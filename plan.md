@@ -68,6 +68,7 @@ Automated government contract pipeline: SAM.gov → PostgreSQL → Gemini AI cla
 ---
 
 ## Phase 8: Go Live — IN PROGRESS
+- [x] Fix NEXT_PUBLIC_INGEST_SECRET — moved to server-only env var
 - [ ] Set `SAM_DRY_RUN=false` and run bulk metadata crawl (~18K contracts, ~2 days)
 - [ ] Run metadata classification (~$2-5 Gemini cost)
 - [ ] Run selective description fetch for GOOD/MAYBE (~500-2K contracts)
@@ -89,7 +90,7 @@ Automated government contract pipeline: SAM.gov → PostgreSQL → Gemini AI cla
 - [ ] NAICS code filtering in SAM.gov queries (reduce irrelevant contracts pre-classification)
 - [ ] Increase DB connection pool (max: 1 → 5-10 for Railway)
 - [ ] Fix `updatedAt` auto-update (app-level or Postgres trigger)
-- [ ] Replace `NEXT_PUBLIC_INGEST_SECRET` with server actions
+- [x] Replace `NEXT_PUBLIC_INGEST_SECRET` with server-side proxy (`/api/pipeline`)
 - [ ] Clickable document links in contract detail
 - [ ] DOCX text extraction for classification (currently PDF-only)
 - [ ] Consider Gemini batch API when SDK supports it

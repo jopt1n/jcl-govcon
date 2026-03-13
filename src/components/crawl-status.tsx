@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback } from "react";
 import {
   RefreshCw,
-  Play,
+
   Pause,
   CheckCircle2,
   AlertCircle,
@@ -65,12 +65,11 @@ const PHASES: {
   key: PipelineAction;
   label: string;
   icon: typeof Download;
-  endpoint: string;
 }[] = [
-  { key: "crawl-start", label: "Crawl Metadata", icon: Download, endpoint: "/api/crawl/start" },
-  { key: "classify-metadata", label: "Classify (Meta)", icon: Brain, endpoint: "/api/classify/metadata" },
-  { key: "fetch-descriptions", label: "Fetch Descriptions", icon: FileText, endpoint: "/api/fetch-descriptions" },
-  { key: "reclassify", label: "Re-classify", icon: RotateCcw, endpoint: "/api/reclassify" },
+  { key: "crawl-start", label: "Crawl Metadata", icon: Download },
+  { key: "classify-metadata", label: "Classify (Meta)", icon: Brain },
+  { key: "fetch-descriptions", label: "Fetch Descriptions", icon: FileText },
+  { key: "reclassify", label: "Re-classify", icon: RotateCcw },
 ];
 
 export function CrawlStatus() {
@@ -80,13 +79,9 @@ export function CrawlStatus() {
   const [error, setError] = useState<string | null>(null);
   const [collapsed, setCollapsed] = useState(false);
 
-  const authHeader = {
-    Authorization: `Bearer ${process.env.NEXT_PUBLIC_INGEST_SECRET ?? ""}`,
-  };
-
   const fetchStatus = useCallback(async () => {
     try {
-      const res = await fetch("/api/crawl/status", { headers: authHeader });
+      const res = await fetch("/api/pipeline?action=crawl-status");
       if (!res.ok) throw new Error("Failed to fetch");
       const json = await res.json();
       setData(json);
@@ -96,7 +91,6 @@ export function CrawlStatus() {
     } finally {
       setLoading(false);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
@@ -111,12 +105,10 @@ export function CrawlStatus() {
 
     setRunningAction(action);
     try {
-      await fetch(phase.endpoint, {
+      await fetch("/api/pipeline", {
         method: "POST",
-        headers: {
-          ...authHeader,
-          "Content-Type": "application/json",
-        },
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action }),
       });
       await fetchStatus();
     } catch {
@@ -129,9 +121,10 @@ export function CrawlStatus() {
   async function handlePause() {
     setRunningAction("crawl-start");
     try {
-      await fetch("/api/crawl/pause", {
+      await fetch("/api/pipeline", {
         method: "POST",
-        headers: authHeader,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "crawl-pause" }),
       });
       await fetchStatus();
     } catch {

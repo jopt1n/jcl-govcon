@@ -35,7 +35,7 @@
 
 ## Known Issues
 - `updatedAt` columns don't auto-update (need app-level fix or Postgres trigger)
-- `NEXT_PUBLIC_INGEST_SECRET` exposed to client (should use server actions)
+- ~~`NEXT_PUBLIC_INGEST_SECRET` exposed to client~~ — FIXED: moved to server-only via `/api/pipeline` proxy
 - DB connection pool `max: 1` (increase for production)
 - All 1,008 contracts are PENDING (no Gemini calls made yet)
 - `RESEND_API_KEY` and `NEXT_PUBLIC_APP_URL` not set yet

@@ -36,7 +36,10 @@ SAM.gov API → metadata crawl → metadata classification (Gemini) → ~80% DIS
 - Database schema changes: `drizzle-kit push` (no migration files).
 
 ## API Keys & Environment
-When user provides an API key, **immediately add it to `.env`**. Current variables: `SAM_GOV_API_KEY`, `GOOGLE_GEMINI_API_KEY`, `RAILWAY_TOKEN`, `DATABASE_URL`, `INGEST_SECRET`, `RESEND_API_KEY`, `NEXT_PUBLIC_INGEST_SECRET`, `NEXT_PUBLIC_APP_URL`, `SAM_DRY_RUN`, `SAM_DAILY_LIMIT`.
+When user provides an API key, **immediately add it to `.env`**. Current variables: `SAM_GOV_API_KEY`, `GOOGLE_GEMINI_API_KEY`, `RAILWAY_TOKEN`, `DATABASE_URL`, `INGEST_SECRET`, `RESEND_API_KEY`, `NEXT_PUBLIC_APP_URL`, `SAM_DRY_RUN`, `SAM_DAILY_LIMIT`.
+
+## Rejected Approaches
+- Never use `NEXT_PUBLIC_` prefix for secrets, API keys, or tokens — exposes them to the browser
 
 ## UI Design System
 Dark-mode-first (Bloomberg Terminal meets Linear.app). CSS variable tokens in `globals.css` with `:root` (light) and `.dark` class. Classification colors: green=GOOD, amber=MAYBE, slate=DISCARD, blue=PENDING, red=urgent. Mobile: hamburger sidebar (<md). Kanban cards: 3px classification border + urgency badges.

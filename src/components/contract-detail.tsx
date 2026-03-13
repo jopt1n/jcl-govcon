@@ -110,13 +110,10 @@ export function ContractDetail({ contractId }: { contractId: string }) {
   async function handleReclassify() {
     setReclassifying(true);
     try {
-      await fetch("/api/classify", {
+      await fetch("/api/pipeline", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${process.env.NEXT_PUBLIC_INGEST_SECRET ?? ""}`,
-        },
-        body: JSON.stringify({ contractIds: [contractId] }),
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "classify", contractIds: [contractId] }),
       });
       await fetchContract();
     } finally {

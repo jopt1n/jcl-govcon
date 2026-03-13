@@ -12,13 +12,10 @@ export function ClassifyControl() {
     setLoading(true);
     setMessage(null);
     try {
-      const res = await fetch("/api/classify/metadata", {
+      const res = await fetch("/api/pipeline", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${process.env.NEXT_PUBLIC_INGEST_SECRET ?? ""}`,
-        },
-        body: JSON.stringify({ limit }),
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "classify-metadata", limit }),
       });
       const data = await res.json();
       if (!res.ok) {
