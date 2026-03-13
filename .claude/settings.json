@@ -1,0 +1,15 @@
+{
+  "hooks": {
+    "stop": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "echo 'Session paused. Remember to update progress.md before ending.'"
+          }
+        ]
+      }
+    ]
+  }
+}
