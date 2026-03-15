@@ -16,10 +16,10 @@ export function mapOpportunityToContract(opp: SamOpportunity) {
     naicsCode: opp.naicsCode,
     pscCode: opp.classificationCode,
     noticeType: opp.type,
-    setAsideType: opp.typeOfSetAside,
-    awardCeiling: opp.award?.amount ?? null,
-    responseDeadline: opp.responseDeadDate
-      ? new Date(opp.responseDeadDate)
+    setAsideType: opp.typeOfSetAside || null,
+    awardCeiling: opp.award?.amount || null,
+    responseDeadline: opp.responseDeadLine
+      ? new Date(opp.responseDeadLine)
       : null,
     postedDate: new Date(opp.postedDate),
     active: opp.active === "Yes",
@@ -34,7 +34,7 @@ export function mapOpportunityToContract(opp: SamOpportunity) {
     popZip: opp.placeOfPerformance?.zip ?? null,
     officeCity: opp.officeAddress?.city ?? null,
     officeState: opp.officeAddress?.state ?? null,
-    setAsideCode: opp.typeOfSetAside ?? null,
+    setAsideCode: opp.typeOfSetAside || null,
     descriptionFetched: false,
     classifiedFromMetadata: false,
   };

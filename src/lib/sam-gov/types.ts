@@ -13,7 +13,7 @@ export interface SamOpportunity {
   baseType: string; // e.g. "Solicitation"
   typeOfSetAside: string | null;
   archiveDate: string | null;
-  responseDeadDate: string | null;
+  responseDeadLine: string | null;
   postedDate: string;
   active: string; // "Yes" | "No"
   description: string | null; // URL to fetch description text (costs 1 API call)

@@ -9,7 +9,7 @@ if (!connectionString) {
 
 // Create postgres client — single connection for serverless, pool for server
 const client = postgres(connectionString, {
-  max: 1,
+  max: 10,
   idle_timeout: 20,
 });
 

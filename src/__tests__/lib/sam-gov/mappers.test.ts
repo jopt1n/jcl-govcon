@@ -16,7 +16,7 @@ function makeOpportunity(
     baseType: "Solicitation",
     typeOfSetAside: "SBA",
     archiveDate: null,
-    responseDeadDate: "2026-06-01T00:00:00Z",
+    responseDeadLine: "2026-06-01T00:00:00Z",
     postedDate: "2026-03-01T00:00:00Z",
     active: "Yes",
     description: "A test opportunity",
@@ -62,7 +62,7 @@ describe("mapOpportunityToContract", () => {
     expect(result.setAsideType).toBe("SBA");
   });
 
-  it("parses responseDeadDate into a Date object", () => {
+  it("parses responseDeadLine into a Date object", () => {
     const result = mapOpportunityToContract(makeOpportunity());
     expect(result.responseDeadline).toBeInstanceOf(Date);
     expect(result.responseDeadline!.toISOString()).toBe(
