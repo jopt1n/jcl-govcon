@@ -18,7 +18,7 @@ export interface SamOpportunity {
   active: string; // "Yes" | "No"
   description: string | null; // URL to fetch description text (costs 1 API call)
   uiLink: string; // public-facing SAM.gov URL
-  resourceLinks: SamResourceLink[] | null;
+  resourceLinks: (string | SamResourceLink)[] | null;
   award: SamAward | null;
   pointOfContact: SamContact[] | null;
   officeAddress: SamAddress | null;

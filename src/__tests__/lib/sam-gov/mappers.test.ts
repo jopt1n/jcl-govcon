@@ -151,6 +151,18 @@ describe("mapOpportunityToContract", () => {
     expect(result.classifiedFromMetadata).toBe(false);
   });
 
+  it("auto-populates tags based on set-aside and resource links", () => {
+    const result = mapOpportunityToContract(makeOpportunity());
+    expect(result.tags).toEqual(["SBA", "HAS_DOCS"]);
+  });
+
+  it("returns empty tags when no set-aside and no resource links", () => {
+    const result = mapOpportunityToContract(
+      makeOpportunity({ typeOfSetAside: null, resourceLinks: null })
+    );
+    expect(result.tags).toEqual([]);
+  });
+
   it("returns null for new fields when source data is null", () => {
     const result = mapOpportunityToContract(
       makeOpportunity({

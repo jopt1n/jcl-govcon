@@ -45,14 +45,17 @@ function getFilename(url: string): string {
  * Resource link downloads are direct URLs and do NOT count against the API limit.
  */
 export function filterDownloadableLinks(
-  links: SamResourceLink[] | null
-): SamResourceLink[] {
+  links: (string | SamResourceLink)[] | null
+): string[] {
   if (!links || links.length === 0) return [];
 
-  return links.filter((link) => {
-    const ext = getExtension(link.url);
-    return ALLOWED_EXTENSIONS.has(ext);
-  });
+  return links
+    .map((link) => (typeof link === "string" ? link : link.url))
+    .filter((url) => {
+      if (!url) return false;
+      const ext = getExtension(url);
+      return ALLOWED_EXTENSIONS.has(ext);
+    });
 }
 
 /**
@@ -60,17 +63,17 @@ export function filterDownloadableLinks(
  * Returns null if the download fails or file is too large.
  */
 async function downloadOne(
-  link: SamResourceLink
+  url: string
 ): Promise<DownloadedDocument | null> {
   try {
-    const res = await fetch(link.url, {
+    const res = await fetch(url, {
       cache: "no-store",
       signal: AbortSignal.timeout(30_000), // 30s timeout per doc
     });
 
     if (!res.ok) {
       console.warn(
-        `[documents] Failed to download ${link.url}: ${res.status} ${res.statusText}`
+        `[documents] Failed to download ${url}: ${res.status} ${res.statusText}`
       );
       return null;
     }
@@ -79,13 +82,13 @@ async function downloadOne(
     const contentLength = res.headers.get("content-length");
     if (contentLength && parseInt(contentLength, 10) > MAX_FILE_SIZE) {
       console.warn(
-        `[documents] Skipping ${link.url}: too large (${contentLength} bytes)`
+        `[documents] Skipping ${url}: too large (${contentLength} bytes)`
       );
       return null;
     }
 
     const contentType = res.headers.get("content-type") || "";
-    const ext = getExtension(link.url);
+    const ext = getExtension(url);
 
     // Verify content type matches what we expect, or trust the extension
     const isAllowedType = ALLOWED_CONTENT_TYPES.has(
@@ -95,7 +98,7 @@ async function downloadOne(
 
     if (!isAllowedType && !isAllowedExt) {
       console.warn(
-        `[documents] Skipping ${link.url}: unexpected content type "${contentType}"`
+        `[documents] Skipping ${url}: unexpected content type "${contentType}"`
       );
       return null;
     }
@@ -105,20 +108,20 @@ async function downloadOne(
 
     if (buffer.length > MAX_FILE_SIZE) {
       console.warn(
-        `[documents] Skipping ${link.url}: too large (${buffer.length} bytes)`
+        `[documents] Skipping ${url}: too large (${buffer.length} bytes)`
       );
       return null;
     }
 
     return {
-      url: link.url,
-      filename: getFilename(link.url),
+      url: url,
+      filename: getFilename(url),
       contentType: contentType.split(";")[0].trim(),
       buffer,
     };
   } catch (err) {
     console.warn(
-      `[documents] Error downloading ${link.url}:`,
+      `[documents] Error downloading ${url}:`,
       err instanceof Error ? err.message : err
     );
     return null;
@@ -130,7 +133,7 @@ async function downloadOne(
  * Downloads in parallel (max 3 concurrent) and returns successful downloads.
  */
 export async function downloadDocuments(
-  links: SamResourceLink[] | null
+  links: (string | SamResourceLink)[] | null
 ): Promise<DownloadedDocument[]> {
   const downloadable = filterDownloadableLinks(links);
   if (downloadable.length === 0) return [];

@@ -10,7 +10,6 @@ import { eq } from "drizzle-orm";
 import { downloadDocuments } from "@/lib/sam-gov/documents";
 import { buildClassificationPrompt } from "./prompts";
 import type { ClassificationPromptInput } from "./prompts";
-import type { SamResourceLink } from "@/lib/sam-gov/types";
 import { delay } from "@/lib/utils";
 
 type Classification = "GOOD" | "MAYBE" | "DISCARD";
@@ -18,6 +17,7 @@ type Classification = "GOOD" | "MAYBE" | "DISCARD";
 interface ClassificationResult {
   classification: Classification;
   reasoning: string;
+  summary: string | null;
 }
 
 interface ClassifyContractResult {
@@ -41,7 +41,7 @@ function getGeminiClient(): GoogleGenAI {
  */
 export function parseClassificationResponse(text: string | undefined): ClassificationResult {
   if (!text) {
-    return { classification: "MAYBE", reasoning: "Failed to get AI response — marked for manual review." };
+    return { classification: "MAYBE", reasoning: "Failed to get AI response — marked for manual review.", summary: null };
   }
 
   try {
@@ -54,17 +54,20 @@ export function parseClassificationResponse(text: string | undefined): Classific
       return {
         classification: "MAYBE",
         reasoning: `AI returned invalid classification "${parsed.classification}". Original reasoning: ${parsed.reasoning || "none"}`,
+        summary: parsed.summary || null,
       };
     }
 
     return {
       classification: classification as Classification,
       reasoning: parsed.reasoning || "No reasoning provided by AI.",
+      summary: parsed.summary || null,
     };
   } catch {
     return {
       classification: "MAYBE",
       reasoning: `Failed to parse AI response — marked for manual review. Raw: ${text.slice(0, 200)}`,
+      summary: null,
     };
   }
 }
@@ -119,12 +122,7 @@ export async function classifyContract(
 
   try {
     // Download documents if available
-    const resourceLinks: SamResourceLink[] = (contract.resourceLinks ?? []).map((url) => ({
-      url,
-      description: null,
-    }));
-
-    const downloadedDocs = await downloadDocuments(resourceLinks);
+    const downloadedDocs = await downloadDocuments(contract.resourceLinks);
     documentsAnalyzed = downloadedDocs.length > 0;
 
     // Build prompt
@@ -163,6 +161,7 @@ export async function classifyContract(
       .set({
         classification: result.classification,
         aiReasoning: result.reasoning,
+        summary: result.summary,
         documentsAnalyzed,
         updatedAt: new Date(),
       })

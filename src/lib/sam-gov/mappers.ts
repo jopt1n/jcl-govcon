@@ -1,12 +1,16 @@
-import type { SamOpportunity, SamResourceLink } from "./types";
+import type { SamOpportunity } from "./types";
 
 /**
  * Map a SAM.gov opportunity to a contract insert row.
  */
 export function mapOpportunityToContract(opp: SamOpportunity) {
-  const linkUrls: string[] = (opp.resourceLinks ?? []).map(
-    (rl: SamResourceLink) => rl.url
-  );
+  const linkUrls: string[] = (opp.resourceLinks ?? [])
+    .map((rl) => (typeof rl === "string" ? rl : rl.url))
+    .filter(Boolean) as string[];
+
+  const tags: string[] = [];
+  if (opp.typeOfSetAside) tags.push("SBA");
+  if (linkUrls.length > 0) tags.push("HAS_DOCS");
 
   return {
     noticeId: opp.noticeId,
@@ -26,7 +30,6 @@ export function mapOpportunityToContract(opp: SamOpportunity) {
     samUrl: opp.uiLink,
     resourceLinks: linkUrls,
     rawJson: opp as unknown as Record<string, unknown>,
-    // New columns
     orgPathName: opp.fullParentPathName ?? null,
     orgPathCode: opp.fullParentPathCode ?? null,
     popState: opp.placeOfPerformance?.state?.code ?? null,
@@ -35,6 +38,7 @@ export function mapOpportunityToContract(opp: SamOpportunity) {
     officeCity: opp.officeAddress?.city ?? null,
     officeState: opp.officeAddress?.state ?? null,
     setAsideCode: opp.typeOfSetAside || null,
+    tags,
     descriptionFetched: false,
     classifiedFromMetadata: false,
   };

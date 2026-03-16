@@ -132,6 +132,7 @@ export async function classifyFromMetadata(
           .set({
             classification: result.classification,
             aiReasoning: result.reasoning,
+            summary: result.summary,
             classifiedFromMetadata: true,
             updatedAt: new Date(),
           })

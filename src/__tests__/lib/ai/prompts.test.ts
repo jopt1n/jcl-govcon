@@ -197,6 +197,12 @@ describe("buildMetadataClassificationPrompt", () => {
     expect(prompt).toContain('"classification": "GOOD" | "MAYBE" | "DISCARD"');
   });
 
+  it("includes insufficient information guidance", () => {
+    const prompt = buildMetadataClassificationPrompt(makeMetadataInput());
+    expect(prompt).toContain("very little information to judge");
+    expect(prompt).toContain("classify as MAYBE");
+  });
+
   it("includes conservative classification guidance", () => {
     const prompt = buildMetadataClassificationPrompt(makeMetadataInput());
     expect(prompt).toContain("When in doubt, classify as MAYBE");

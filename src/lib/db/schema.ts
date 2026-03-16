@@ -65,6 +65,7 @@ export const contracts = pgTable(
       .notNull()
       .default("PENDING"),
     aiReasoning: text("ai_reasoning"),
+    summary: text("summary"),
     descriptionText: text("description_text"),
     userOverride: boolean("user_override").notNull().default(false),
     status: contractStatusEnum("status").default("IDENTIFIED"),
@@ -85,6 +86,8 @@ export const contracts = pgTable(
     officeState: text("office_state"),
     // Set-aside code
     setAsideCode: text("set_aside_code"),
+    // Computed tags for filtering
+    tags: jsonb("tags").$type<string[]>().default([]),
     // Pipeline phase tracking
     descriptionFetched: boolean("description_fetched").notNull().default(false),
     classifiedFromMetadata: boolean("classified_from_metadata").notNull().default(false),

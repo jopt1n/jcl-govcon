@@ -9,23 +9,20 @@ const JCL_CAPABILITY_PROFILE = `
 **Model:** Solo operator with AI-augmented development (Claude Code, Cursor, etc.)
 **Set-asides:** Small business
 **Delivery:** Remote-first, software-deliverable work
+**Clearance:** None
 
-### Core Capabilities
-- Custom software development (web apps, APIs, full-stack systems)
-- AI/ML systems and automation (chatbots, voice agents, intelligent workflows)
-- Cloud infrastructure and DevOps (AWS, GCP, Azure)
-- CRM implementation and integration (Salesforce, HubSpot, custom)
-- Workflow automation (n8n, Make, Zapier, custom integrations)
-- IT consulting and systems design
-- Data analytics and visualization
-- Any software-deliverable work buildable with AI-assisted development
+### Can Do
+Any work that is deliverable remotely by building software. This includes custom software development, web/mobile apps, APIs, AI/ML, cloud architecture, DevOps, automation, data analytics, cybersecurity tools, IT modernization, CRM/ERP systems, chatbots, dashboards, and IT consulting.
+
+### Cannot Do
+Anything requiring physical presence, physical labor, hardware, or non-software deliverables. This includes construction, facilities maintenance, janitorial, manufacturing, hardware engineering, drone/vehicle/weapons systems, physical R&D, lab work, medical/clinical services, logistics/warehousing, transportation, security guard services, staffing, telecommunications cabling/wiring, and scientific research equipment.
 
 ### Classification Rules
-**GOOD** — Strong match. Software, AI, IT, automation, cloud, consulting, or data work that is remote-deliverable and realistically achievable by a skilled solo developer with AI tools. Examples: web app development, API integrations, chatbot systems, cloud migration, IT modernization, data dashboards, workflow automation.
+**GOOD** — Strong match. Title or description explicitly mentions software, application, web, API, database, cloud, AI, machine learning, data analytics, cybersecurity, IT modernization, automation, or consulting AND is remote-deliverable. Realistically achievable by a skilled solo developer with AI tools.
 
 **MAYBE** — Partial match. Interesting opportunity that partially aligns but may need teaming, has larger scope, or requires further review. Examples: larger IT modernization programs (could subcontract), mixed physical/digital projects, staff augmentation, training development with tech components.
 
-**DISCARD** — Poor match. Construction, physical infrastructure, manufacturing, hardware-only, requires security clearance, on-site fieldwork, massive defense programs, janitorial, facilities management, or any work that fundamentally cannot be delivered remotely by a solo software developer. Still provide clear reasoning for why it doesn't fit.
+**DISCARD** — Poor match. Construction, physical infrastructure, manufacturing, hardware-only, requires security clearance, on-site fieldwork, drone/vehicle/weapons systems, physical R&D, lab work, medical/clinical services, logistics/warehousing, janitorial, facilities management, or any work that fundamentally cannot be delivered remotely by a solo software developer. Still provide clear reasoning for why it doesn't fit.
 `.trim();
 
 interface ClassificationPromptInput {
@@ -85,7 +82,8 @@ Your reasoning MUST always be populated with a clear, specific explanation (2-4 
 Respond with valid JSON only:
 {
   "classification": "GOOD" | "MAYBE" | "DISCARD",
-  "reasoning": "Your detailed reasoning here..."
+  "reasoning": "Your detailed reasoning here...",
+  "summary": "1 plain English sentence describing what this contract is actually asking for"
 }`;
 }
 
@@ -134,14 +132,14 @@ You are classifying contracts using ONLY metadata fields (title, NAICS, PSC, age
 - Mark anything ambiguous as MAYBE for later full review
 - Only mark GOOD if metadata strongly signals a software/IT/AI opportunity
 
-## Company Capabilities (Summary)
-- Custom software, web apps, APIs, AI/ML, cloud, DevOps, automation, IT consulting
-- Small business, remote-deliverable work only
-- Solo operator with AI-augmented development
+## Company Capabilities
+- **Can do:** Any work that is deliverable remotely by building software. This includes custom software development, web/mobile apps, APIs, AI/ML, cloud architecture, DevOps, automation, data analytics, cybersecurity tools, IT modernization, CRM/ERP systems, chatbots, dashboards, and IT consulting.
+- **Cannot do:** Anything requiring physical presence, physical labor, hardware, or non-software deliverables. This includes construction, facilities maintenance, janitorial, manufacturing, hardware engineering, drone/vehicle/weapons systems, physical R&D, lab work, medical/clinical services, logistics/warehousing, transportation, security guard services, staffing, telecommunications cabling/wiring, and scientific research equipment.
+- Solo operator, small business, remote only. No security clearance.
 
 ## NAICS Code Hints
 - **Likely relevant:** 541511 (Custom Software), 541512 (Computer Systems Design), 541519 (Other IT Services), 518210 (Data Processing/Hosting), 541611 (Management Consulting), 541715 (R&D Physical/Bio — sometimes AI)
-- **Likely irrelevant:** 236xxx (Construction), 237xxx (Heavy/Civil Engineering), 238xxx (Specialty Trade), 561xxx (Facilities/Janitorial), 336xxx (Manufacturing), 622xxx (Healthcare Facilities)
+- **Likely irrelevant:** 236xxx (Construction), 237xxx (Heavy/Civil Engineering), 238xxx (Specialty Trade), 561xxx (Facilities/Janitorial), 336xxx (Manufacturing), 622xxx (Healthcare Facilities), 541330 (Engineering Services — usually physical/mechanical, not software), 541713 (R&D — physical sciences), 541714 (R&D — physical sciences), 488xxx (Transportation support), 811xxx (Repair/Maintenance)
 
 ## Set-Aside Boost
 Small business set-asides (SBA, SBP, 8A, 8AN) are a positive signal — JCL qualifies for these.
@@ -151,16 +149,19 @@ Small business set-asides (SBA, SBP, 8A, 8AN) are a positive signal — JCL qual
 ${metadata}
 
 ## Classification Rules (Conservative)
-- **GOOD** — Metadata strongly signals software, IT, AI, cloud, data, or automation work with small business set-aside
+- **GOOD** — Title or metadata explicitly mentions software, application, web, API, database, cloud, AI, machine learning, data analytics, cybersecurity, IT modernization, automation, or consulting AND is remote-deliverable
 - **MAYBE** — Ambiguous from metadata alone, could be relevant, needs full description review
-- **DISCARD** — Clearly construction, manufacturing, facilities, janitorial, heavy equipment, medical supplies, or other non-IT physical work
+- **DISCARD** — Clearly construction, manufacturing, facilities, janitorial, heavy equipment, medical supplies, drone/vehicle/weapons systems, physical R&D, lab work, logistics/warehousing, transportation, repair/maintenance, staffing, or other non-IT physical work
+
+If the contract has very little information to judge (missing description, vague title, unclear scope), classify as MAYBE with reasoning that notes insufficient information for confident classification.
 
 When in doubt, classify as MAYBE. It's better to review a false positive than miss a real opportunity.
 
 Respond with valid JSON only:
 {
   "classification": "GOOD" | "MAYBE" | "DISCARD",
-  "reasoning": "Brief explanation (1-2 sentences) based on metadata signals"
+  "reasoning": "1-2 sentences explaining the classification decision",
+  "summary": "1 plain English sentence describing what this contract is actually asking for"
 }`;
 }
 

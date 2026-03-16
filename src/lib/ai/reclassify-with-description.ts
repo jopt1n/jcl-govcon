@@ -121,6 +121,7 @@ export async function reclassifyWithDescription(
           .set({
             classification: result.classification,
             aiReasoning: result.reasoning,
+            summary: result.summary,
             classifiedFromMetadata: false,
             updatedAt: new Date(),
           })

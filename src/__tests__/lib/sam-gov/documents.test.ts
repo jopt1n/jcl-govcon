@@ -26,7 +26,7 @@ describe("filterDownloadableLinks", () => {
 
     const result = filterDownloadableLinks(links);
     expect(result).toHaveLength(3);
-    expect(result.map(l => l.url)).toEqual([
+    expect(result).toEqual([
       "https://example.com/file.pdf",
       "https://example.com/file.docx",
       "https://example.com/file.doc",
@@ -40,7 +40,7 @@ describe("filterDownloadableLinks", () => {
 
     const result = filterDownloadableLinks(links);
     expect(result).toHaveLength(1);
-    expect(result[0].url).toBe("https://example.com/file.pdf?token=abc");
+    expect(result[0]).toBe("https://example.com/file.pdf?token=abc");
   });
 
   it("rejects invalid and non-document URLs", () => {
