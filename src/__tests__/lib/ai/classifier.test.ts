@@ -1,9 +1,9 @@
 import { vi } from "vitest";
 
 // Use vi.hoisted to create the mock function before vi.mock hoisting
-const { mockGenerateContent } = vi.hoisted(() => ({
-  mockGenerateContent: vi.fn().mockResolvedValue({
-    text: JSON.stringify({ classification: "GOOD", reasoning: "Great fit" }),
+const { mockCreate } = vi.hoisted(() => ({
+  mockCreate: vi.fn().mockResolvedValue({
+    choices: [{ message: { content: JSON.stringify({ classification: "GOOD", reasoning: "Great fit" }) } }],
   }),
 }));
 
@@ -41,15 +41,16 @@ vi.mock("@/lib/db/schema", () => ({
   },
 }));
 
-vi.mock("@google/genai", () => {
-  return {
-    GoogleGenAI: class MockGoogleGenAI {
-      models = {
-        generateContent: mockGenerateContent,
-      };
+vi.mock("@/lib/ai/grok-client", () => ({
+  getGrokClient: vi.fn().mockReturnValue({
+    chat: {
+      completions: {
+        create: mockCreate,
+      },
     },
-  };
-});
+  }),
+  GROK_MODEL: "grok-4-1-fast-non-reasoning",
+}));
 
 vi.mock("@/lib/sam-gov/documents", () => ({
   downloadDocuments: vi.fn().mockResolvedValue([]),
@@ -86,15 +87,9 @@ const makeContract = (overrides: Partial<Parameters<typeof classifyContract>[0]>
 describe("classifyContract", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    process.env.GOOGLE_GEMINI_API_KEY = "test-key";
-    // Re-setup the default mock after clearAllMocks
-    mockGenerateContent.mockResolvedValue({
-      text: JSON.stringify({ classification: "GOOD", reasoning: "Great fit" }),
+    mockCreate.mockResolvedValue({
+      choices: [{ message: { content: JSON.stringify({ classification: "GOOD", reasoning: "Great fit" }) } }],
     });
-  });
-
-  afterEach(() => {
-    delete process.env.GOOGLE_GEMINI_API_KEY;
   });
 
   it("returns GOOD classification on happy path", async () => {
@@ -127,14 +122,14 @@ describe("classifyContract", () => {
     expect(result.documentsAnalyzed).toBe(false);
   });
 
-  it("returns MAYBE with error message when Gemini throws", async () => {
-    mockGenerateContent.mockRejectedValueOnce(new Error("Gemini API down"));
+  it("returns MAYBE with error message when API throws", async () => {
+    mockCreate.mockRejectedValueOnce(new Error("API down"));
 
     const result = await classifyContract(makeContract());
 
     expect(result.classification).toBe("MAYBE");
     expect(result.reasoning).toContain("Classification failed");
-    expect(result.error).toBe("Gemini API down");
+    expect(result.error).toBe("API down");
   });
 
   it("updates database with classification result", async () => {
@@ -142,8 +137,10 @@ describe("classifyContract", () => {
     expect(db.update).toHaveBeenCalled();
   });
 
-  it("returns MAYBE when response text is undefined", async () => {
-    mockGenerateContent.mockResolvedValueOnce({ text: undefined });
+  it("returns MAYBE when response content is null", async () => {
+    mockCreate.mockResolvedValueOnce({
+      choices: [{ message: { content: null } }],
+    });
 
     const result = await classifyContract(makeContract());
 
@@ -152,8 +149,8 @@ describe("classifyContract", () => {
   });
 
   it("handles markdown-wrapped JSON response", async () => {
-    mockGenerateContent.mockResolvedValueOnce({
-      text: '```json\n{"classification": "DISCARD", "reasoning": "Not a fit"}\n```',
+    mockCreate.mockResolvedValueOnce({
+      choices: [{ message: { content: '```json\n{"classification": "DISCARD", "reasoning": "Not a fit"}\n```' } }],
     });
 
     const result = await classifyContract(makeContract());
@@ -163,8 +160,8 @@ describe("classifyContract", () => {
   });
 
   it("returns MAYBE for invalid classification value", async () => {
-    mockGenerateContent.mockResolvedValueOnce({
-      text: JSON.stringify({ classification: "EXCELLENT", reasoning: "Amazing" }),
+    mockCreate.mockResolvedValueOnce({
+      choices: [{ message: { content: JSON.stringify({ classification: "EXCELLENT", reasoning: "Amazing" }) } }],
     });
 
     const result = await classifyContract(makeContract());
@@ -174,8 +171,8 @@ describe("classifyContract", () => {
   });
 
   it("returns MAYBE for malformed JSON response", async () => {
-    mockGenerateContent.mockResolvedValueOnce({
-      text: "this is not json at all",
+    mockCreate.mockResolvedValueOnce({
+      choices: [{ message: { content: "this is not json at all" } }],
     });
 
     const result = await classifyContract(makeContract());
@@ -188,14 +185,9 @@ describe("classifyContract", () => {
 describe("classifyContracts", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    process.env.GOOGLE_GEMINI_API_KEY = "test-key";
-    mockGenerateContent.mockResolvedValue({
-      text: JSON.stringify({ classification: "GOOD", reasoning: "Great fit" }),
+    mockCreate.mockResolvedValue({
+      choices: [{ message: { content: JSON.stringify({ classification: "GOOD", reasoning: "Great fit" }) } }],
     });
-  });
-
-  afterEach(() => {
-    delete process.env.GOOGLE_GEMINI_API_KEY;
   });
 
   it("processes all contracts sequentially", async () => {
@@ -214,13 +206,13 @@ describe("classifyContracts", () => {
   });
 
   it("returns all results even with partial failures", async () => {
-    mockGenerateContent
+    mockCreate
       .mockResolvedValueOnce({
-        text: JSON.stringify({ classification: "GOOD", reasoning: "Great" }),
+        choices: [{ message: { content: JSON.stringify({ classification: "GOOD", reasoning: "Great" }) } }],
       })
       .mockRejectedValueOnce(new Error("API error"))
       .mockResolvedValueOnce({
-        text: JSON.stringify({ classification: "DISCARD", reasoning: "Not fit" }),
+        choices: [{ message: { content: JSON.stringify({ classification: "DISCARD", reasoning: "Not fit" }) } }],
       });
 
     const contracts = [
@@ -239,75 +231,24 @@ describe("classifyContracts", () => {
   });
 });
 
-describe("buildContentParts (via classifyContract)", () => {
+describe("classifyContract sends correct request", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    process.env.GOOGLE_GEMINI_API_KEY = "test-key";
-    mockGenerateContent.mockResolvedValue({
-      text: JSON.stringify({ classification: "GOOD", reasoning: "Great fit" }),
+    mockCreate.mockResolvedValue({
+      choices: [{ message: { content: JSON.stringify({ classification: "GOOD", reasoning: "Great fit" }) } }],
     });
   });
 
-  afterEach(() => {
-    delete process.env.GOOGLE_GEMINI_API_KEY;
-  });
+  it("sends prompt as chat completion with json_object format", async () => {
+    vi.mocked(downloadDocuments).mockResolvedValueOnce([]);
 
-  it("sends PDFs as base64 inline data", async () => {
-    const pdfBuffer = Buffer.from("fake pdf content");
-    vi.mocked(downloadDocuments).mockResolvedValueOnce([
-      {
-        url: "https://example.com/doc.pdf",
-        filename: "doc.pdf",
-        contentType: "application/pdf",
-        buffer: pdfBuffer,
-      },
-    ]);
+    await classifyContract(makeContract());
 
-    await classifyContract(makeContract({ resourceLinks: ["https://example.com/doc.pdf"] }));
-
-    expect(mockGenerateContent).toHaveBeenCalledTimes(1);
-    const callArgs = mockGenerateContent.mock.calls[0][0];
-    const parts = callArgs.contents[0].parts;
-    const inlinePart = parts.find((p: any) => p.inlineData);
-    expect(inlinePart).toBeDefined();
-    expect(inlinePart.inlineData.mimeType).toBe("application/pdf");
-    expect(inlinePart.inlineData.data).toBe(pdfBuffer.toString("base64"));
-  });
-
-  it("excludes non-PDF documents from content parts", async () => {
-    vi.mocked(downloadDocuments).mockResolvedValueOnce([
-      {
-        url: "https://example.com/doc.docx",
-        filename: "doc.docx",
-        contentType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-        buffer: Buffer.from("docx content"),
-      },
-    ]);
-
-    await classifyContract(makeContract({ resourceLinks: ["https://example.com/doc.docx"] }));
-
-    const callArgs = mockGenerateContent.mock.calls[0][0];
-    const parts = callArgs.contents[0].parts;
-    const inlineParts = parts.filter((p: any) => p.inlineData);
-    expect(inlineParts).toHaveLength(0);
-  });
-
-  it("adds text prompt as the last part", async () => {
-    vi.mocked(downloadDocuments).mockResolvedValueOnce([
-      {
-        url: "https://example.com/doc.pdf",
-        filename: "doc.pdf",
-        contentType: "application/pdf",
-        buffer: Buffer.from("pdf content"),
-      },
-    ]);
-
-    await classifyContract(makeContract({ resourceLinks: ["https://example.com/doc.pdf"] }));
-
-    const callArgs = mockGenerateContent.mock.calls[0][0];
-    const parts = callArgs.contents[0].parts;
-    const lastPart = parts[parts.length - 1];
-    expect(lastPart.text).toBeDefined();
-    expect(lastPart.text).toBe("test prompt text");
+    expect(mockCreate).toHaveBeenCalledTimes(1);
+    expect(mockCreate).toHaveBeenCalledWith({
+      model: "grok-4-1-fast-non-reasoning",
+      messages: [{ role: "user", content: "test prompt text" }],
+      response_format: { type: "json_object" },
+    });
   });
 });

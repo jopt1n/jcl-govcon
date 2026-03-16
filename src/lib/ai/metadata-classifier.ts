@@ -1,17 +1,17 @@
 /**
- * Metadata-only classifier using Gemini 2.5 Flash.
+ * Metadata-only classifier using Grok (xAI).
  *
  * Classifies contracts using ONLY metadata fields (title, NAICS, PSC, etc.)
  * without fetching descriptions or documents from SAM.gov.
  * Quickly triages ~80-90% of clearly irrelevant contracts as DISCARD.
  */
 
-import { GoogleGenAI } from "@google/genai";
 import { db } from "@/lib/db";
 import { contracts, crawlProgress } from "@/lib/db/schema";
 import { eq, and } from "drizzle-orm";
 import { buildMetadataClassificationPrompt } from "./prompts";
 import { parseClassificationResponse } from "./classifier";
+import { getGrokClient, GROK_MODEL } from "./grok-client";
 import { delay } from "@/lib/utils";
 
 const CHUNK_SIZE = 50;
@@ -31,12 +31,6 @@ interface MetadataClassifyResult {
   errors: number;
 }
 
-function getGeminiClient(): GoogleGenAI {
-  const apiKey = process.env.GOOGLE_GEMINI_API_KEY;
-  if (!apiKey) throw new Error("GOOGLE_GEMINI_API_KEY environment variable is not set");
-  return new GoogleGenAI({ apiKey });
-}
-
 /**
  * Classify PENDING contracts using only metadata fields.
  * Processes in chunks with pause support.
@@ -45,7 +39,7 @@ export async function classifyFromMetadata(
   options: MetadataClassifyOptions = {}
 ): Promise<MetadataClassifyResult> {
   const { limit = 500, crawlProgressId } = options;
-  const ai = getGeminiClient();
+  const ai = getGrokClient();
 
   let classified = 0;
   let good = 0;
@@ -119,13 +113,15 @@ export async function classifyFromMetadata(
           awardCeiling: contract.awardCeiling,
         });
 
-        const response = await ai.models.generateContent({
-          model: "gemini-2.5-flash",
-          contents: [{ role: "user", parts: [{ text: prompt }] }],
-          config: { responseMimeType: "application/json" },
+        const response = await ai.chat.completions.create({
+          model: GROK_MODEL,
+          messages: [{ role: "user", content: prompt }],
+          response_format: { type: "json_object" },
         });
 
-        const result = parseClassificationResponse(response.text);
+        const result = parseClassificationResponse(
+          response.choices[0]?.message?.content ?? undefined
+        );
 
         await db
           .update(contracts)
@@ -144,26 +140,11 @@ export async function classifyFromMetadata(
         else discard++;
       } catch (err) {
         errors++;
-        classified++;
         console.error(
           `[metadata-classifier] Error on ${contract.noticeId}:`,
           err instanceof Error ? err.message : err
         );
-
-        // Mark as classified with MAYBE fallback so we don't retry forever
-        try {
-          await db
-            .update(contracts)
-            .set({
-              classification: "MAYBE",
-              aiReasoning: `Metadata classification failed: ${err instanceof Error ? err.message : String(err)}`,
-              classifiedFromMetadata: true,
-              updatedAt: new Date(),
-            })
-            .where(eq(contracts.id, contract.id));
-        } catch {
-          // Ignore DB error on fallback update
-        }
+        // Leave contract as PENDING/classifiedFromMetadata=false so it gets retried next run
       }
 
       await delay(CALL_DELAY_MS);

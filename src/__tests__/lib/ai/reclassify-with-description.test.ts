@@ -1,8 +1,8 @@
 import { vi } from "vitest";
 
-const { mockGenerateContent } = vi.hoisted(() => ({
-  mockGenerateContent: vi.fn().mockResolvedValue({
-    text: JSON.stringify({ classification: "GOOD", reasoning: "Strong IT match with description" }),
+const { mockCreate } = vi.hoisted(() => ({
+  mockCreate: vi.fn().mockResolvedValue({
+    choices: [{ message: { content: JSON.stringify({ classification: "GOOD", reasoning: "Strong IT match with description" }) } }],
   }),
 }));
 
@@ -55,15 +55,16 @@ vi.mock("@/lib/db/schema", () => ({
   },
 }));
 
-vi.mock("@google/genai", () => {
-  return {
-    GoogleGenAI: class MockGoogleGenAI {
-      models = {
-        generateContent: mockGenerateContent,
-      };
+vi.mock("@/lib/ai/grok-client", () => ({
+  getGrokClient: vi.fn().mockReturnValue({
+    chat: {
+      completions: {
+        create: mockCreate,
+      },
     },
-  };
-});
+  }),
+  GROK_MODEL: "grok-4-1-fast-non-reasoning",
+}));
 
 vi.mock("@/lib/ai/prompts", () => ({
   buildClassificationPrompt: vi.fn().mockReturnValue("test full prompt"),
@@ -112,17 +113,12 @@ const makeContract = (overrides: Record<string, any> = {}) => ({
 describe("reclassifyWithDescription", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    process.env.GOOGLE_GEMINI_API_KEY = "test-key";
     updateSetArgs = [];
     selectData = [];
 
-    mockGenerateContent.mockResolvedValue({
-      text: JSON.stringify({ classification: "GOOD", reasoning: "Strong IT match" }),
+    mockCreate.mockResolvedValue({
+      choices: [{ message: { content: JSON.stringify({ classification: "GOOD", reasoning: "Strong IT match" }) } }],
     });
-  });
-
-  afterEach(() => {
-    delete process.env.GOOGLE_GEMINI_API_KEY;
   });
 
   it("returns zeros when no eligible contracts found", async () => {
@@ -159,8 +155,8 @@ describe("reclassifyWithDescription", () => {
 
   it("tracks upgrades correctly (MAYBE -> GOOD)", async () => {
     selectData = [makeContract({ classification: "MAYBE" })];
-    mockGenerateContent.mockResolvedValueOnce({
-      text: JSON.stringify({ classification: "GOOD", reasoning: "Upgraded" }),
+    mockCreate.mockResolvedValueOnce({
+      choices: [{ message: { content: JSON.stringify({ classification: "GOOD", reasoning: "Upgraded" }) } }],
     });
 
     const result = await reclassifyWithDescription();
@@ -172,8 +168,8 @@ describe("reclassifyWithDescription", () => {
 
   it("tracks downgrades correctly (GOOD -> DISCARD)", async () => {
     selectData = [makeContract({ classification: "GOOD" })];
-    mockGenerateContent.mockResolvedValueOnce({
-      text: JSON.stringify({ classification: "DISCARD", reasoning: "Not relevant after full review" }),
+    mockCreate.mockResolvedValueOnce({
+      choices: [{ message: { content: JSON.stringify({ classification: "DISCARD", reasoning: "Not relevant after full review" }) } }],
     });
 
     const result = await reclassifyWithDescription();
@@ -184,8 +180,8 @@ describe("reclassifyWithDescription", () => {
 
   it("tracks unchanged correctly (MAYBE -> MAYBE)", async () => {
     selectData = [makeContract({ classification: "MAYBE" })];
-    mockGenerateContent.mockResolvedValueOnce({
-      text: JSON.stringify({ classification: "MAYBE", reasoning: "Still ambiguous" }),
+    mockCreate.mockResolvedValueOnce({
+      choices: [{ message: { content: JSON.stringify({ classification: "MAYBE", reasoning: "Still ambiguous" }) } }],
     });
 
     const result = await reclassifyWithDescription();
@@ -193,9 +189,9 @@ describe("reclassifyWithDescription", () => {
     expect(result.unchanged).toBe(1);
   });
 
-  it("handles Gemini errors gracefully", async () => {
+  it("handles API errors gracefully", async () => {
     selectData = [makeContract()];
-    mockGenerateContent.mockRejectedValueOnce(new Error("Gemini quota exceeded"));
+    mockCreate.mockRejectedValueOnce(new Error("Rate limit exceeded"));
 
     const result = await reclassifyWithDescription();
 
@@ -210,10 +206,10 @@ describe("reclassifyWithDescription", () => {
       makeContract({ id: "c3", noticeId: "n3", classification: "GOOD" }),
     ];
 
-    mockGenerateContent
-      .mockResolvedValueOnce({ text: JSON.stringify({ classification: "GOOD", reasoning: "Upgrade" }) })
-      .mockResolvedValueOnce({ text: JSON.stringify({ classification: "DISCARD", reasoning: "Downgrade" }) })
-      .mockResolvedValueOnce({ text: JSON.stringify({ classification: "GOOD", reasoning: "Same" }) });
+    mockCreate
+      .mockResolvedValueOnce({ choices: [{ message: { content: JSON.stringify({ classification: "GOOD", reasoning: "Upgrade" }) } }] })
+      .mockResolvedValueOnce({ choices: [{ message: { content: JSON.stringify({ classification: "DISCARD", reasoning: "Downgrade" }) } }] })
+      .mockResolvedValueOnce({ choices: [{ message: { content: JSON.stringify({ classification: "GOOD", reasoning: "Same" }) } }] });
 
     const result = await reclassifyWithDescription();
 
@@ -223,15 +219,15 @@ describe("reclassifyWithDescription", () => {
     expect(result.unchanged).toBe(1);
   });
 
-  it("sends correct config to Gemini", async () => {
+  it("sends correct config to Grok", async () => {
     selectData = [makeContract()];
 
     await reclassifyWithDescription();
 
-    expect(mockGenerateContent).toHaveBeenCalledWith({
-      model: "gemini-2.5-flash",
-      contents: [{ role: "user", parts: [{ text: "test full prompt" }] }],
-      config: { responseMimeType: "application/json" },
+    expect(mockCreate).toHaveBeenCalledWith({
+      model: "grok-4-1-fast-non-reasoning",
+      messages: [{ role: "user", content: "test full prompt" }],
+      response_format: { type: "json_object" },
     });
   });
 });

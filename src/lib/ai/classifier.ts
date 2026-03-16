@@ -1,15 +1,15 @@
 /**
- * Standard (real-time) classifier using Gemini 2.5 Flash.
+ * Standard (real-time) classifier using Grok (xAI).
  * For daily new contracts — processes sequentially with rate limiting.
  */
 
-import { GoogleGenAI } from "@google/genai";
 import { db } from "@/lib/db";
 import { contracts } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
 import { downloadDocuments } from "@/lib/sam-gov/documents";
 import { buildClassificationPrompt } from "./prompts";
 import type { ClassificationPromptInput } from "./prompts";
+import { getGrokClient, GROK_MODEL } from "./grok-client";
 import { delay } from "@/lib/utils";
 
 type Classification = "GOOD" | "MAYBE" | "DISCARD";
@@ -29,14 +29,8 @@ interface ClassifyContractResult {
   error?: string;
 }
 
-function getGeminiClient(): GoogleGenAI {
-  const apiKey = process.env.GOOGLE_GEMINI_API_KEY;
-  if (!apiKey) throw new Error("GOOGLE_GEMINI_API_KEY environment variable is not set");
-  return new GoogleGenAI({ apiKey });
-}
-
 /**
- * Parse Gemini response into a ClassificationResult.
+ * Parse AI response into a ClassificationResult.
  * Handles edge cases like markdown-wrapped JSON.
  */
 export function parseClassificationResponse(text: string | undefined): ClassificationResult {
@@ -73,34 +67,7 @@ export function parseClassificationResponse(text: string | undefined): Classific
 }
 
 /**
- * Build content parts for Gemini, including PDF documents as inline data.
- */
-function buildContentParts(
-  promptText: string,
-  documents: { buffer: Buffer; contentType: string }[]
-): Array<{ text: string } | { inlineData: { mimeType: string; data: string } }> {
-  const parts: Array<{ text: string } | { inlineData: { mimeType: string; data: string } }> = [];
-
-  // Add PDF documents as inline data parts
-  for (const doc of documents) {
-    if (doc.contentType === "application/pdf") {
-      parts.push({
-        inlineData: {
-          mimeType: "application/pdf",
-          data: doc.buffer.toString("base64"),
-        },
-      });
-    }
-  }
-
-  // Add text prompt last
-  parts.push({ text: promptText });
-
-  return parts;
-}
-
-/**
- * Classify a single contract using Gemini 2.5 Flash.
+ * Classify a single contract using Grok.
  */
 export async function classifyContract(
   contract: {
@@ -117,7 +84,7 @@ export async function classifyContract(
     resourceLinks: string[] | null;
   }
 ): Promise<ClassifyContractResult> {
-  const ai = getGeminiClient();
+  const ai = getGrokClient();
   let documentsAnalyzed = false;
 
   try {
@@ -135,25 +102,21 @@ export async function classifyContract(
       setAsideType: contract.setAsideType,
       awardCeiling: contract.awardCeiling,
       descriptionText: contract.descriptionText,
-      documentTexts: [], // PDFs sent as inline data, not text
+      documentTexts: [], // PDF content not supported via OpenAI-compatible API
     };
 
     const promptText = buildClassificationPrompt(promptInput);
 
-    // Build content parts with inline PDF data
-    const pdfDocs = downloadedDocs.filter((d) => d.contentType === "application/pdf");
-    const contentParts = buildContentParts(promptText, pdfDocs);
-
-    // Call Gemini
-    const response = await ai.models.generateContent({
-      model: "gemini-2.5-flash",
-      contents: [{ role: "user", parts: contentParts }],
-      config: {
-        responseMimeType: "application/json",
-      },
+    // Call Grok
+    const response = await ai.chat.completions.create({
+      model: GROK_MODEL,
+      messages: [{ role: "user", content: promptText }],
+      response_format: { type: "json_object" },
     });
 
-    const result = parseClassificationResponse(response.text);
+    const result = parseClassificationResponse(
+      response.choices[0]?.message?.content ?? undefined
+    );
 
     // Update database
     await db
@@ -214,7 +177,7 @@ export async function classifyContracts(
     const result = await classifyContract(contractRows[i]);
     results.push(result);
 
-    // Rate limit: 500ms between calls to stay well under Gemini limits
+    // Rate limit: 500ms between calls
     if (i < contractRows.length - 1) {
       await delay(500);
     }

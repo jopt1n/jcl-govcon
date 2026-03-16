@@ -6,12 +6,12 @@
  * for more accurate classification.
  */
 
-import { GoogleGenAI } from "@google/genai";
 import { db } from "@/lib/db";
 import { contracts } from "@/lib/db/schema";
 import { eq, and, isNotNull } from "drizzle-orm";
 import { buildClassificationPrompt } from "./prompts";
 import { parseClassificationResponse } from "./classifier";
+import { getGrokClient, GROK_MODEL } from "./grok-client";
 import { delay } from "@/lib/utils";
 
 const CHUNK_SIZE = 50;
@@ -30,12 +30,6 @@ interface ReclassifyResult {
   errors: number;
 }
 
-function getGeminiClient(): GoogleGenAI {
-  const apiKey = process.env.GOOGLE_GEMINI_API_KEY;
-  if (!apiKey) throw new Error("GOOGLE_GEMINI_API_KEY environment variable is not set");
-  return new GoogleGenAI({ apiKey });
-}
-
 // Classification ranking for upgrade/downgrade tracking
 const RANK: Record<string, number> = { DISCARD: 0, MAYBE: 1, GOOD: 2 };
 
@@ -47,7 +41,7 @@ export async function reclassifyWithDescription(
   options: ReclassifyOptions = {}
 ): Promise<ReclassifyResult> {
   const { batchSize = 500 } = options;
-  const ai = getGeminiClient();
+  const ai = getGrokClient();
 
   let reclassified = 0;
   let upgraded = 0;
@@ -108,13 +102,15 @@ export async function reclassifyWithDescription(
           documentTexts: [],
         });
 
-        const response = await ai.models.generateContent({
-          model: "gemini-2.5-flash",
-          contents: [{ role: "user", parts: [{ text: prompt }] }],
-          config: { responseMimeType: "application/json" },
+        const response = await ai.chat.completions.create({
+          model: GROK_MODEL,
+          messages: [{ role: "user", content: prompt }],
+          response_format: { type: "json_object" },
         });
 
-        const result = parseClassificationResponse(response.text);
+        const result = parseClassificationResponse(
+          response.choices[0]?.message?.content ?? undefined
+        );
 
         await db
           .update(contracts)

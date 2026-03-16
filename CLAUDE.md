@@ -6,7 +6,7 @@ Government contract pipeline for JCL Solutions LLC. Crawls SAM.gov, classifies c
 ## Tech Stack
 - **Framework**: Next.js 14 (App Router), TypeScript, Tailwind CSS
 - **Database**: PostgreSQL on Railway, Drizzle ORM (`drizzle-kit push` for schema)
-- **AI**: Gemini 2.5 Flash via `@google/genai` SDK
+- **AI**: Grok (xAI) via OpenAI-compatible SDK (`grok-4-1-fast-non-reasoning`), Gemini 2.5 Flash as fallback
 - **UI**: @dnd-kit (drag-drop Kanban), Recharts, lucide-react, Resend (email)
 - **Deploy**: Railway (nixpacks), n8n for workflow automation
 
@@ -21,7 +21,7 @@ npm run lint         # ESLint
 
 ## Architecture
 ```
-SAM.gov API → metadata crawl → metadata classification (Gemini) → ~80% DISCARD
+SAM.gov API → metadata crawl → metadata classification (Grok) → ~80% DISCARD
                                     ↓ remaining GOOD/MAYBE
                           fetch full descriptions → re-classify with descriptions
                                     ↓
@@ -29,14 +29,14 @@ SAM.gov API → metadata crawl → metadata classification (Gemini) → ~80% DIS
 ```
 
 ## Critical Rules
-- **NEVER make external API calls** (SAM.gov, Gemini, Resend) unless user explicitly says to. Costs money, has rate limits.
+- **NEVER make external API calls** (SAM.gov, Grok/Gemini, Resend) unless user explicitly says to. Costs money, has rate limits.
 - **NEVER run `npm run build`** during cleanup — use `npx tsc --noEmit` for type checking.
 - **Always use CSS variable tokens** (`var(--surface)`, `var(--text-primary)`, etc.) — never hardcode `bg-white`, `text-gray-*`.
 - Dev server: `localhost:3001` (port 3000 often occupied).
 - Database schema changes: `drizzle-kit push` (no migration files).
 
 ## API Keys & Environment
-When user provides an API key, **immediately add it to `.env`**. Current variables: `SAM_GOV_API_KEY`, `GOOGLE_GEMINI_API_KEY`, `RAILWAY_TOKEN`, `DATABASE_URL`, `INGEST_SECRET`, `RESEND_API_KEY`, `NEXT_PUBLIC_APP_URL`, `SAM_DRY_RUN`, `SAM_DAILY_LIMIT`.
+When user provides an API key, **immediately add it to `.env`**. Current variables: `SAM_GOV_API_KEY`, `GOOGLE_GEMINI_API_KEY`, `XAI_API_KEY`, `RAILWAY_TOKEN`, `DATABASE_URL`, `INGEST_SECRET`, `RESEND_API_KEY`, `NEXT_PUBLIC_APP_URL`, `SAM_DRY_RUN`, `SAM_DAILY_LIMIT`.
 
 ## Rejected Approaches
 - Never use `NEXT_PUBLIC_` prefix for secrets, API keys, or tokens — exposes them to the browser
@@ -47,7 +47,7 @@ Dark-mode-first (Bloomberg Terminal meets Linear.app). CSS variable tokens in `g
 ## Key Files
 - **Schema**: `src/lib/db/schema.ts` (5 tables, 4 enums)
 - **SAM.gov client**: `src/lib/sam-gov/client.ts`, `bulk-crawl.ts`, `mappers.ts`
-- **AI classification**: `src/lib/ai/classifier.ts`, `metadata-classifier.ts`, `prompts.ts`
+- **AI classification**: `src/lib/ai/classifier.ts`, `metadata-classifier.ts`, `prompts.ts`, `grok-client.ts`
 - **Dashboard**: `src/components/kanban/board.tsx`, `src/app/page.tsx`
 - **API routes**: `src/app/api/` (contracts, classify, crawl, ingest, settings, digest, analytics)
 

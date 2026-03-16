@@ -1,9 +1,9 @@
 import { vi } from "vitest";
 
 // Use vi.hoisted to create the mock function before vi.mock hoisting
-const { mockGenerateContent } = vi.hoisted(() => ({
-  mockGenerateContent: vi.fn().mockResolvedValue({
-    text: JSON.stringify({ classification: "DISCARD", reasoning: "Construction project" }),
+const { mockCreate } = vi.hoisted(() => ({
+  mockCreate: vi.fn().mockResolvedValue({
+    choices: [{ message: { content: JSON.stringify({ classification: "DISCARD", reasoning: "Construction project" }) } }],
   }),
 }));
 
@@ -64,15 +64,16 @@ vi.mock("@/lib/db/schema", () => ({
   crawlProgress: { id: "id", status: "status", classified: "classified", updatedAt: "updated_at" },
 }));
 
-vi.mock("@google/genai", () => {
-  return {
-    GoogleGenAI: class MockGoogleGenAI {
-      models = {
-        generateContent: mockGenerateContent,
-      };
+vi.mock("@/lib/ai/grok-client", () => ({
+  getGrokClient: vi.fn().mockReturnValue({
+    chat: {
+      completions: {
+        create: mockCreate,
+      },
     },
-  };
-});
+  }),
+  GROK_MODEL: "grok-4-1-fast-non-reasoning",
+}));
 
 vi.mock("@/lib/ai/prompts", () => ({
   buildMetadataClassificationPrompt: vi.fn().mockReturnValue("test metadata prompt"),
@@ -124,19 +125,14 @@ const makeContractRow = (overrides: Record<string, any> = {}) => ({
 describe("classifyFromMetadata", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    process.env.GOOGLE_GEMINI_API_KEY = "test-key";
     updateSetArgs = [];
     selectData = [];
     selectDataSequence = [];
     selectCallIndex = 0;
 
-    mockGenerateContent.mockResolvedValue({
-      text: JSON.stringify({ classification: "DISCARD", reasoning: "Construction project" }),
+    mockCreate.mockResolvedValue({
+      choices: [{ message: { content: JSON.stringify({ classification: "DISCARD", reasoning: "Construction project" }) } }],
     });
-  });
-
-  afterEach(() => {
-    delete process.env.GOOGLE_GEMINI_API_KEY;
   });
 
   it("returns zeros when no pending contracts found", async () => {
@@ -152,10 +148,10 @@ describe("classifyFromMetadata", () => {
       makeContractRow({ id: "c3", noticeId: "n3", title: "IT Support Services", naicsCode: "541511" }),
     ];
 
-    mockGenerateContent
-      .mockResolvedValueOnce({ text: JSON.stringify({ classification: "DISCARD", reasoning: "Construction" }) })
-      .mockResolvedValueOnce({ text: JSON.stringify({ classification: "MAYBE", reasoning: "Unclear scope" }) })
-      .mockResolvedValueOnce({ text: JSON.stringify({ classification: "GOOD", reasoning: "IT services" }) });
+    mockCreate
+      .mockResolvedValueOnce({ choices: [{ message: { content: JSON.stringify({ classification: "DISCARD", reasoning: "Construction" }) } }] })
+      .mockResolvedValueOnce({ choices: [{ message: { content: JSON.stringify({ classification: "MAYBE", reasoning: "Unclear scope" }) } }] })
+      .mockResolvedValueOnce({ choices: [{ message: { content: JSON.stringify({ classification: "GOOD", reasoning: "IT services" }) } }] });
 
     const result = await classifyFromMetadata();
 
@@ -192,7 +188,6 @@ describe("classifyFromMetadata", () => {
     await classifyFromMetadata();
 
     expect(db.update).toHaveBeenCalled();
-    // Verify the set args include classifiedFromMetadata: true
     expect(updateSetArgs.length).toBeGreaterThan(0);
     const setArg = updateSetArgs[0];
     expect(setArg.classification).toBe("DISCARD");
@@ -200,24 +195,22 @@ describe("classifyFromMetadata", () => {
     expect(setArg.aiReasoning).toBe("Construction project");
   });
 
-  it("handles Gemini errors gracefully with MAYBE fallback", async () => {
+  it("skips contract on API error without marking it classified", async () => {
     selectData = [makeContractRow()];
-    mockGenerateContent.mockRejectedValueOnce(new Error("Gemini quota exceeded"));
+    mockCreate.mockRejectedValueOnce(new Error("Rate limit exceeded"));
 
     const result = await classifyFromMetadata();
 
     expect(result.errors).toBe(1);
-    expect(result.classified).toBe(1);
-    // Should have updated DB with MAYBE fallback
-    expect(updateSetArgs.length).toBeGreaterThan(0);
-    const fallbackSet = updateSetArgs[0];
-    expect(fallbackSet.classification).toBe("MAYBE");
-    expect(fallbackSet.classifiedFromMetadata).toBe(true);
+    expect(result.classified).toBe(0);
+    expect(updateSetArgs.length).toBe(0);
   });
 
   it("handles malformed JSON by falling back to MAYBE", async () => {
     selectData = [makeContractRow()];
-    mockGenerateContent.mockResolvedValueOnce({ text: "not valid json{" });
+    mockCreate.mockResolvedValueOnce({
+      choices: [{ message: { content: "not valid json{" } }],
+    });
 
     const result = await classifyFromMetadata();
 
@@ -226,29 +219,24 @@ describe("classifyFromMetadata", () => {
   });
 
   it("respects pause status between chunks", async () => {
-    // Generate 51 contracts to trigger chunk boundary
     const manyContracts = Array.from({ length: 51 }, (_, i) =>
       makeContractRow({ id: `c${i}`, noticeId: `n${i}` })
     );
 
-    // Select 0: initial contract fetch → 51 contracts
-    // Select 1: pause check before chunk 1 → RUNNING (process chunk 1)
-    // Select 2: pause check before chunk 2 → PAUSED (stop)
     selectDataSequence = [
-      manyContracts,              // initial contract fetch
-      [{ status: "RUNNING" }],    // pause check before chunk 1
-      [{ status: "PAUSED" }],     // pause check before chunk 2
+      manyContracts,
+      [{ status: "RUNNING" }],
+      [{ status: "PAUSED" }],
     ];
 
-    mockGenerateContent.mockResolvedValue({
-      text: JSON.stringify({ classification: "DISCARD", reasoning: "Not relevant" }),
+    mockCreate.mockResolvedValue({
+      choices: [{ message: { content: JSON.stringify({ classification: "DISCARD", reasoning: "Not relevant" }) } }],
     });
 
     const result = await classifyFromMetadata({ limit: 100, crawlProgressId: "progress-1" });
 
-    // First chunk (50) processes, then pause is detected before chunk 2
     expect(result.classified).toBe(50);
-    expect(mockGenerateContent).toHaveBeenCalledTimes(50);
+    expect(mockCreate).toHaveBeenCalledTimes(50);
   });
 
   it("respects limit option", async () => {
@@ -256,19 +244,18 @@ describe("classifyFromMetadata", () => {
 
     await classifyFromMetadata({ limit: 100 });
 
-    // Verify select was called (limit is passed to the DB query)
     expect(db.select).toHaveBeenCalled();
   });
 
-  it("sends correct config to Gemini", async () => {
+  it("sends correct config to Grok", async () => {
     selectData = [makeContractRow()];
 
     await classifyFromMetadata();
 
-    expect(mockGenerateContent).toHaveBeenCalledWith({
-      model: "gemini-2.5-flash",
-      contents: [{ role: "user", parts: [{ text: "test metadata prompt" }] }],
-      config: { responseMimeType: "application/json" },
+    expect(mockCreate).toHaveBeenCalledWith({
+      model: "grok-4-1-fast-non-reasoning",
+      messages: [{ role: "user", content: "test metadata prompt" }],
+      response_format: { type: "json_object" },
     });
   });
 });
