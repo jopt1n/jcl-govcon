@@ -39,6 +39,7 @@ export function mapOpportunityToContract(opp: SamOpportunity) {
     officeState: opp.officeAddress?.state ?? null,
     setAsideCode: opp.typeOfSetAside || null,
     tags,
+    classificationRound: 0,
     descriptionFetched: false,
     classifiedFromMetadata: false,
   };

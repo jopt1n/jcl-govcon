@@ -22,7 +22,7 @@ Anything requiring physical presence, physical labor, hardware, or non-software 
 
 **MAYBE** — Partial match. Interesting opportunity that partially aligns but may need teaming, has larger scope, or requires further review. Examples: larger IT modernization programs (could subcontract), mixed physical/digital projects, staff augmentation, training development with tech components.
 
-**DISCARD** — Poor match. Construction, physical infrastructure, manufacturing, hardware-only, requires security clearance, on-site fieldwork, drone/vehicle/weapons systems, physical R&D, lab work, medical/clinical services, logistics/warehousing, janitorial, facilities management, or any work that fundamentally cannot be delivered remotely by a solo software developer. Still provide clear reasoning for why it doesn't fit.
+**DISCARD** — Poor match. Construction, physical infrastructure, manufacturing, hardware-only, requires security clearance, on-site fieldwork, drone/vehicle/weapons systems, physical R&D, lab work, medical/clinical services, logistics/warehousing, janitorial, facilities management, or any work that fundamentally cannot be delivered remotely by a solo software developer. Also DISCARD contracts with restrictive set-asides (8(a), SDVOSB, HUBZone, WOSB, EDWOSB, Veteran-owned, Native American-owned) — these should be filtered before AI classification, but if they reach the classifier, DISCARD them. Still provide clear reasoning for why it doesn't fit.
 `.trim();
 
 interface ClassificationPromptInput {
@@ -151,7 +151,7 @@ ${metadata}
 ## Classification Rules (Conservative)
 - **GOOD** — Title or metadata explicitly mentions software, application, web, API, database, cloud, AI, machine learning, data analytics, cybersecurity, IT modernization, automation, or consulting AND is remote-deliverable
 - **MAYBE** — Ambiguous from metadata alone, could be relevant, needs full description review
-- **DISCARD** — Clearly construction, manufacturing, facilities, janitorial, heavy equipment, medical supplies, drone/vehicle/weapons systems, physical R&D, lab work, logistics/warehousing, transportation, repair/maintenance, staffing, or other non-IT physical work
+- **DISCARD** — Clearly construction, manufacturing, facilities, janitorial, heavy equipment, medical supplies, drone/vehicle/weapons systems, physical R&D, lab work, logistics/warehousing, transportation, repair/maintenance, staffing, or other non-IT physical work. Also DISCARD contracts with restrictive set-asides (8(a), SDVOSB, HUBZone, WOSB, EDWOSB, Veteran-owned, Native American-owned) — these should be filtered before AI classification, but if they reach the classifier, DISCARD them
 
 If the contract has very little information to judge (missing description, vague title, unclear scope), classify as MAYBE with reasoning that notes insufficient information for confident classification.
 

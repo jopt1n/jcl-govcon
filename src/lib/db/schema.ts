@@ -89,6 +89,7 @@ export const contracts = pgTable(
     // Computed tags for filtering
     tags: jsonb("tags").$type<string[]>().default([]),
     // Pipeline phase tracking
+    classificationRound: integer("classification_round").notNull().default(1),
     descriptionFetched: boolean("description_fetched").notNull().default(false),
     classifiedFromMetadata: boolean("classified_from_metadata").notNull().default(false),
     createdAt: timestamp("created_at", { withTimezone: true })
