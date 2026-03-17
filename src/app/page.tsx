@@ -1,7 +1,7 @@
 import { KanbanBoard } from "@/components/kanban/board";
 import { CrawlStatus } from "@/components/crawl-status";
 import { DashboardStats } from "@/components/dashboard-stats";
-import { ClassifyControl } from "@/components/classify-control";
+
 
 export default function DashboardPage() {
   return (
@@ -13,14 +13,7 @@ export default function DashboardPage() {
         </p>
       </div>
       <CrawlStatus />
-      <div className="flex flex-col lg:flex-row gap-3">
-        <div className="flex-1">
-          <DashboardStats />
-        </div>
-        <div className="lg:w-80 shrink-0">
-          <ClassifyControl />
-        </div>
-      </div>
+      <DashboardStats />
       <KanbanBoard />
     </div>
   );
