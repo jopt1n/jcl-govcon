@@ -4,11 +4,18 @@
  * Re-classifies GOOD/MAYBE contracts from Round 1 using full descriptions
  * and PDF document text extracted via pdf-parse.
  *
+ * --dry-run only skips the final bulk DB update. All fetching, downloading,
+ * PDF parsing, and Grok classification run normally.
+ *
  * Usage:
  *   npx tsx --import ./scripts/load-env.ts scripts/deep-scan.ts --dry-run --limit 5
  *   npx tsx --import ./scripts/load-env.ts scripts/deep-scan.ts --skip 10 --limit 50
  *   npx tsx --import ./scripts/load-env.ts scripts/deep-scan.ts
  */
+
+// Override SAM_DRY_RUN — this script has its own --dry-run that only skips DB writes.
+// SAM.gov fetches and doc downloads must always run so we can test the full pipeline.
+delete process.env.SAM_DRY_RUN;
 
 import { writeFileSync } from "fs";
 import { resolve, dirname } from "path";
@@ -264,16 +271,24 @@ async function main() {
     let documentsAnalyzed = false;
 
     if (contract.resourceLinks && contract.resourceLinks.length > 0) {
+      console.log(`[deep-scan] ${contract.noticeId}: ${contract.resourceLinks.length} resource links, downloading...`);
       try {
         const docs = await downloadDocuments(contract.resourceLinks);
+        console.log(`[deep-scan] ${contract.noticeId}: downloaded ${docs.length} docs (${docs.map(d => `${d.filename} [${d.contentType}]`).join(', ') || 'none'})`);
 
         for (const doc of docs) {
-          if (doc.contentType === "application/pdf" || doc.filename.endsWith(".pdf")) {
+          const isPdf = doc.contentType === "application/pdf" || doc.filename.endsWith(".pdf");
+          // SAM.gov serves files as application/octet-stream — try PDF parsing on those too
+          const isOctetStream = doc.contentType === "application/octet-stream";
+
+          if (isPdf || isOctetStream) {
             const text = await extractPdfText(doc.buffer);
             if (text) {
               documentTexts.push(text);
-            } else {
+            } else if (isPdf) {
               console.log(`[deep-scan] ${contract.noticeId}: PDF "${doc.filename}" likely scanned image, skipping`);
+            } else {
+              console.log(`[deep-scan] ${contract.noticeId}: "${doc.filename}" not a parseable PDF, skipping`);
             }
           } else {
             console.log(`[deep-scan] ${contract.noticeId}: Skipping non-PDF "${doc.filename}" (${doc.contentType})`);

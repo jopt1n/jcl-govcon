@@ -41,8 +41,10 @@ function getFilename(url: string): string {
 }
 
 /**
- * Filter resource links to only those we want to download (PDF, DOCX).
- * Resource link downloads are direct URLs and do NOT count against the API limit.
+ * Filter resource links to only those we want to download.
+ * SAM.gov API download URLs (ending in /download) are always included since
+ * the actual file type is determined by Content-Type at download time.
+ * Other URLs are filtered by file extension (PDF, DOCX).
  */
 export function filterDownloadableLinks(
   links: (string | SamResourceLink)[] | null
@@ -53,6 +55,10 @@ export function filterDownloadableLinks(
     .map((link) => (typeof link === "string" ? link : link.url))
     .filter((url) => {
       if (!url) return false;
+      // SAM.gov API download URLs don't have file extensions — always include them
+      if (url.includes("/opportunities/resources/files/") && url.endsWith("/download")) {
+        return true;
+      }
       const ext = getExtension(url);
       return ALLOWED_EXTENSIONS.has(ext);
     });
@@ -90,13 +96,16 @@ async function downloadOne(
     const contentType = res.headers.get("content-type") || "";
     const ext = getExtension(url);
 
-    // Verify content type matches what we expect, or trust the extension
-    const isAllowedType = ALLOWED_CONTENT_TYPES.has(
-      contentType.split(";")[0].trim()
-    );
+    // Verify content type matches what we expect, or trust the extension.
+    // SAM.gov API download URLs often serve files as application/octet-stream,
+    // so we accept that content type for SAM.gov URLs.
+    const normalizedType = contentType.split(";")[0].trim();
+    const isAllowedType = ALLOWED_CONTENT_TYPES.has(normalizedType);
     const isAllowedExt = ALLOWED_EXTENSIONS.has(ext);
+    const isSamGovDownload = url.includes("/opportunities/resources/files/") && url.endsWith("/download");
+    const isOctetStream = normalizedType === "application/octet-stream";
 
-    if (!isAllowedType && !isAllowedExt) {
+    if (!isAllowedType && !isAllowedExt && !(isSamGovDownload && isOctetStream)) {
       console.warn(
         `[documents] Skipping ${url}: unexpected content type "${contentType}"`
       );
