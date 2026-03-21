@@ -43,6 +43,9 @@ screenshot-*.png
 # playwright mcp
 .playwright-mcp/
 
+# batch run artifacts
+scripts/last-batch-id.txt
+
 # drizzle
 drizzle/
 

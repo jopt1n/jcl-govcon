@@ -10,7 +10,7 @@
  *   npx tsx scripts/batch-classify.ts --import-batch-id <batchId>
  */
 
-import { readFileSync } from "fs";
+import { readFileSync, writeFileSync } from "fs";
 import { resolve } from "path";
 
 // Load env before any imports that need it
@@ -250,6 +250,9 @@ async function main() {
     });
     batchId = batch.id ?? batch.batch_id;
     console.log(`[batch] Created batch: ${batchId}`);
+    const batchIdFile = resolve(__dirname, "last-batch-id.txt");
+    writeFileSync(batchIdFile, batchId, "utf-8");
+    console.log(`[batch] Batch ID saved to ${batchIdFile}`);
   }
 
   // 4. Add requests in chunks of 100
