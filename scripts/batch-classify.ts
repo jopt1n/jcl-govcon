@@ -391,8 +391,16 @@ function extractContent(item: Record<string, unknown>): string | undefined {
   return undefined;
 }
 
-// Track chunks that permanently fail for reporting
+// Track state across retry attempts
 const failedChunks: { chunkIndex: number; rowCount: number; error: string }[] = [];
+let lastSuccessfulToken: string | null = null;
+let resumeProcessed = 0;
+let resumeGood = 0;
+let resumeMaybe = 0;
+let resumeDiscard = 0;
+let resumeErrors = 0;
+let resumePageNum = 0;
+let resumeDbChunksSent = 0;
 
 async function bulkUpdateContracts(
   db: any,
@@ -458,16 +466,23 @@ async function importResults(
   sql: any,
   parseClassificationResponse: any,
 ) {
-  console.log("[batch] Fetching and importing results...");
-  failedChunks.length = 0; // Reset for this import attempt
-  let good = 0;
-  let maybe = 0;
-  let discard = 0;
-  let errors = 0;
-  let processed = 0;
-  let pageNum = 0;
-  let dbChunksSent = 0;
-  let paginationToken: string | null = null;
+  // Resume from last successful page if retrying
+  const resuming = lastSuccessfulToken !== null;
+  if (resuming) {
+    console.log(`[batch] Resuming import from page ${resumePageNum + 1} (${resumeProcessed} already imported)...`);
+  } else {
+    console.log("[batch] Fetching and importing results...");
+    failedChunks.length = 0;
+  }
+
+  let good = resuming ? resumeGood : 0;
+  let maybe = resuming ? resumeMaybe : 0;
+  let discard = resuming ? resumeDiscard : 0;
+  let errors = resuming ? resumeErrors : 0;
+  let processed = resuming ? resumeProcessed : 0;
+  let pageNum = resuming ? resumePageNum : 0;
+  let dbChunksSent = resuming ? resumeDbChunksSent : 0;
+  let paginationToken: string | null = resuming ? lastSuccessfulToken : null;
 
   // Buffer parsed results for bulk DB writes
   let buffer: ParsedResult[] = [];
@@ -530,7 +545,16 @@ async function importResults(
       `[batch] Fetched page ${pageNum}: ${processed} parsed, ${errors} errors (${good} GOOD, ${maybe} MAYBE, ${discard} DISCARD)`
     );
 
+    // Save checkpoint so retries resume from here
     paginationToken = page.pagination_token ?? null;
+    lastSuccessfulToken = paginationToken;
+    resumeProcessed = processed;
+    resumeGood = good;
+    resumeMaybe = maybe;
+    resumeDiscard = discard;
+    resumeErrors = errors;
+    resumePageNum = pageNum;
+    resumeDbChunksSent = dbChunksSent;
   } while (paginationToken);
 
   // Flush remaining buffer
@@ -547,6 +571,16 @@ async function importResults(
     }
     console.error(`[batch] These contracts were NOT updated. Re-run with --import-batch-id to retry.`);
   }
+
+  // Clear checkpoint on success
+  lastSuccessfulToken = null;
+  resumeProcessed = 0;
+  resumeGood = 0;
+  resumeMaybe = 0;
+  resumeDiscard = 0;
+  resumeErrors = 0;
+  resumePageNum = 0;
+  resumeDbChunksSent = 0;
 
   const skippedRows = failedChunks.reduce((sum, fc) => sum + fc.rowCount, 0);
   console.log(`[batch] DB import complete: ${processed - skippedRows} rows written, ${skippedRows} skipped`);
