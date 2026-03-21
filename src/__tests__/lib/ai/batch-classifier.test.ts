@@ -84,6 +84,7 @@ const mockContractRow = {
   id: "test-id", noticeId: "test-notice", title: "Test Contract",
   agency: "Test Agency", naicsCode: "541511", pscCode: "D301",
   noticeType: "Solicitation", setAsideType: "SBA", awardCeiling: "100000",
+  responseDeadline: "2026-04-01T00:00:00Z",
   descriptionText: "Test desc", resourceLinks: null,
 };
 

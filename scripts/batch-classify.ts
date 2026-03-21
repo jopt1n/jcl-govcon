@@ -1,8 +1,10 @@
 /**
  * Batch classification via xAI Batch API (50% cheaper, no rate limits).
+ * Round 3: Uses full classification prompt with description text.
  *
  * Usage:
  *   npx tsx scripts/batch-classify.ts
+ *   npx tsx scripts/batch-classify.ts --limit 5 --dry-run
  *   npx tsx scripts/batch-classify.ts --batch-id <id> --skip 8600
  *   npx tsx scripts/batch-classify.ts --poll-only <batchId>
  */
@@ -41,6 +43,8 @@ function parseArgs() {
   let batchId: string | null = null;
   let skip = 0;
   let pollOnly: string | null = null;
+  let limit: number | null = null;
+  let dryRun = false;
 
   for (let i = 0; i < args.length; i++) {
     if (args[i] === "--batch-id" && args[i + 1]) {
@@ -49,10 +53,14 @@ function parseArgs() {
       skip = parseInt(args[++i], 10);
     } else if (args[i] === "--poll-only" && args[i + 1]) {
       pollOnly = args[++i];
+    } else if (args[i] === "--limit" && args[i + 1]) {
+      limit = parseInt(args[++i], 10);
+    } else if (args[i] === "--dry-run") {
+      dryRun = true;
     }
   }
 
-  return { batchId, skip, pollOnly };
+  return { batchId, skip, pollOnly, limit, dryRun };
 }
 
 // ── Helpers ────────────────────────────────────────────────────────────────
@@ -107,12 +115,12 @@ async function xai(method: string, path: string, body?: unknown): Promise<any> {
 // ── Main ───────────────────────────────────────────────────────────────────
 
 async function main() {
-  const { batchId: resumeBatchId, skip, pollOnly } = parseArgs();
+  const { batchId: resumeBatchId, skip, pollOnly, limit, dryRun } = parseArgs();
 
   const { db } = await import("../src/lib/db");
   const { contracts } = await import("../src/lib/db/schema");
-  const { eq, and } = await import("drizzle-orm");
-  const { buildMetadataClassificationPrompt } = await import(
+  const { eq } = await import("drizzle-orm");
+  const { buildClassificationPrompt } = await import(
     "../src/lib/ai/prompts"
   );
   const { parseClassificationResponse } = await import(
@@ -126,9 +134,10 @@ async function main() {
     process.exit(0);
   }
 
-  // 1. Query all PENDING contracts not yet metadata-classified
-  console.log("[batch] Querying PENDING contracts...");
-  const pending = await db
+  // 1. Query all contracts for Round 3 reclassification
+  //    Skip user-overridden contracts to preserve manual reviews
+  console.log("[batch] Querying contracts for Round 3 classification...");
+  const queryBuilder = db
     .select({
       id: contracts.id,
       noticeId: contracts.noticeId,
@@ -136,32 +145,83 @@ async function main() {
       naicsCode: contracts.naicsCode,
       pscCode: contracts.pscCode,
       agency: contracts.agency,
-      orgPathName: contracts.orgPathName,
       noticeType: contracts.noticeType,
       setAsideType: contracts.setAsideType,
-      setAsideCode: contracts.setAsideCode,
-      popState: contracts.popState,
       awardCeiling: contracts.awardCeiling,
+      responseDeadline: contracts.responseDeadline,
+      descriptionText: contracts.descriptionText,
     })
     .from(contracts)
-    .where(
-      and(
-        eq(contracts.classification, "PENDING"),
-        eq(contracts.classifiedFromMetadata, false)
-      )
-    )
+    .where(eq(contracts.userOverride, false))
     .orderBy(contracts.postedDate);
 
+  let pending = limit
+    ? await queryBuilder.limit(limit)
+    : await queryBuilder;
+
   if (pending.length === 0) {
-    console.log("[batch] No pending contracts to classify.");
+    console.log("[batch] No contracts to classify.");
     process.exit(0);
   }
   console.log(`[batch] Found ${pending.length} contracts to classify`);
 
+  // Show description coverage stats
+  const withDesc = pending.filter((c) => c.descriptionText).length;
+  console.log(`[batch] Description coverage: ${withDesc}/${pending.length} contracts have description_text`);
+
+  // ── Dry-run mode ──────────────────────────────────────────────────────
+  if (dryRun) {
+    console.log("\n[batch] ═══ DRY RUN — Showing generated prompts ═══\n");
+    for (let i = 0; i < Math.min(pending.length, 3); i++) {
+      const contract = pending[i];
+      const prompt = buildClassificationPrompt({
+        title: contract.title,
+        agency: contract.agency,
+        naicsCode: contract.naicsCode,
+        pscCode: contract.pscCode,
+        noticeType: contract.noticeType,
+        setAsideType: contract.setAsideType,
+        awardCeiling: contract.awardCeiling,
+        responseDeadline: contract.responseDeadline
+          ? new Date(contract.responseDeadline).toISOString()
+          : null,
+        descriptionText: contract.descriptionText,
+        documentTexts: [],
+      });
+
+      console.log(`──── Contract ${i + 1}: ${contract.noticeId} ────`);
+      console.log(`Title: ${contract.title}`);
+      console.log(`Has description: ${!!contract.descriptionText} (${contract.descriptionText?.length ?? 0} chars)`);
+      console.log(`\n--- PROMPT START ---`);
+      console.log(prompt);
+      console.log(`--- PROMPT END ---\n`);
+    }
+    console.log("[batch] Dry run complete. No API calls made, no DB changes.");
+    process.exit(0);
+  }
+
+  // 2. Reset all target contracts to PENDING with classificationRound = 3
+  console.log("[batch] Resetting contracts to PENDING for Round 3...");
+  const resetIds = pending.map((c) => c.id);
+  const { inArray } = await import("drizzle-orm");
+  // Reset in chunks to avoid query size limits
+  for (let i = 0; i < resetIds.length; i += 500) {
+    const chunk = resetIds.slice(i, i + 500);
+    await db
+      .update(contracts)
+      .set({
+        classification: "PENDING",
+        classificationRound: 3,
+        updatedAt: new Date(),
+      })
+      .where(inArray(contracts.id, chunk));
+  }
+  console.log(`[batch] Reset ${resetIds.length} contracts to PENDING (round 3)`);
+
   // Build a lookup map: noticeId → contract
   const contractMap = new Map(pending.map((c) => [c.noticeId, c]));
 
-  // 2. Create or resume batch
+  // 3. Create or resume batch
   let batchId: string;
   if (resumeBatchId) {
     batchId = resumeBatchId;
@@ -169,28 +229,30 @@ async function main() {
   } else {
     const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
     const batch = await xai("POST", "/batches", {
-      name: `metadata-classification-${timestamp}`,
+      name: `round3-classification-${timestamp}`,
     });
     batchId = batch.id ?? batch.batch_id;
     console.log(`[batch] Created batch: ${batchId}`);
   }
 
-  // 3-4. Add requests in chunks of 100
+  // 4. Add requests in chunks of 100
   const startIdx = skip > 0 ? skip : 0;
   for (let i = startIdx; i < pending.length; i += CHUNK_SIZE) {
     const chunk = pending.slice(i, i + CHUNK_SIZE);
     const batchRequests = chunk.map((contract) => {
-      const prompt = buildMetadataClassificationPrompt({
+      const prompt = buildClassificationPrompt({
         title: contract.title,
+        agency: contract.agency,
         naicsCode: contract.naicsCode,
         pscCode: contract.pscCode,
-        agency: contract.agency,
-        orgPathName: contract.orgPathName,
         noticeType: contract.noticeType,
         setAsideType: contract.setAsideType,
-        setAsideCode: contract.setAsideCode,
-        popState: contract.popState,
         awardCeiling: contract.awardCeiling,
+        responseDeadline: contract.responseDeadline
+          ? new Date(contract.responseDeadline).toISOString()
+          : null,
+        descriptionText: contract.descriptionText,
+        documentTexts: [],
       });
 
       return {
@@ -301,28 +363,24 @@ async function pollAndImport(
 
         const result = parseClassificationResponse(content);
 
+        const updateData = {
+          classification: result.classification,
+          aiReasoning: result.reasoning,
+          summary: result.summary,
+          classificationRound: 3,
+          updatedAt: new Date(),
+        };
+
         if (contract) {
           await db
             .update(contracts)
-            .set({
-              classification: result.classification,
-              aiReasoning: result.reasoning,
-              summary: result.summary,
-              classifiedFromMetadata: true,
-              updatedAt: new Date(),
-            })
+            .set(updateData)
             .where(eq(contracts.id, contract.id));
         } else {
           // Poll-only mode: update by noticeId
           await db
             .update(contracts)
-            .set({
-              classification: result.classification,
-              aiReasoning: result.reasoning,
-              summary: result.summary,
-              classifiedFromMetadata: true,
-              updatedAt: new Date(),
-            })
+            .set(updateData)
             .where(eq(contracts.noticeId, noticeId));
         }
 
@@ -357,7 +415,7 @@ async function pollAndImport(
     finalStatus.cost_breakdown?.total_cost_usd_ticks ?? 0;
   const costUsd = costTicks / 1e10;
 
-  console.log("\n[batch] ═══ Classification Complete ═══");
+  console.log("\n[batch] ═══ Round 3 Classification Complete ═══");
   console.log(`  Total classified: ${processed}`);
   console.log(`  GOOD:    ${good}`);
   console.log(`  MAYBE:   ${maybe}`);

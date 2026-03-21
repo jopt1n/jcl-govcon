@@ -79,6 +79,7 @@ const makeContract = (overrides: Partial<Parameters<typeof classifyContract>[0]>
   noticeType: "Solicitation",
   setAsideType: "SBA",
   awardCeiling: "100000",
+  responseDeadline: "2026-04-01T00:00:00Z",
   descriptionText: "Test description",
   resourceLinks: null,
   ...overrides,

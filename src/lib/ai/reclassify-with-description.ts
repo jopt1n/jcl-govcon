@@ -61,6 +61,7 @@ export async function reclassifyWithDescription(
       noticeType: contracts.noticeType,
       setAsideType: contracts.setAsideType,
       awardCeiling: contracts.awardCeiling,
+      responseDeadline: contracts.responseDeadline,
       descriptionText: contracts.descriptionText,
       classification: contracts.classification,
     })
@@ -98,6 +99,11 @@ export async function reclassifyWithDescription(
           noticeType: contract.noticeType,
           setAsideType: contract.setAsideType,
           awardCeiling: contract.awardCeiling,
+          responseDeadline: contract.responseDeadline
+            ? contract.responseDeadline instanceof Date
+              ? contract.responseDeadline.toISOString()
+              : String(contract.responseDeadline)
+            : null,
           descriptionText: contract.descriptionText,
           documentTexts: [],
         });

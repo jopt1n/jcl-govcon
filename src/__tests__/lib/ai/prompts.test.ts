@@ -17,6 +17,7 @@ function makeInput(
     noticeType: "Solicitation",
     setAsideType: "SBA",
     awardCeiling: "500000",
+    responseDeadline: "2026-04-01T00:00:00Z",
     descriptionText: "Provide IT support services.",
     documentTexts: [],
     ...overrides,
@@ -90,6 +91,33 @@ describe("buildClassificationPrompt", () => {
     const prompt = buildClassificationPrompt(makeInput());
     expect(prompt).toContain("Respond with valid JSON only");
     expect(prompt).toContain('"classification": "GOOD" | "MAYBE" | "DISCARD"');
+  });
+
+  it("includes sole-source DISCARD rule", () => {
+    const prompt = buildClassificationPrompt(makeInput());
+    expect(prompt).toContain("sole-source awards");
+    expect(prompt).toContain("sole source");
+    expect(prompt).toContain("not a request for competitive quotes");
+  });
+
+  it("includes expired deadline DISCARD rule", () => {
+    const prompt = buildClassificationPrompt(makeInput());
+    expect(prompt).toContain("response deadline has already passed");
+    expect(prompt).toContain("opportunity has closed");
+  });
+
+  it("includes responseDeadline in metadata when provided", () => {
+    const prompt = buildClassificationPrompt(
+      makeInput({ responseDeadline: "2026-04-01T00:00:00Z" })
+    );
+    expect(prompt).toContain("Response Deadline: 2026-04-01T00:00:00Z");
+  });
+
+  it("omits responseDeadline when null", () => {
+    const prompt = buildClassificationPrompt(
+      makeInput({ responseDeadline: null })
+    );
+    expect(prompt).not.toContain("Response Deadline:");
   });
 });
 

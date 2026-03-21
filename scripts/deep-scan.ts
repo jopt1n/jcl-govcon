@@ -199,6 +199,7 @@ async function main() {
       noticeType: contracts.noticeType,
       setAsideType: contracts.setAsideType,
       awardCeiling: contracts.awardCeiling,
+      responseDeadline: contracts.responseDeadline,
       descriptionText: contracts.descriptionText,
       descriptionFetched: contracts.descriptionFetched,
       resourceLinks: contracts.resourceLinks,
@@ -327,6 +328,11 @@ async function main() {
       noticeType: contract.noticeType,
       setAsideType: contract.setAsideType,
       awardCeiling: contract.awardCeiling,
+      responseDeadline: contract.responseDeadline
+        ? (contract.responseDeadline instanceof Date
+          ? contract.responseDeadline.toISOString()
+          : String(contract.responseDeadline))
+        : null,
       descriptionText: descriptionText,
       documentTexts: cappedDocTexts,
     };

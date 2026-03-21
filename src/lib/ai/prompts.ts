@@ -22,7 +22,7 @@ Anything requiring physical presence, physical labor, hardware, or non-software 
 
 **MAYBE** — Partial match. Interesting opportunity that partially aligns but may need teaming, has larger scope, or requires further review. Examples: larger IT modernization programs (could subcontract), mixed physical/digital projects, staff augmentation, training development with tech components.
 
-**DISCARD** — Poor match. Construction, physical infrastructure, manufacturing, hardware-only, requires security clearance, on-site fieldwork, drone/vehicle/weapons systems, physical R&D, lab work, medical/clinical services, logistics/warehousing, janitorial, facilities management, or any work that fundamentally cannot be delivered remotely by a solo software developer. Also DISCARD contracts with restrictive set-asides (8(a), SDVOSB, HUBZone, WOSB, EDWOSB, Veteran-owned, Native American-owned) — these should be filtered before AI classification, but if they reach the classifier, DISCARD them. Still provide clear reasoning for why it doesn't fit.
+**DISCARD** — Poor match. Construction, physical infrastructure, manufacturing, hardware-only, requires security clearance, on-site fieldwork, drone/vehicle/weapons systems, physical R&D, lab work, medical/clinical services, logistics/warehousing, janitorial, facilities management, or any work that fundamentally cannot be delivered remotely by a solo software developer. Also DISCARD contracts with restrictive set-asides (8(a), SDVOSB, HUBZone, WOSB, EDWOSB, Veteran-owned, Native American-owned) — these should be filtered before AI classification, but if they reach the classifier, DISCARD them. Also DISCARD sole-source awards — contracts where the description states a specific vendor has already been selected, includes language like 'sole source', 'only known responsible source', 'not a request for competitive quotes', 'intent to award to [specific company]', 'is the only source', or names a specific incumbent contractor who has been pre-selected. These are not open competitions and JCL cannot bid on them. Also DISCARD contracts where the response deadline has already passed. If the Response Deadline is before today's date, mark as DISCARD with reasoning that the opportunity has closed. Still provide clear reasoning for why it doesn't fit.
 `.trim();
 
 interface ClassificationPromptInput {
@@ -33,6 +33,7 @@ interface ClassificationPromptInput {
   noticeType: string | null;
   setAsideType: string | null;
   awardCeiling: string | null;
+  responseDeadline: string | null;
   descriptionText: string | null;
   documentTexts: string[];
 }
@@ -50,6 +51,7 @@ export function buildClassificationPrompt(input: ClassificationPromptInput): str
     input.noticeType ? `Notice Type: ${input.noticeType}` : null,
     input.setAsideType ? `Set-Aside: ${input.setAsideType}` : null,
     input.awardCeiling ? `Award Ceiling: $${input.awardCeiling}` : null,
+    input.responseDeadline ? `Response Deadline: ${input.responseDeadline}` : null,
   ]
     .filter(Boolean)
     .join("\n");

@@ -80,6 +80,7 @@ export async function classifyContract(
     noticeType: string | null;
     setAsideType: string | null;
     awardCeiling: string | null;
+    responseDeadline: string | Date | null;
     descriptionText: string | null;
     resourceLinks: string[] | null;
   }
@@ -93,6 +94,7 @@ export async function classifyContract(
     documentsAnalyzed = downloadedDocs.length > 0;
 
     // Build prompt
+    const deadline = contract.responseDeadline;
     const promptInput: ClassificationPromptInput = {
       title: contract.title,
       agency: contract.agency,
@@ -101,6 +103,7 @@ export async function classifyContract(
       noticeType: contract.noticeType,
       setAsideType: contract.setAsideType,
       awardCeiling: contract.awardCeiling,
+      responseDeadline: deadline instanceof Date ? deadline.toISOString() : deadline,
       descriptionText: contract.descriptionText,
       documentTexts: [], // PDF content not supported via OpenAI-compatible API
     };
@@ -167,6 +170,7 @@ export async function classifyContracts(
     noticeType: string | null;
     setAsideType: string | null;
     awardCeiling: string | null;
+    responseDeadline: string | Date | null;
     descriptionText: string | null;
     resourceLinks: string[] | null;
   }>
