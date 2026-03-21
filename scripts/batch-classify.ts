@@ -468,11 +468,11 @@ async function importResults(
 ) {
   // Resume from last successful page if retrying
   const resuming = lastSuccessfulToken !== null;
+  failedChunks.length = 0; // Always clear — retries re-process failed chunks
   if (resuming) {
     console.log(`[batch] Resuming import from page ${resumePageNum + 1} (${resumeProcessed} already imported)...`);
   } else {
     console.log("[batch] Fetching and importing results...");
-    failedChunks.length = 0;
   }
 
   let good = resuming ? resumeGood : 0;
