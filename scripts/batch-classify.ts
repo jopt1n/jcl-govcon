@@ -7,6 +7,7 @@
  *   npx tsx scripts/batch-classify.ts --limit 5 --dry-run
  *   npx tsx scripts/batch-classify.ts --batch-id <id> --skip 8600
  *   npx tsx scripts/batch-classify.ts --poll-only <batchId>
+ *   npx tsx scripts/batch-classify.ts --import-batch-id <batchId>
  */
 
 import { readFileSync } from "fs";
@@ -35,6 +36,8 @@ const MAX_RETRIES = 3;
 const BACKOFF_BASE_MS = 5_000;
 const CHUNK_DELAY_MS = 500;
 const FETCH_TIMEOUT_MS = 60_000;
+const RESULTS_FETCH_TIMEOUT_MS = 120_000;
+const DB_CHUNK_SIZE = 500;
 
 // ── CLI args ──────────────────────────────────────────────────────────────
 
@@ -43,6 +46,7 @@ function parseArgs() {
   let batchId: string | null = null;
   let skip = 0;
   let pollOnly: string | null = null;
+  let importBatchId: string | null = null;
   let limit: number | null = null;
   let dryRun = false;
 
@@ -53,6 +57,8 @@ function parseArgs() {
       skip = parseInt(args[++i], 10);
     } else if (args[i] === "--poll-only" && args[i + 1]) {
       pollOnly = args[++i];
+    } else if (args[i] === "--import-batch-id" && args[i + 1]) {
+      importBatchId = args[++i];
     } else if (args[i] === "--limit" && args[i + 1]) {
       limit = parseInt(args[++i], 10);
     } else if (args[i] === "--dry-run") {
@@ -60,7 +66,7 @@ function parseArgs() {
     }
   }
 
-  return { batchId, skip, pollOnly, limit, dryRun };
+  return { batchId, skip, pollOnly, importBatchId, limit, dryRun };
 }
 
 // ── Helpers ────────────────────────────────────────────────────────────────
@@ -69,7 +75,7 @@ function sleep(ms: number) {
   return new Promise((r) => setTimeout(r, ms));
 }
 
-async function xai(method: string, path: string, body?: unknown): Promise<any> {
+async function xai(method: string, path: string, body?: unknown, timeoutMs = FETCH_TIMEOUT_MS): Promise<any> {
   for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
     try {
       const res = await fetch(`${BASE_URL}${path}`, {
@@ -79,7 +85,7 @@ async function xai(method: string, path: string, body?: unknown): Promise<any> {
           Authorization: `Bearer ${XAI_API_KEY}`,
         },
         ...(body ? { body: JSON.stringify(body) } : {}),
-        signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
+        signal: AbortSignal.timeout(timeoutMs),
       });
 
       if (res.ok) return res.json();
@@ -115,11 +121,11 @@ async function xai(method: string, path: string, body?: unknown): Promise<any> {
 // ── Main ───────────────────────────────────────────────────────────────────
 
 async function main() {
-  const { batchId: resumeBatchId, skip, pollOnly, limit, dryRun } = parseArgs();
+  const { batchId: resumeBatchId, skip, pollOnly, importBatchId, limit, dryRun } = parseArgs();
 
   const { db } = await import("../src/lib/db");
   const { contracts } = await import("../src/lib/db/schema");
-  const { eq } = await import("drizzle-orm");
+  const { eq, sql } = await import("drizzle-orm");
   const { buildClassificationPrompt } = await import(
     "../src/lib/ai/prompts"
   );
@@ -127,10 +133,24 @@ async function main() {
     "../src/lib/ai/classifier"
   );
 
+  // ── Import-only mode (retry import from completed batch) ────────────
+  if (importBatchId) {
+    console.log(`[batch] Import-only mode for completed batch: ${importBatchId}`);
+    const status = await xai("GET", `/batches/${importBatchId}`);
+    const state = status.state ?? {};
+    console.log(`[batch] Batch status: ${state.num_success ?? 0} success, ${state.num_error ?? 0} error, ${state.num_pending ?? 0} pending`);
+    if ((state.num_pending ?? 0) > 0) {
+      console.error("[batch] Batch still has pending requests — use --poll-only instead");
+      process.exit(1);
+    }
+    await importResults(importBatchId, db, sql, parseClassificationResponse);
+    process.exit(0);
+  }
+
   // ── Poll-only mode ────────────────────────────────────────────────────
   if (pollOnly) {
     console.log(`[batch] Poll-only mode for batch: ${pollOnly}`);
-    await pollAndImport(pollOnly, db, contracts, eq, parseClassificationResponse);
+    await pollAndImport(pollOnly, db, sql, parseClassificationResponse);
     process.exit(0);
   }
 
@@ -218,9 +238,6 @@ async function main() {
   }
   console.log(`[batch] Reset ${resetIds.length} contracts to PENDING (round 3)`);
 
-  // Build a lookup map: noticeId → contract
-  const contractMap = new Map(pending.map((c) => [c.noticeId, c]));
-
   // 3. Create or resume batch
   let batchId: string;
   if (resumeBatchId) {
@@ -280,7 +297,7 @@ async function main() {
   }
 
   // 5-7. Poll and import results
-  await pollAndImport(batchId, db, contracts, eq, parseClassificationResponse, contractMap);
+  await pollAndImport(batchId, db, sql, parseClassificationResponse);
   process.exit(0);
 }
 
@@ -289,12 +306,10 @@ async function main() {
 async function pollAndImport(
   batchId: string,
   db: any,
-  contracts: any,
-  eq: any,
+  sql: any,
   parseClassificationResponse: any,
-  contractMap?: Map<string, any>
 ) {
-  // 5. Poll until done
+  // Poll until done
   console.log("[batch] Polling for completion...");
   let done = false;
   while (!done) {
@@ -315,75 +330,114 @@ async function pollAndImport(
     }
   }
 
-  // 6. Paginate through results and update DB
-  console.log("[batch] Fetching results...");
+  await importResults(batchId, db, sql, parseClassificationResponse);
+}
+
+// ── Import Results (bulk) ─────────────────────────────────────────────────
+
+type ParsedResult = {
+  noticeId: string;
+  classification: string;
+  reasoning: string;
+  summary: string;
+};
+
+function extractContent(item: Record<string, unknown>): string | undefined {
+  // Shape 1: batch_result.response.chat_get_completion.choices[0].message.content
+  const batchResult = (item as any).batch_result?.response?.chat_get_completion;
+  if (batchResult?.choices?.[0]?.message?.content) {
+    return batchResult.choices[0].message.content;
+  }
+  // Shape 2: response.choices[0].message.content or response.content
+  const response = item.response as Record<string, unknown> | undefined;
+  if (response) {
+    if (typeof response.content === "string") return response.content;
+    const choices = response.choices as { message?: { content?: string } }[] | undefined;
+    if (choices?.[0]?.message?.content) return choices[0].message.content;
+  }
+  return undefined;
+}
+
+async function bulkUpdateContracts(
+  db: any,
+  sql: any,
+  rows: ParsedResult[],
+) {
+  if (rows.length === 0) return;
+
+  // Build VALUES list for UPDATE ... FROM (VALUES ...) pattern
+  // This does 1 round trip per chunk instead of N individual UPDATEs
+  for (let i = 0; i < rows.length; i += DB_CHUNK_SIZE) {
+    const chunk = rows.slice(i, i + DB_CHUNK_SIZE);
+    const values = chunk
+      .map(
+        (r) =>
+          `(${escapeLiteral(r.noticeId)}, ${escapeLiteral(r.classification)}, ${escapeLiteral(r.reasoning)}, ${escapeLiteral(r.summary)})`
+      )
+      .join(",\n");
+
+    await db.execute(sql`
+      UPDATE contracts SET
+        classification = v.classification::classification,
+        ai_reasoning = v.reasoning,
+        summary = v.summary,
+        classification_round = 3,
+        updated_at = NOW()
+      FROM (VALUES ${sql.raw(values)}) AS v(notice_id, classification, reasoning, summary)
+      WHERE contracts.notice_id = v.notice_id
+    `);
+  }
+}
+
+function escapeLiteral(val: string | null | undefined): string {
+  if (val == null) return "NULL";
+  // Escape single quotes by doubling them, then wrap in quotes
+  return `'${String(val).replace(/'/g, "''")}'`;
+}
+
+async function importResults(
+  batchId: string,
+  db: any,
+  sql: any,
+  parseClassificationResponse: any,
+) {
+  console.log("[batch] Fetching and importing results...");
   let good = 0;
   let maybe = 0;
   let discard = 0;
   let errors = 0;
   let processed = 0;
+  let pageNum = 0;
   let paginationToken: string | null = null;
 
+  // Buffer parsed results for bulk DB writes
+  let buffer: ParsedResult[] = [];
+
   do {
+    pageNum++;
     const params = new URLSearchParams({ page_size: "100" });
     if (paginationToken) params.set("pagination_token", paginationToken);
 
     const page = await xai(
       "GET",
-      `/batches/${batchId}/results?${params.toString()}`
+      `/batches/${batchId}/results?${params.toString()}`,
+      undefined,
+      RESULTS_FETCH_TIMEOUT_MS,
     );
 
-    // Process succeeded results
+    // Parse succeeded results
     const succeeded: unknown[] = page.succeeded ?? page.results ?? [];
     for (const item of succeeded as Record<string, unknown>[]) {
       const noticeId = item.batch_request_id as string;
-
-      // If we have a contractMap, use it for id-based lookup; otherwise query by noticeId
-      const contract = contractMap?.get(noticeId);
-
       try {
-        // Handle both possible response shapes
-        const response = item.response as Record<string, unknown> | undefined;
-        const batchResult = (item as any).batch_result?.response?.chat_get_completion;
-        let content: string | undefined;
-
-        if (batchResult?.choices?.[0]?.message?.content) {
-          content = batchResult.choices[0].message.content;
-        } else if (response) {
-          if (typeof response.content === "string") {
-            content = response.content;
-          }
-          const choices = response.choices as
-            | { message?: { content?: string } }[]
-            | undefined;
-          if (!content && choices?.[0]?.message?.content) {
-            content = choices[0].message.content;
-          }
-        }
-
+        const content = extractContent(item);
         const result = parseClassificationResponse(content);
-
-        const updateData = {
+        buffer.push({
+          noticeId,
           classification: result.classification,
-          aiReasoning: result.reasoning,
-          summary: result.summary,
-          classificationRound: 3,
-          updatedAt: new Date(),
-        };
-
-        if (contract) {
-          await db
-            .update(contracts)
-            .set(updateData)
-            .where(eq(contracts.id, contract.id));
-        } else {
-          // Poll-only mode: update by noticeId
-          await db
-            .update(contracts)
-            .set(updateData)
-            .where(eq(contracts.noticeId, noticeId));
-        }
-
+          reasoning: result.reasoning ?? "",
+          summary: result.summary ?? "",
+        });
         processed++;
         if (result.classification === "GOOD") good++;
         else if (result.classification === "MAYBE") maybe++;
@@ -401,15 +455,32 @@ async function pollAndImport(
     const failed: unknown[] = page.failed ?? [];
     for (const item of failed as Record<string, unknown>[]) {
       errors++;
-      const noticeId = item.batch_request_id as string;
-      const errMsg = item.error_message ?? "unknown error";
+      const noticeId = (item as Record<string, unknown>).batch_request_id as string;
+      const errMsg = (item as Record<string, unknown>).error_message ?? "unknown error";
       console.error(`[batch] Failed request ${noticeId}: ${errMsg}`);
     }
+
+    // Flush buffer to DB when it hits DB_CHUNK_SIZE
+    if (buffer.length >= DB_CHUNK_SIZE) {
+      await bulkUpdateContracts(db, sql, buffer);
+      buffer = [];
+    }
+
+    console.log(
+      `[batch] Fetched page ${pageNum}: ${processed} parsed, ${errors} errors (${good} GOOD, ${maybe} MAYBE, ${discard} DISCARD)`
+    );
 
     paginationToken = page.pagination_token ?? null;
   } while (paginationToken);
 
-  // 7. Final stats
+  // Flush remaining buffer
+  if (buffer.length > 0) {
+    await bulkUpdateContracts(db, sql, buffer);
+  }
+
+  console.log(`[batch] DB import complete: ${processed} rows written in bulk`);
+
+  // Final stats
   const finalStatus = await xai("GET", `/batches/${batchId}`);
   const costTicks =
     finalStatus.cost_breakdown?.total_cost_usd_ticks ?? 0;
