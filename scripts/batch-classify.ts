@@ -38,6 +38,10 @@ const CHUNK_DELAY_MS = 500;
 const FETCH_TIMEOUT_MS = 60_000;
 const RESULTS_FETCH_TIMEOUT_MS = 120_000;
 const DB_CHUNK_SIZE = 500;
+const IMPORT_MAX_RETRIES = 5;
+const IMPORT_RETRY_DELAY_MS = 30_000;
+const DB_CHUNK_MAX_RETRIES = 3;
+const DB_CHUNK_RETRY_DELAY_MS = 10_000;
 
 // ── CLI args ──────────────────────────────────────────────────────────────
 
@@ -143,7 +147,7 @@ async function main() {
       console.error("[batch] Batch still has pending requests — use --poll-only instead");
       process.exit(1);
     }
-    await importResults(importBatchId, db, sql, parseClassificationResponse);
+    await importResultsWithRetry(importBatchId, db, sql, parseClassificationResponse);
     process.exit(0);
   }
 
@@ -333,7 +337,33 @@ async function pollAndImport(
     }
   }
 
-  await importResults(batchId, db, sql, parseClassificationResponse);
+  await importResultsWithRetry(batchId, db, sql, parseClassificationResponse);
+}
+
+async function importResultsWithRetry(
+  batchId: string,
+  db: any,
+  sql: any,
+  parseClassificationResponse: any,
+) {
+  for (let attempt = 1; attempt <= IMPORT_MAX_RETRIES; attempt++) {
+    try {
+      await importResults(batchId, db, sql, parseClassificationResponse);
+      return;
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      if (attempt < IMPORT_MAX_RETRIES) {
+        console.error(
+          `[batch] Results fetch/import failed (attempt ${attempt}/${IMPORT_MAX_RETRIES}): ${msg}. Retrying in ${IMPORT_RETRY_DELAY_MS / 1000}s...`
+        );
+        await sleep(IMPORT_RETRY_DELAY_MS);
+      } else {
+        console.error(`[batch] Results fetch/import failed after ${IMPORT_MAX_RETRIES} attempts: ${msg}`);
+        console.error(`[batch] To retry manually:\n  npx tsx scripts/batch-classify.ts --import-batch-id ${batchId}`);
+        throw err;
+      }
+    }
+  }
 }
 
 // ── Import Results (bulk) ─────────────────────────────────────────────────
@@ -361,16 +391,21 @@ function extractContent(item: Record<string, unknown>): string | undefined {
   return undefined;
 }
 
+// Track chunks that permanently fail for reporting
+const failedChunks: { chunkIndex: number; rowCount: number; error: string }[] = [];
+
 async function bulkUpdateContracts(
   db: any,
   sql: any,
   rows: ParsedResult[],
+  chunkOffset: number,
 ) {
   if (rows.length === 0) return;
 
   // Build VALUES list for UPDATE ... FROM (VALUES ...) pattern
   // This does 1 round trip per chunk instead of N individual UPDATEs
   for (let i = 0; i < rows.length; i += DB_CHUNK_SIZE) {
+    const chunkIndex = chunkOffset + Math.floor(i / DB_CHUNK_SIZE);
     const chunk = rows.slice(i, i + DB_CHUNK_SIZE);
     const values = chunk
       .map(
@@ -379,16 +414,35 @@ async function bulkUpdateContracts(
       )
       .join(",\n");
 
-    await db.execute(sql`
-      UPDATE contracts SET
-        classification = v.classification::classification,
-        ai_reasoning = v.reasoning,
-        summary = v.summary,
-        classification_round = 3,
-        updated_at = NOW()
-      FROM (VALUES ${sql.raw(values)}) AS v(notice_id, classification, reasoning, summary)
-      WHERE contracts.notice_id = v.notice_id
-    `);
+    for (let attempt = 1; attempt <= DB_CHUNK_MAX_RETRIES; attempt++) {
+      try {
+        await db.execute(sql`
+          UPDATE contracts SET
+            classification = v.classification::classification,
+            ai_reasoning = v.reasoning,
+            summary = v.summary,
+            classification_round = 3,
+            updated_at = NOW()
+          FROM (VALUES ${sql.raw(values)}) AS v(notice_id, classification, reasoning, summary)
+          WHERE contracts.notice_id = v.notice_id
+        `);
+        break;
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        if (attempt < DB_CHUNK_MAX_RETRIES) {
+          const delay = DB_CHUNK_RETRY_DELAY_MS * attempt;
+          console.error(
+            `[batch] DB import failed at chunk ${chunkIndex + 1} (${chunk.length} rows): ${msg}. Retrying in ${delay / 1000}s...`
+          );
+          await sleep(delay);
+        } else {
+          console.error(
+            `[batch] DB import permanently failed at chunk ${chunkIndex + 1} (${chunk.length} rows) after ${DB_CHUNK_MAX_RETRIES} attempts: ${msg}. Skipping.`
+          );
+          failedChunks.push({ chunkIndex: chunkIndex + 1, rowCount: chunk.length, error: msg });
+        }
+      }
+    }
   }
 }
 
@@ -405,12 +459,14 @@ async function importResults(
   parseClassificationResponse: any,
 ) {
   console.log("[batch] Fetching and importing results...");
+  failedChunks.length = 0; // Reset for this import attempt
   let good = 0;
   let maybe = 0;
   let discard = 0;
   let errors = 0;
   let processed = 0;
   let pageNum = 0;
+  let dbChunksSent = 0;
   let paginationToken: string | null = null;
 
   // Buffer parsed results for bulk DB writes
@@ -465,7 +521,8 @@ async function importResults(
 
     // Flush buffer to DB when it hits DB_CHUNK_SIZE
     if (buffer.length >= DB_CHUNK_SIZE) {
-      await bulkUpdateContracts(db, sql, buffer);
+      await bulkUpdateContracts(db, sql, buffer, dbChunksSent);
+      dbChunksSent += Math.ceil(buffer.length / DB_CHUNK_SIZE);
       buffer = [];
     }
 
@@ -478,10 +535,21 @@ async function importResults(
 
   // Flush remaining buffer
   if (buffer.length > 0) {
-    await bulkUpdateContracts(db, sql, buffer);
+    await bulkUpdateContracts(db, sql, buffer, dbChunksSent);
+    dbChunksSent += Math.ceil(buffer.length / DB_CHUNK_SIZE);
   }
 
-  console.log(`[batch] DB import complete: ${processed} rows written in bulk`);
+  // Report failed chunks
+  if (failedChunks.length > 0) {
+    console.error(`\n[batch] ⚠ ${failedChunks.length} DB chunk(s) failed permanently:`);
+    for (const fc of failedChunks) {
+      console.error(`  Chunk ${fc.chunkIndex}: ${fc.rowCount} rows — ${fc.error}`);
+    }
+    console.error(`[batch] These contracts were NOT updated. Re-run with --import-batch-id to retry.`);
+  }
+
+  const skippedRows = failedChunks.reduce((sum, fc) => sum + fc.rowCount, 0);
+  console.log(`[batch] DB import complete: ${processed - skippedRows} rows written, ${skippedRows} skipped`);
 
   // Final stats
   const finalStatus = await xai("GET", `/batches/${batchId}`);
