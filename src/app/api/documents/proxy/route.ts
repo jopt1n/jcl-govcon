@@ -13,6 +13,7 @@ const TIMEOUT_MS = 30_000;
  */
 export async function GET(req: NextRequest) {
   const url = req.nextUrl.searchParams.get("url");
+  const viewInline = req.nextUrl.searchParams.get("view") === "1";
   if (!url) {
     return NextResponse.json({ error: "Missing url parameter" }, { status: 400 });
   }
@@ -54,19 +55,22 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: "Empty response from SAM.gov" }, { status: 502 });
     }
 
+    // Extract filename from Content-Disposition if available
+    const filenameMatch = contentDisposition?.match(/filename[*]?=["']?([^"';\n]+)/);
+    const filename = filenameMatch?.[1] || null;
+
     const headers: Record<string, string> = {
       "Content-Type": contentType,
       "Cache-Control": "private, max-age=3600",
     };
 
-    // If SAM.gov sends a filename, pass it through
-    if (contentDisposition) {
+    if (viewInline) {
+      // Force inline display — strip any "attachment" disposition from SAM.gov
+      headers["Content-Disposition"] = filename
+        ? `inline; filename="${filename}"`
+        : "inline";
+    } else if (contentDisposition) {
       headers["Content-Disposition"] = contentDisposition;
-    }
-
-    // For PDFs, force inline display instead of download
-    if (contentType.includes("pdf") && !contentDisposition?.includes("inline")) {
-      headers["Content-Disposition"] = "inline";
     }
 
     return new NextResponse(body as ReadableStream, { status: 200, headers });

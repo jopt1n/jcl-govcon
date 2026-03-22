@@ -316,19 +316,19 @@ export function ContractDetail({ contractId }: { contractId: string }) {
               <h3 className="text-sm font-semibold text-[var(--text-secondary)] mb-2">Documents</h3>
               <div className="space-y-1">
                 {contract.resourceLinks.filter(Boolean).map((link, i) => {
-                  const proxyUrl = `/api/documents/proxy?url=${encodeURIComponent(link)}`;
+                  const viewUrl = `/api/documents/proxy?view=1&url=${encodeURIComponent(link)}`;
+                  const downloadUrl = `/api/documents/proxy?url=${encodeURIComponent(link)}`;
                   return (
                     <div key={i} className="flex items-center gap-2">
                       <button
-                        onClick={() => setViewingDoc(proxyUrl)}
+                        onClick={() => setViewingDoc(viewUrl)}
                         className="flex items-center gap-1.5 text-sm text-[var(--accent)] hover:text-[var(--accent-hover)] cursor-pointer"
                       >
                         <Eye className="w-3 h-3" />
                         Document {i + 1}
                       </button>
                       <a
-                        href={proxyUrl}
-                        download
+                        href={downloadUrl}
                         className="text-[var(--text-tertiary)] hover:text-[var(--text-secondary)]"
                         title="Download"
                       >
