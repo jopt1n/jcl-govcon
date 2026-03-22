@@ -7,13 +7,16 @@ import {
   Building2,
   Calendar,
   DollarSign,
+  Download,
   ExternalLink,
+  Eye,
   FileText,
   Brain,
   Tag,
   Hash,
   Loader2,
   RefreshCw,
+  X,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { naicsDescription, pscDescription } from "@/lib/code-descriptions";
@@ -62,6 +65,7 @@ export function ContractDetail({ contractId }: { contractId: string }) {
   const [saving, setSaving] = useState(false);
   const [notes, setNotes] = useState("");
   const [reclassifying, setReclassifying] = useState(false);
+  const [viewingDoc, setViewingDoc] = useState<string | null>(null);
   const saveTimeout = useRef<ReturnType<typeof setTimeout>>();
 
   const fetchContract = useCallback(async () => {
@@ -141,6 +145,7 @@ export function ContractDetail({ contractId }: { contractId: string }) {
   }
 
   return (
+    <>
     <div className="max-w-5xl mx-auto space-y-6">
       {/* Header */}
       <div>
@@ -305,23 +310,33 @@ export function ContractDetail({ contractId }: { contractId: string }) {
             </a>
           </div>
 
-          {/* Resource Links — filter nulls to prevent crash */}
+          {/* Resource Links — proxy through our API for auth */}
           {contract.resourceLinks && contract.resourceLinks.length > 0 && (
             <div>
               <h3 className="text-sm font-semibold text-[var(--text-secondary)] mb-2">Documents</h3>
               <div className="space-y-1">
-                {contract.resourceLinks.filter(Boolean).map((link, i) => (
-                  <a
-                    key={i}
-                    href={link}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="flex items-center gap-1.5 text-sm text-[var(--accent)] hover:text-[var(--accent-hover)]"
-                  >
-                    <FileText className="w-3 h-3" />
-                    {link.split("/").pop() || `Document ${i + 1}`}
-                  </a>
-                ))}
+                {contract.resourceLinks.filter(Boolean).map((link, i) => {
+                  const proxyUrl = `/api/documents/proxy?url=${encodeURIComponent(link)}`;
+                  return (
+                    <div key={i} className="flex items-center gap-2">
+                      <button
+                        onClick={() => setViewingDoc(proxyUrl)}
+                        className="flex items-center gap-1.5 text-sm text-[var(--accent)] hover:text-[var(--accent-hover)] cursor-pointer"
+                      >
+                        <Eye className="w-3 h-3" />
+                        Document {i + 1}
+                      </button>
+                      <a
+                        href={proxyUrl}
+                        download
+                        className="text-[var(--text-tertiary)] hover:text-[var(--text-secondary)]"
+                        title="Download"
+                      >
+                        <Download className="w-3 h-3" />
+                      </a>
+                    </div>
+                  );
+                })}
               </div>
             </div>
           )}
@@ -353,6 +368,47 @@ export function ContractDetail({ contractId }: { contractId: string }) {
         </div>
       </div>
     </div>
+
+    {/* Document Viewer Modal */}
+    {viewingDoc && (
+      <div
+        className="fixed inset-0 z-50 flex items-center justify-center bg-black/60"
+        onClick={() => setViewingDoc(null)}
+      >
+        <div
+          className="relative w-[90vw] h-[85vh] bg-[var(--background)] border border-[var(--border)] rounded-xl shadow-2xl flex flex-col"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <div className="flex items-center justify-between px-4 py-3 border-b border-[var(--border)]">
+            <h3 className="text-sm font-semibold text-[var(--text-primary)]">Document Viewer</h3>
+            <div className="flex items-center gap-2">
+              <a
+                href={viewingDoc}
+                download
+                className="flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-md bg-[var(--surface)] border border-[var(--border)] text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
+              >
+                <Download className="w-3 h-3" />
+                Download
+              </a>
+              <button
+                onClick={() => setViewingDoc(null)}
+                className="p-1 rounded-md hover:bg-[var(--surface)] text-[var(--text-muted)] hover:text-[var(--text-primary)]"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
+          <div className="flex-1 overflow-hidden">
+            <iframe
+              src={viewingDoc}
+              className="w-full h-full border-0"
+              title="Document preview"
+            />
+          </div>
+        </div>
+      </div>
+    )}
+    </>
   );
 }
 

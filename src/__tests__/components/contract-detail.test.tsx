@@ -17,6 +17,8 @@ vi.mock("lucide-react", () => {
     DollarSign: icon,
     Clock: icon,
     Brain: icon,
+    Download: icon,
+    Eye: icon,
     Search: icon,
     Filter: icon,
     X: icon,
