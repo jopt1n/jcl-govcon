@@ -66,7 +66,53 @@ export function ContractDetail({ contractId }: { contractId: string }) {
   const [notes, setNotes] = useState("");
   const [reclassifying, setReclassifying] = useState(false);
   const [viewingDoc, setViewingDoc] = useState<string | null>(null);
+  const [blobUrl, setBlobUrl] = useState<string | null>(null);
+  const [docLoading, setDocLoading] = useState(false);
+  const [docError, setDocError] = useState<string | null>(null);
   const saveTimeout = useRef<ReturnType<typeof setTimeout>>();
+
+  // Fetch document as blob when viewingDoc changes
+  useEffect(() => {
+    if (!viewingDoc) return;
+    let cancelled = false;
+    setDocLoading(true);
+    setDocError(null);
+    setBlobUrl(null);
+
+    fetch(viewingDoc)
+      .then((res) => {
+        if (!res.ok) throw new Error(`Failed to load document (${res.status})`);
+        return res.blob();
+      })
+      .then((blob) => {
+        if (cancelled) return;
+        setBlobUrl(URL.createObjectURL(blob));
+      })
+      .catch((err) => {
+        if (cancelled) return;
+        setDocError(err instanceof Error ? err.message : "Failed to load document");
+      })
+      .finally(() => {
+        if (!cancelled) setDocLoading(false);
+      });
+
+    return () => { cancelled = true; };
+  }, [viewingDoc]);
+
+  // Cleanup blob URL on change/unmount
+  useEffect(() => {
+    return () => {
+      if (blobUrl) URL.revokeObjectURL(blobUrl);
+    };
+  }, [blobUrl]);
+
+  function closeDocViewer() {
+    if (blobUrl) URL.revokeObjectURL(blobUrl);
+    setBlobUrl(null);
+    setViewingDoc(null);
+    setDocError(null);
+    setDocLoading(false);
+  }
 
   const fetchContract = useCallback(async () => {
     try {
@@ -373,7 +419,7 @@ export function ContractDetail({ contractId }: { contractId: string }) {
     {viewingDoc && (
       <div
         className="fixed inset-0 z-50 flex items-center justify-center bg-black/60"
-        onClick={() => setViewingDoc(null)}
+        onClick={closeDocViewer}
       >
         <div
           className="relative w-[90vw] h-[85vh] bg-[var(--background)] border border-[var(--border)] rounded-xl shadow-2xl flex flex-col"
@@ -383,15 +429,14 @@ export function ContractDetail({ contractId }: { contractId: string }) {
             <h3 className="text-sm font-semibold text-[var(--text-primary)]">Document Viewer</h3>
             <div className="flex items-center gap-2">
               <a
-                href={viewingDoc}
-                download
+                href={viewingDoc.replace("view=1&", "")}
                 className="flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-md bg-[var(--surface)] border border-[var(--border)] text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
               >
                 <Download className="w-3 h-3" />
                 Download
               </a>
               <button
-                onClick={() => setViewingDoc(null)}
+                onClick={closeDocViewer}
                 className="p-1 rounded-md hover:bg-[var(--surface)] text-[var(--text-muted)] hover:text-[var(--text-primary)]"
               >
                 <X className="w-4 h-4" />
@@ -399,11 +444,30 @@ export function ContractDetail({ contractId }: { contractId: string }) {
             </div>
           </div>
           <div className="flex-1 overflow-hidden">
-            <iframe
-              src={viewingDoc}
-              className="w-full h-full border-0"
-              title="Document preview"
-            />
+            {docLoading && (
+              <div className="flex flex-col items-center justify-center h-full gap-3">
+                <Loader2 className="w-8 h-8 animate-spin text-[var(--accent)]" />
+                <p className="text-sm text-[var(--text-muted)]">Loading document...</p>
+              </div>
+            )}
+            {docError && (
+              <div className="flex flex-col items-center justify-center h-full gap-3">
+                <p className="text-sm text-red-400">{docError}</p>
+                <button
+                  onClick={() => { setViewingDoc(null); setTimeout(() => setViewingDoc(viewingDoc), 0); }}
+                  className="px-3 py-1.5 text-xs rounded-md bg-[var(--surface)] border border-[var(--border)] text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
+                >
+                  Retry
+                </button>
+              </div>
+            )}
+            {blobUrl && (
+              <iframe
+                src={blobUrl}
+                className="w-full h-full border-0"
+                title="Document preview"
+              />
+            )}
           </div>
         </div>
       </div>
