@@ -10,6 +10,31 @@ const DOCX_TYPES = new Set([
   "application/msword",
 ]);
 
+// SAM.gov sends application/octet-stream for everything — detect real type from filename
+const MIME_BY_EXT: Record<string, string> = {
+  ".pdf": "application/pdf",
+  ".doc": "application/msword",
+  ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  ".xls": "application/vnd.ms-excel",
+  ".xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  ".txt": "text/plain",
+  ".csv": "text/csv",
+  ".zip": "application/zip",
+};
+
+function detectMimeType(filename: string | null, serverContentType: string): string {
+  // If server sent a specific type (not octet-stream), trust it
+  if (serverContentType && !serverContentType.includes("octet-stream")) {
+    return serverContentType;
+  }
+  // Detect from filename extension
+  if (filename) {
+    const ext = filename.slice(filename.lastIndexOf(".")).toLowerCase();
+    if (MIME_BY_EXT[ext]) return MIME_BY_EXT[ext];
+  }
+  return serverContentType || "application/octet-stream";
+}
+
 /**
  * GET /api/documents/proxy?url=<sam-gov-download-url>&view=1
  *
@@ -55,12 +80,15 @@ export async function GET(req: NextRequest) {
       );
     }
 
-    const contentType = res.headers.get("content-type") || "application/octet-stream";
+    const rawContentType = res.headers.get("content-type") || "application/octet-stream";
     const contentDisposition = res.headers.get("content-disposition");
 
     // Extract filename from Content-Disposition if available
     const filenameMatch = contentDisposition?.match(/filename[*]?=["']?([^"';\n]+)/);
     const filename = filenameMatch?.[1] || null;
+
+    // SAM.gov sends application/octet-stream for everything — detect real type
+    const contentType = detectMimeType(filename, rawContentType);
 
     // For inline viewing of DOCX files, convert to HTML and return as JSON
     // Client uses iframe srcdoc attribute with this HTML — no blob URL needed
