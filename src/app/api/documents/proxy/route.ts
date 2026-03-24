@@ -62,18 +62,13 @@ export async function GET(req: NextRequest) {
     const filenameMatch = contentDisposition?.match(/filename[*]?=["']?([^"';\n]+)/);
     const filename = filenameMatch?.[1] || null;
 
-    // For inline viewing of DOCX files, convert to HTML
+    // For inline viewing of DOCX files, convert to HTML and return as JSON
+    // Client uses iframe srcdoc attribute with this HTML — no blob URL needed
     if (viewInline && isDocx(contentType, filename)) {
       const buffer = Buffer.from(await res.arrayBuffer());
       const result = await mammoth.convertToHtml({ buffer });
       const html = wrapHtml(result.value, filename || "Document");
-      return new NextResponse(html, {
-        status: 200,
-        headers: {
-          "Content-Type": "text/html; charset=utf-8",
-          "Cache-Control": "private, max-age=3600",
-        },
-      });
+      return NextResponse.json({ html, filename });
     }
 
     const body = res.body;

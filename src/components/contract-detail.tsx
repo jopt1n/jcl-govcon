@@ -67,26 +67,39 @@ export function ContractDetail({ contractId }: { contractId: string }) {
   const [reclassifying, setReclassifying] = useState(false);
   const [viewingDoc, setViewingDoc] = useState<string | null>(null);
   const [blobUrl, setBlobUrl] = useState<string | null>(null);
+  const [docHtml, setDocHtml] = useState<string | null>(null);
   const [docLoading, setDocLoading] = useState(false);
   const [docError, setDocError] = useState<string | null>(null);
   const saveTimeout = useRef<ReturnType<typeof setTimeout>>();
 
-  // Fetch document as blob when viewingDoc changes
+  // Fetch document when viewingDoc changes
+  // DOCX: proxy returns JSON {html} → use srcdoc (no blob URL, no download dialog)
+  // PDF: fetch as arrayBuffer → explicit Blob with MIME type → blob URL for iframe
   useEffect(() => {
     if (!viewingDoc) return;
     let cancelled = false;
     setDocLoading(true);
     setDocError(null);
     setBlobUrl(null);
+    setDocHtml(null);
 
     fetch(viewingDoc)
-      .then((res) => {
+      .then(async (res) => {
         if (!res.ok) throw new Error(`Failed to load document (${res.status})`);
-        return res.blob();
-      })
-      .then((blob) => {
-        if (cancelled) return;
-        setBlobUrl(URL.createObjectURL(blob));
+        const ct = res.headers.get("content-type") || "";
+
+        if (ct.includes("application/json")) {
+          // DOCX → proxy returned JSON with HTML string
+          const data = await res.json();
+          if (!cancelled) setDocHtml(data.html);
+        } else {
+          // PDF or other binary → create blob with explicit MIME type
+          const buffer = await res.arrayBuffer();
+          if (!cancelled) {
+            const blob = new Blob([buffer], { type: ct || "application/pdf" });
+            setBlobUrl(URL.createObjectURL(blob));
+          }
+        }
       })
       .catch((err) => {
         if (cancelled) return;
@@ -109,6 +122,7 @@ export function ContractDetail({ contractId }: { contractId: string }) {
   function closeDocViewer() {
     if (blobUrl) URL.revokeObjectURL(blobUrl);
     setBlobUrl(null);
+    setDocHtml(null);
     setViewingDoc(null);
     setDocError(null);
     setDocLoading(false);
@@ -466,6 +480,14 @@ export function ContractDetail({ contractId }: { contractId: string }) {
                 src={blobUrl}
                 className="w-full h-full border-0"
                 title="Document preview"
+              />
+            )}
+            {docHtml && (
+              <iframe
+                srcDoc={docHtml}
+                className="w-full h-full border-0"
+                title="Document preview"
+                sandbox="allow-same-origin"
               />
             )}
           </div>
