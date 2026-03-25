@@ -7,6 +7,7 @@ import { db } from "@/lib/db";
 import { contracts } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
 import { downloadDocuments } from "@/lib/sam-gov/documents";
+import { extractAllDocumentTexts } from "@/lib/document-text";
 import { buildClassificationPrompt, buildActionPlanPrompt } from "./prompts";
 import type { ClassificationPromptInput, ActionPlanInput } from "./prompts";
 import { getGrokClient, GROK_MODEL } from "./grok-client";
@@ -174,46 +175,7 @@ export async function classifyContract(
     // Generate action plan for GOOD/MAYBE contracts
     let actionPlan: string | null = null;
     if (result.classification === "GOOD" || result.classification === "MAYBE") {
-      // Extract text from downloaded document buffers for the action plan
-      // documents.ts now sniffs real content type via magic bytes
-      const docTexts: string[] = [];
-      for (const doc of downloadedDocs) {
-        try {
-          const ct = doc.contentType;
-          if (ct.includes("pdf")) {
-            const { PDFParse } = await import("pdf-parse");
-            const parser = new PDFParse({ data: new Uint8Array(doc.buffer) });
-            const pdfResult = await parser.getText();
-            await parser.destroy();
-            if (pdfResult.text?.trim()) docTexts.push(pdfResult.text.trim());
-          } else if (ct.includes("spreadsheet") || ct.includes("ms-excel")) {
-            const XLSX = await import("xlsx");
-            const wb = XLSX.read(new Uint8Array(doc.buffer), { type: "array" });
-            const texts = wb.SheetNames.map((name) => XLSX.utils.sheet_to_txt(wb.Sheets[name])).join("\n");
-            if (texts.trim()) docTexts.push(texts.trim());
-          } else if (ct.includes("wordprocessing") || ct.includes("msword")) {
-            const mammoth = await import("mammoth");
-            const mammothResult = await mammoth.convertToHtml({ buffer: doc.buffer });
-            if (mammothResult.value) docTexts.push(mammothResult.value.replace(/<[^>]+>/g, " ").trim());
-          } else {
-            // Unknown type — try pdf-parse first (throws cleanly on non-PDFs), then mammoth
-            try {
-              const { PDFParse } = await import("pdf-parse");
-              const parser = new PDFParse({ data: new Uint8Array(doc.buffer) });
-              const pdfResult = await parser.getText();
-              await parser.destroy();
-              if (pdfResult.text?.trim()) { docTexts.push(pdfResult.text.trim()); continue; }
-            } catch { /* not a PDF */ }
-            try {
-              const mammoth = await import("mammoth");
-              const mammothResult = await mammoth.convertToHtml({ buffer: doc.buffer });
-              if (mammothResult.value) docTexts.push(mammothResult.value.replace(/<[^>]+>/g, " ").trim());
-            } catch { /* not a DOCX either */ }
-          }
-        } catch {
-          // Skip documents that can't be parsed
-        }
-      }
+      const docTexts = await extractAllDocumentTexts(downloadedDocs);
       actionPlan = await generateActionPlan(contract, docTexts);
     }
 

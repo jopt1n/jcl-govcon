@@ -4,6 +4,7 @@ import { contracts } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
 import { generateActionPlan } from "@/lib/ai/classifier";
 import { downloadDocuments } from "@/lib/sam-gov/documents";
+import { extractAllDocumentTexts } from "@/lib/document-text";
 
 /**
  * GET /api/contracts/[id]
@@ -120,32 +121,9 @@ export async function POST(
       return NextResponse.json({ error: "Contract not found" }, { status: 404 });
     }
 
-    // Extract text from documents (documents.ts now sniffs real content type)
+    // Extract text from documents (documents.ts sniffs real content type via magic bytes)
     const downloadedDocs = await downloadDocuments(contract.resourceLinks);
-    const docTexts: string[] = [];
-    for (const doc of downloadedDocs) {
-      try {
-        const ct = doc.contentType;
-        if (ct.includes("pdf")) {
-          const { PDFParse } = await import("pdf-parse");
-          const parser = new PDFParse({ data: new Uint8Array(doc.buffer) });
-          const pdfResult = await parser.getText();
-          await parser.destroy();
-          if (pdfResult.text?.trim()) docTexts.push(pdfResult.text.trim());
-        } else if (ct.includes("spreadsheet") || ct.includes("ms-excel")) {
-          const XLSX = await import("xlsx");
-          const wb = XLSX.read(new Uint8Array(doc.buffer), { type: "array" });
-          const sheetTexts = wb.SheetNames.map((name) => XLSX.utils.sheet_to_txt(wb.Sheets[name])).join("\n");
-          if (sheetTexts.trim()) docTexts.push(sheetTexts.trim());
-        } else if (ct.includes("wordprocessing") || ct.includes("msword")) {
-          const mammoth = await import("mammoth");
-          const mammothResult = await mammoth.convertToHtml({ buffer: doc.buffer });
-          if (mammothResult.value) docTexts.push(mammothResult.value.replace(/<[^>]+>/g, " ").trim());
-        }
-      } catch {
-        // Skip unparseable documents
-      }
-    }
+    const docTexts = await extractAllDocumentTexts(downloadedDocs);
 
     const actionPlan = await generateActionPlan(contract, docTexts);
 

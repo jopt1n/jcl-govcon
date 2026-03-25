@@ -9,8 +9,9 @@
 
 import { db } from "../src/lib/db";
 import { contracts } from "../src/lib/db/schema";
-import { eq, and, inArray, isNull, sql } from "drizzle-orm";
+import { eq, and, inArray, isNull } from "drizzle-orm";
 import { downloadDocuments } from "../src/lib/sam-gov/documents";
+import { extractAllDocumentTexts } from "../src/lib/document-text";
 import { generateActionPlan } from "../src/lib/ai/classifier";
 
 // ── CLI args ──────────────────────────────────────────────────────
@@ -24,47 +25,7 @@ const SKIP = skipIdx !== -1 ? parseInt(args[skipIdx + 1], 10) : 0;
 
 async function extractDocTexts(resourceLinks: string[] | null): Promise<string[]> {
   const docs = await downloadDocuments(resourceLinks);
-  const texts: string[] = [];
-
-  for (const doc of docs) {
-    try {
-      const ct = doc.contentType;
-      if (ct.includes("pdf")) {
-        const { PDFParse } = await import("pdf-parse");
-        const parser = new PDFParse({ data: new Uint8Array(doc.buffer) });
-        const result = await parser.getText();
-        await parser.destroy();
-        if (result.text?.trim()) texts.push(result.text.trim());
-      } else if (ct.includes("spreadsheet") || ct.includes("ms-excel")) {
-        const XLSX = await import("xlsx");
-        const wb = XLSX.read(new Uint8Array(doc.buffer), { type: "array" });
-        const sheetTexts = wb.SheetNames.map((name) => XLSX.utils.sheet_to_txt(wb.Sheets[name])).join("\n");
-        if (sheetTexts.trim()) texts.push(sheetTexts.trim());
-      } else if (ct.includes("wordprocessing") || ct.includes("msword")) {
-        const mammoth = await import("mammoth");
-        const result = await mammoth.convertToHtml({ buffer: doc.buffer });
-        if (result.value) texts.push(result.value.replace(/<[^>]+>/g, " ").trim());
-      } else {
-        // Unknown — try pdf-parse first, then mammoth
-        try {
-          const { PDFParse } = await import("pdf-parse");
-          const parser = new PDFParse({ data: new Uint8Array(doc.buffer) });
-          const result = await parser.getText();
-          await parser.destroy();
-          if (result.text?.trim()) { texts.push(result.text.trim()); continue; }
-        } catch { /* not a PDF */ }
-        try {
-          const mammoth = await import("mammoth");
-          const result = await mammoth.convertToHtml({ buffer: doc.buffer });
-          if (result.value) texts.push(result.value.replace(/<[^>]+>/g, " ").trim());
-        } catch { /* not a DOCX */ }
-      }
-    } catch {
-      // Skip unparseable documents
-    }
-  }
-
-  return texts;
+  return extractAllDocumentTexts(docs);
 }
 
 async function main() {
