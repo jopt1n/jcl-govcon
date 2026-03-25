@@ -7,8 +7,8 @@ import { db } from "@/lib/db";
 import { contracts } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
 import { downloadDocuments } from "@/lib/sam-gov/documents";
-import { buildClassificationPrompt } from "./prompts";
-import type { ClassificationPromptInput } from "./prompts";
+import { buildClassificationPrompt, buildActionPlanPrompt } from "./prompts";
+import type { ClassificationPromptInput, ActionPlanInput } from "./prompts";
 import { getGrokClient, GROK_MODEL } from "./grok-client";
 import { delay } from "@/lib/utils";
 
@@ -67,6 +67,56 @@ export function parseClassificationResponse(text: string | undefined): Classific
 }
 
 /**
+ * Generate an action plan for a GOOD/MAYBE contract.
+ * Returns the JSON string to store in the actionPlan column, or null on failure.
+ */
+export async function generateActionPlan(
+  contract: {
+    title: string;
+    agency: string | null;
+    naicsCode: string | null;
+    awardCeiling: string | null;
+    responseDeadline: string | Date | null;
+    descriptionText: string | null;
+  },
+  documentTexts: string[] = []
+): Promise<string | null> {
+  const ai = getGrokClient();
+
+  try {
+    const deadline = contract.responseDeadline;
+    const input: ActionPlanInput = {
+      title: contract.title,
+      agency: contract.agency,
+      naicsCode: contract.naicsCode,
+      awardCeiling: contract.awardCeiling,
+      responseDeadline: deadline instanceof Date ? deadline.toISOString() : deadline,
+      descriptionText: contract.descriptionText,
+      documentTexts,
+    };
+
+    const promptText = buildActionPlanPrompt(input);
+
+    const response = await ai.chat.completions.create({
+      model: GROK_MODEL,
+      messages: [{ role: "user", content: promptText }],
+      response_format: { type: "json_object" },
+    });
+
+    const content = response.choices[0]?.message?.content;
+    if (!content) return null;
+
+    // Validate it's parseable JSON
+    const cleaned = content.replace(/```json\s*/g, "").replace(/```\s*/g, "").trim();
+    JSON.parse(cleaned); // throws if invalid
+    return cleaned;
+  } catch (err) {
+    console.error("[classifier] Error generating action plan:", err instanceof Error ? err.message : err);
+    return null;
+  }
+}
+
+/**
  * Classify a single contract using Grok.
  */
 export async function classifyContract(
@@ -121,6 +171,52 @@ export async function classifyContract(
       response.choices[0]?.message?.content ?? undefined
     );
 
+    // Generate action plan for GOOD/MAYBE contracts
+    let actionPlan: string | null = null;
+    if (result.classification === "GOOD" || result.classification === "MAYBE") {
+      // Extract text from downloaded document buffers for the action plan
+      // documents.ts now sniffs real content type via magic bytes
+      const docTexts: string[] = [];
+      for (const doc of downloadedDocs) {
+        try {
+          const ct = doc.contentType;
+          if (ct.includes("pdf")) {
+            const { PDFParse } = await import("pdf-parse");
+            const parser = new PDFParse({ data: new Uint8Array(doc.buffer) });
+            const pdfResult = await parser.getText();
+            await parser.destroy();
+            if (pdfResult.text?.trim()) docTexts.push(pdfResult.text.trim());
+          } else if (ct.includes("spreadsheet") || ct.includes("ms-excel")) {
+            const XLSX = await import("xlsx");
+            const wb = XLSX.read(new Uint8Array(doc.buffer), { type: "array" });
+            const texts = wb.SheetNames.map((name) => XLSX.utils.sheet_to_txt(wb.Sheets[name])).join("\n");
+            if (texts.trim()) docTexts.push(texts.trim());
+          } else if (ct.includes("wordprocessing") || ct.includes("msword")) {
+            const mammoth = await import("mammoth");
+            const mammothResult = await mammoth.convertToHtml({ buffer: doc.buffer });
+            if (mammothResult.value) docTexts.push(mammothResult.value.replace(/<[^>]+>/g, " ").trim());
+          } else {
+            // Unknown type — try pdf-parse first (throws cleanly on non-PDFs), then mammoth
+            try {
+              const { PDFParse } = await import("pdf-parse");
+              const parser = new PDFParse({ data: new Uint8Array(doc.buffer) });
+              const pdfResult = await parser.getText();
+              await parser.destroy();
+              if (pdfResult.text?.trim()) { docTexts.push(pdfResult.text.trim()); continue; }
+            } catch { /* not a PDF */ }
+            try {
+              const mammoth = await import("mammoth");
+              const mammothResult = await mammoth.convertToHtml({ buffer: doc.buffer });
+              if (mammothResult.value) docTexts.push(mammothResult.value.replace(/<[^>]+>/g, " ").trim());
+            } catch { /* not a DOCX either */ }
+          }
+        } catch {
+          // Skip documents that can't be parsed
+        }
+      }
+      actionPlan = await generateActionPlan(contract, docTexts);
+    }
+
     // Update database
     await db
       .update(contracts)
@@ -128,6 +224,7 @@ export async function classifyContract(
         classification: result.classification,
         aiReasoning: result.reasoning,
         summary: result.summary,
+        actionPlan,
         documentsAnalyzed,
         updatedAt: new Date(),
       })

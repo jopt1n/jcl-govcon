@@ -1,4 +1,5 @@
 import type { SamResourceLink, DownloadedDocument } from "./types";
+import { sniffContentType } from "@/lib/content-type";
 
 /** File extensions we want to download for analysis */
 const ALLOWED_EXTENSIONS = new Set([".pdf", ".docx", ".doc"]);
@@ -122,10 +123,17 @@ async function downloadOne(
       return null;
     }
 
+    // Sniff real content type from binary header when server sends octet-stream
+    let resolvedType = contentType.split(";")[0].trim();
+    if (resolvedType === "application/octet-stream" || resolvedType === "") {
+      const sniffed = sniffContentType(buffer);
+      if (sniffed) resolvedType = sniffed;
+    }
+
     return {
       url: url,
       filename: getFilename(url),
-      contentType: contentType.split(";")[0].trim(),
+      contentType: resolvedType,
       buffer,
     };
   } catch (err) {
