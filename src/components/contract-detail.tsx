@@ -6,6 +6,7 @@ import {
   ArrowLeft,
   Building2,
   Calendar,
+  Clock,
   DollarSign,
   Download,
   ExternalLink,
@@ -16,11 +17,45 @@ import {
   Hash,
   Loader2,
   RefreshCw,
+  Shield,
+  AlertTriangle,
+  Target,
+  Zap,
   X,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { naicsDescription, pscDescription } from "@/lib/code-descriptions";
 import Link from "next/link";
+
+interface ActionPlanVerdict {
+  recommendation: string;
+  confidence: number;
+  reasoning: string;
+}
+
+interface ActionPlanTechStack {
+  frontend?: string[];
+  backend?: string[];
+  database?: string[];
+  auth?: string[];
+  storage?: string[];
+  ai?: string[];
+  monitoring?: string[];
+  cicd?: string[];
+}
+
+interface ActionPlan {
+  description: string;
+  deadline: string;
+  verdict: ActionPlanVerdict;
+  ballparkBid: string;
+  deliverables: string[];
+  techStack: ActionPlanTechStack;
+  implementationSteps: string[];
+  estimatedEffort: string;
+  compliance: string[];
+  risks: string[];
+}
 
 interface Contract {
   id: string;
@@ -39,6 +74,7 @@ interface Contract {
   classification: string;
   aiReasoning: string | null;
   descriptionText: string | null;
+  actionPlan: string | null;
   userOverride: boolean;
   status: string | null;
   notes: string | null;
@@ -65,6 +101,7 @@ export function ContractDetail({ contractId }: { contractId: string }) {
   const [saving, setSaving] = useState(false);
   const [notes, setNotes] = useState("");
   const [reclassifying, setReclassifying] = useState(false);
+  const [generatingPlan, setGeneratingPlan] = useState(false);
   const [viewingDoc, setViewingDoc] = useState<string | null>(null);
   const [blobUrl, setBlobUrl] = useState<string | null>(null);
   const [docHtml, setDocHtml] = useState<string | null>(null);
@@ -185,6 +222,19 @@ export function ContractDetail({ contractId }: { contractId: string }) {
     }
   }
 
+  async function handleGenerateActionPlan() {
+    setGeneratingPlan(true);
+    try {
+      const res = await fetch(`/api/contracts/${contractId}`, { method: "POST" });
+      if (res.ok) {
+        const updated = await res.json();
+        setContract(updated);
+      }
+    } finally {
+      setGeneratingPlan(false);
+    }
+  }
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -258,6 +308,13 @@ export function ContractDetail({ contractId }: { contractId: string }) {
           {reclassifying ? "Classifying…" : contract.aiReasoning ? "Re-classify" : "Classify with AI"}
         </button>
       </div>
+
+      {/* Action Plan */}
+      <ActionPlanSection
+        contract={contract}
+        generating={generatingPlan}
+        onGenerate={handleGenerateActionPlan}
+      />
 
       {/* Two-column layout */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -495,6 +552,229 @@ export function ContractDetail({ contractId }: { contractId: string }) {
       </div>
     )}
     </>
+  );
+}
+
+// ── Verdict color helpers ─────────────────────────────────────────────────
+
+const verdictStyles: Record<string, { bg: string; border: string; text: string; glow: string }> = {
+  "PURSUE AGGRESSIVELY": { bg: "bg-emerald-500/8", border: "border-emerald-500/25", text: "text-emerald-400", glow: "shadow-[inset_0_1px_0_0_rgba(16,185,129,0.1)]" },
+  "PURSUE": { bg: "bg-blue-500/8", border: "border-blue-500/25", text: "text-blue-400", glow: "shadow-[inset_0_1px_0_0_rgba(59,130,246,0.1)]" },
+  "EXPLORE": { bg: "bg-amber-500/8", border: "border-amber-500/25", text: "text-amber-400", glow: "shadow-[inset_0_1px_0_0_rgba(245,158,11,0.1)]" },
+  "PASS": { bg: "bg-red-500/8", border: "border-red-500/25", text: "text-red-400", glow: "shadow-[inset_0_1px_0_0_rgba(239,68,68,0.1)]" },
+};
+
+const techStackIcons: Record<string, string> = {
+  frontend: "layout",
+  backend: "server",
+  database: "database",
+  auth: "shield",
+  storage: "hard-drive",
+  ai: "brain",
+  monitoring: "activity",
+  cicd: "git-branch",
+};
+
+function ConfidenceMeter({ value }: { value: number }) {
+  return (
+    <div className="flex items-center gap-1" title={`Confidence: ${value}/10`}>
+      {Array.from({ length: 10 }).map((_, i) => (
+        <div
+          key={i}
+          className={cn(
+            "w-1.5 h-3 rounded-[1px] transition-colors",
+            i < value
+              ? value >= 8 ? "bg-emerald-400" : value >= 5 ? "bg-amber-400" : "bg-red-400"
+              : "bg-[var(--border)]"
+          )}
+        />
+      ))}
+    </div>
+  );
+}
+
+function ActionPlanSection({
+  contract,
+  generating,
+  onGenerate,
+}: {
+  contract: Contract;
+  generating: boolean;
+  onGenerate: () => void;
+}) {
+  if (contract.classification !== "GOOD" && contract.classification !== "MAYBE") {
+    return null;
+  }
+
+  let plan: ActionPlan | null = null;
+  if (contract.actionPlan) {
+    try {
+      plan = JSON.parse(contract.actionPlan);
+    } catch {
+      // Invalid JSON — show regenerate
+    }
+  }
+
+  if (!plan) {
+    return (
+      <div className="relative bg-[var(--surface)] border border-dashed border-[var(--border)] rounded-lg p-6 text-center">
+        <div className="flex flex-col items-center gap-3">
+          <div className="w-10 h-10 rounded-full bg-[var(--accent)]/10 flex items-center justify-center">
+            <Target className="w-5 h-5 text-[var(--accent)]" />
+          </div>
+          <div>
+            <p className="text-sm font-medium text-[var(--text-primary)]">No Action Plan Yet</p>
+            <p className="text-xs text-[var(--text-muted)] mt-0.5">Generate a strategic brief with tech stack, bid range, and implementation steps.</p>
+          </div>
+          <button
+            onClick={onGenerate}
+            disabled={generating}
+            className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-semibold rounded-md bg-[var(--accent)] text-white hover:bg-[var(--accent-hover)] disabled:opacity-50 transition-colors"
+          >
+            <Zap className={cn("w-3.5 h-3.5", generating && "animate-pulse")} />
+            {generating ? "Generating…" : "Generate Action Plan"}
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  const vs = verdictStyles[plan.verdict?.recommendation] ?? verdictStyles["EXPLORE"];
+
+  return (
+    <div className="bg-[var(--surface)] border border-[var(--border)] rounded-lg overflow-hidden">
+      {/* ── Verdict Header ────────────────────────────────────────── */}
+      {plan.verdict && (
+        <div className={cn("px-4 py-3 border-b border-[var(--border)]", vs.bg, vs.glow)}>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <span className={cn("text-sm font-bold tracking-wide", vs.text)}>
+                {plan.verdict.recommendation}
+              </span>
+              <ConfidenceMeter value={plan.verdict.confidence} />
+            </div>
+            <button
+              onClick={onGenerate}
+              disabled={generating}
+              className="inline-flex items-center gap-1 px-2 py-1 text-xs rounded-md text-[var(--text-muted)] hover:text-[var(--accent)] hover:bg-[var(--accent)]/10 disabled:opacity-50 transition-colors"
+            >
+              <RefreshCw className={cn("w-3 h-3", generating && "animate-spin")} />
+              {generating ? "Regenerating…" : "Regenerate"}
+            </button>
+          </div>
+          <p className="text-xs text-[var(--text-secondary)] mt-1.5 leading-relaxed">{plan.verdict.reasoning}</p>
+        </div>
+      )}
+
+      {/* ── Key Metrics Strip ─────────────────────────────────────── */}
+      <div className="grid grid-cols-3 divide-x divide-[var(--border)] border-b border-[var(--border)]">
+        <div className="px-4 py-2.5">
+          <div className="flex items-center gap-1.5 text-[10px] uppercase tracking-wider text-[var(--text-muted)] font-semibold mb-0.5">
+            <Calendar className="w-3 h-3" /> Deadline
+          </div>
+          <p className="text-xs text-[var(--text-primary)] font-medium">{plan.deadline}</p>
+        </div>
+        <div className="px-4 py-2.5">
+          <div className="flex items-center gap-1.5 text-[10px] uppercase tracking-wider text-[var(--text-muted)] font-semibold mb-0.5">
+            <DollarSign className="w-3 h-3" /> Ballpark Bid
+          </div>
+          <p className="text-xs text-[var(--accent)] font-semibold">{plan.ballparkBid}</p>
+        </div>
+        <div className="px-4 py-2.5">
+          <div className="flex items-center gap-1.5 text-[10px] uppercase tracking-wider text-[var(--text-muted)] font-semibold mb-0.5">
+            <Clock className="w-3 h-3" /> Effort
+          </div>
+          <p className="text-xs text-[var(--text-primary)] font-medium">{plan.estimatedEffort}</p>
+        </div>
+      </div>
+
+      <div className="p-4 space-y-5">
+        {/* ── Description ───────────────────────────────────────────── */}
+        <div>
+          <h4 className="text-[10px] uppercase tracking-wider text-[var(--text-muted)] font-semibold mb-1.5">What This Contract Is</h4>
+          <p className="text-sm text-[var(--text-secondary)] leading-relaxed">{plan.description}</p>
+        </div>
+
+        {/* ── Deliverables ──────────────────────────────────────────── */}
+        {plan.deliverables?.length > 0 && (
+          <div>
+            <h4 className="text-[10px] uppercase tracking-wider text-[var(--text-muted)] font-semibold mb-2">What We&apos;d Build</h4>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
+              {plan.deliverables.map((d, i) => (
+                <div key={i} className="flex items-start gap-2 text-xs text-[var(--text-secondary)]">
+                  <span className="text-[var(--accent)] font-mono text-[10px] mt-px shrink-0">{String(i + 1).padStart(2, "0")}</span>
+                  {d}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* ── Tech Stack Blueprint ──────────────────────────────────── */}
+        {plan.techStack && (
+          <div>
+            <h4 className="text-[10px] uppercase tracking-wider text-[var(--text-muted)] font-semibold mb-2">Tech Stack Blueprint</h4>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5">
+              {Object.entries(plan.techStack).map(([layer, tools]) => (
+                tools && (tools as string[]).length > 0 && (
+                  <div key={layer} className="group p-2.5 bg-[var(--surface-alt)] border border-[var(--border)] rounded-md hover:border-[var(--accent)]/30 transition-colors">
+                    <div className="text-[10px] font-bold text-[var(--accent)] uppercase tracking-wider mb-1.5">{layer}</div>
+                    {(tools as string[]).map((tool, i) => (
+                      <div key={i} className="text-[11px] text-[var(--text-secondary)] leading-snug">{tool}</div>
+                    ))}
+                  </div>
+                )
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* ── Implementation Steps (Timeline) ───────────────────────── */}
+        {plan.implementationSteps?.length > 0 && (
+          <div>
+            <h4 className="text-[10px] uppercase tracking-wider text-[var(--text-muted)] font-semibold mb-2">Implementation Steps</h4>
+            <div className="relative pl-4 border-l-2 border-[var(--border)] space-y-2">
+              {plan.implementationSteps.map((step, i) => (
+                <div key={i} className="relative">
+                  <div className="absolute -left-[21px] top-1 w-2.5 h-2.5 rounded-full bg-[var(--surface)] border-2 border-[var(--accent)]" />
+                  <p className="text-xs text-[var(--text-secondary)] leading-relaxed">{step}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* ── Compliance + Risks (Warning Strips) ───────────────────── */}
+        {(plan.compliance?.length > 0 || plan.risks?.length > 0) && (
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            {plan.compliance?.length > 0 && (
+              <div className="p-3 bg-blue-500/5 border border-blue-500/15 rounded-md">
+                <div className="flex items-center gap-1.5 text-[10px] uppercase tracking-wider text-blue-400 font-semibold mb-2">
+                  <Shield className="w-3 h-3" /> Compliance Requirements
+                </div>
+                <div className="space-y-1">
+                  {plan.compliance.map((c, i) => (
+                    <p key={i} className="text-[11px] text-[var(--text-secondary)] leading-snug">{c}</p>
+                  ))}
+                </div>
+              </div>
+            )}
+            {plan.risks?.length > 0 && (
+              <div className="p-3 bg-amber-500/5 border border-amber-500/15 rounded-md">
+                <div className="flex items-center gap-1.5 text-[10px] uppercase tracking-wider text-amber-400 font-semibold mb-2">
+                  <AlertTriangle className="w-3 h-3" /> Risks
+                </div>
+                <div className="space-y-1">
+                  {plan.risks.map((r, i) => (
+                    <p key={i} className="text-[11px] text-[var(--text-secondary)] leading-snug">{r}</p>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+    </div>
   );
 }
 

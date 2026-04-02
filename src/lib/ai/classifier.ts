@@ -107,9 +107,27 @@ export async function generateActionPlan(
     const content = response.choices[0]?.message?.content;
     if (!content) return null;
 
-    // Validate it's parseable JSON
+    // Validate it's parseable JSON with expected shape
     const cleaned = content.replace(/```json\s*/g, "").replace(/```\s*/g, "").trim();
-    JSON.parse(cleaned); // throws if invalid
+    const parsed = JSON.parse(cleaned);
+
+    // Shape validation — ensure required fields exist with correct types
+    if (
+      typeof parsed.description !== "string" ||
+      typeof parsed.deadline !== "string" ||
+      !parsed.verdict || typeof parsed.verdict.recommendation !== "string" ||
+      typeof parsed.ballparkBid !== "string" ||
+      !Array.isArray(parsed.deliverables) ||
+      !parsed.techStack || typeof parsed.techStack !== "object" ||
+      !Array.isArray(parsed.implementationSteps) ||
+      typeof parsed.estimatedEffort !== "string" ||
+      !Array.isArray(parsed.compliance) ||
+      !Array.isArray(parsed.risks)
+    ) {
+      console.error("[classifier] Action plan response has invalid shape:", Object.keys(parsed));
+      return null;
+    }
+
     return cleaned;
   } catch (err) {
     console.error("[classifier] Error generating action plan:", err instanceof Error ? err.message : err);

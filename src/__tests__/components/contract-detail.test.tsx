@@ -30,6 +30,10 @@ vi.mock("lucide-react", () => {
     Hash: icon,
     Loader2: icon,
     RefreshCw: icon,
+    Shield: icon,
+    AlertTriangle: icon,
+    Target: icon,
+    Zap: icon,
   };
 });
 

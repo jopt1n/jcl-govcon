@@ -86,6 +86,8 @@ export const contracts = pgTable(
     officeState: text("office_state"),
     // Set-aside code
     setAsideCode: text("set_aside_code"),
+    // AI-generated action plan (JSON string with deliverables, tools, steps)
+    actionPlan: text("action_plan"),
     // Computed tags for filtering
     tags: jsonb("tags").$type<string[]>().default([]),
     // Pipeline phase tracking

@@ -167,5 +167,85 @@ Respond with valid JSON only:
 }`;
 }
 
+// ── Action Plan Generation ───────────────────────────────────────────────
+
+export interface ActionPlanInput {
+  title: string;
+  agency: string | null;
+  naicsCode: string | null;
+  awardCeiling: string | null;
+  responseDeadline: string | null;
+  descriptionText: string | null;
+  documentTexts: string[];
+}
+
+/**
+ * Build a prompt that generates a structured action plan for a GOOD/MAYBE contract.
+ * Includes full description + all document content for comprehensive understanding.
+ */
+export function buildActionPlanPrompt(input: ActionPlanInput): string {
+  const metadata = [
+    `Title: ${input.title}`,
+    input.agency ? `Agency: ${input.agency}` : null,
+    input.naicsCode ? `NAICS Code: ${input.naicsCode}` : null,
+    input.awardCeiling ? `Award Ceiling: $${input.awardCeiling}` : null,
+    input.responseDeadline ? `Response Deadline: ${input.responseDeadline}` : null,
+  ]
+    .filter(Boolean)
+    .join("\n");
+
+  const descriptionSection = input.descriptionText
+    ? `\n## Full Contract Description\n${input.descriptionText.slice(0, 15000)}`
+    : "";
+
+  const docsSection =
+    input.documentTexts.length > 0
+      ? `\n## Attached Document Content\n${input.documentTexts.map((t, i) => `--- Document ${i + 1} ---\n${t.slice(0, 10000)}`).join("\n\n")}`
+      : "";
+
+  return `You are a government contract strategist and solutions architect for JCL Solutions LLC.
+
+${JCL_CAPABILITY_PROFILE}
+
+## Contract Details
+
+${metadata}
+${descriptionSection}
+${docsSection}
+
+## Instructions
+
+Analyze this contract thoroughly. Read every document. Then produce a comprehensive action plan covering: what to build, the full technology stack across every layer, a strategic go/no-go verdict, a ballpark bid, compliance requirements, and risks.
+
+Be cloud-agnostic — name specific products/services but don't default to any single cloud provider. Pick the best tool for each job (could be AWS, Azure, GCP, or self-hosted). Think about what this agency actually needs and how a solo AI-augmented developer would realistically build and deliver it.
+
+Respond with valid JSON only:
+{
+  "description": "2-3 sentence plain English explanation of what this contract is asking for and why the agency needs it",
+  "deadline": "Response deadline with how many days remaining from today (${new Date().toISOString().split("T")[0]}), or 'No deadline specified'",
+  "verdict": {
+    "recommendation": "PURSUE AGGRESSIVELY | PURSUE | EXPLORE | PASS",
+    "confidence": 1-10,
+    "reasoning": "2-3 sentences explaining the strategic recommendation — why pursue or why pass. Reference specific factors: contract size, competition level, JCL fit, timeline feasibility, clearance requirements"
+  },
+  "ballparkBid": "Suggested bid range based on contract scope, complexity, and market rates. e.g. '$180K-$250K for base year' or '$500K-$750K total (5 years)'. If award ceiling is stated, position within it. If not enough info, say 'Insufficient data — need full SOW'",
+  "deliverables": ["Specific things JCL would need to build/deliver — be concrete, not generic"],
+  "techStack": {
+    "frontend": ["e.g. 'Next.js 14 with App Router', 'Tailwind CSS + shadcn/ui', 'Recharts for data visualization'"],
+    "backend": ["e.g. 'Node.js API with Express', 'Python FastAPI for ML endpoints'"],
+    "database": ["e.g. 'PostgreSQL on Neon (serverless)', 'Redis on Upstash for caching', 'Pinecone for vector search'"],
+    "auth": ["e.g. 'Clerk for user management + role-based access', 'Auth0 for SAML/SSO if required'"],
+    "storage": ["e.g. 'S3-compatible object storage for documents', 'CloudFront CDN'"],
+    "ai": ["e.g. 'OpenAI GPT-4o for analysis', 'LangChain for RAG pipeline', 'Hugging Face for custom models'"],
+    "monitoring": ["e.g. 'Sentry for error tracking', 'Datadog for APM', 'CloudWatch for infrastructure'"],
+    "cicd": ["e.g. 'GitHub Actions for CI/CD', 'Docker + ECS Fargate for deployment', 'Terraform for IaC'"]
+  },
+  "implementationSteps": ["Ordered concrete steps with enough detail to start working — e.g. '1. Set up cloud infrastructure: VPC, managed PostgreSQL, object storage bucket, container registry'"],
+  "estimatedEffort": "Realistic total timeline for a solo AI-augmented developer (e.g. '8-12 weeks')",
+  "compliance": ["Detected compliance/certification requirements — e.g. 'FedRAMP Moderate likely required (federal SaaS)', 'Section 508 accessibility mandatory', 'CMMC Level 2 for DoD data', 'No security clearance mentioned'. If none detected, say 'No specific compliance requirements detected'"],
+  "risks": ["Key risks, challenges, and potential dealbreakers — be blunt about what could go wrong"]
+}`;
+}
+
 export { JCL_CAPABILITY_PROFILE };
 export type { ClassificationPromptInput };
