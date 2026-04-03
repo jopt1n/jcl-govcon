@@ -129,6 +129,52 @@ export async function GET(req: NextRequest) {
   }
 }
 
+/**
+ * HEAD /api/documents/proxy?url=<sam-gov-download-url>
+ * Returns headers only (filename, content-type) without downloading the file body.
+ * Used by contract detail to resolve document names.
+ */
+export async function HEAD(req: NextRequest) {
+  const url = req.nextUrl.searchParams.get("url");
+  if (!url) return new NextResponse(null, { status: 400 });
+
+  try {
+    const parsed = new URL(url);
+    if (!parsed.hostname.endsWith(ALLOWED_HOST)) {
+      return new NextResponse(null, { status: 403 });
+    }
+  } catch {
+    return new NextResponse(null, { status: 400 });
+  }
+
+  if (!SAM_API_KEY) return new NextResponse(null, { status: 500 });
+
+  try {
+    const separator = url.includes("?") ? "&" : "?";
+    const authedUrl = `${url}${separator}api_key=${SAM_API_KEY}`;
+    const res = await fetch(authedUrl, {
+      method: "HEAD",
+      signal: AbortSignal.timeout(10_000),
+    });
+
+    const contentDisposition = res.headers.get("content-disposition") || "";
+    const rawContentType = res.headers.get("content-type") || "application/octet-stream";
+    const filenameMatch = contentDisposition.match(/filename[*]?=["']?([^"';\n]+)/);
+    const filename = filenameMatch?.[1] || null;
+    const contentType = detectMimeType(filename, rawContentType);
+
+    const headers: Record<string, string> = {
+      "Content-Type": contentType,
+    };
+    if (filename) {
+      headers["Content-Disposition"] = `inline; filename="${filename}"`;
+    }
+    return new NextResponse(null, { status: 200, headers });
+  } catch {
+    return new NextResponse(null, { status: 502 });
+  }
+}
+
 function isDocx(contentType: string, filename: string | null): boolean {
   if (DOCX_TYPES.has(contentType)) return true;
   if (filename) {

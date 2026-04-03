@@ -103,6 +103,7 @@ export function ContractDetail({ contractId }: { contractId: string }) {
   const [reclassifying, setReclassifying] = useState(false);
   const [generatingPlan, setGeneratingPlan] = useState(false);
   const [viewingDoc, setViewingDoc] = useState<string | null>(null);
+  const [docMeta, setDocMeta] = useState<Record<string, { name: string; type: string }>>({});
   const [blobUrl, setBlobUrl] = useState<string | null>(null);
   const [docHtml, setDocHtml] = useState<string | null>(null);
   const [docLoading, setDocLoading] = useState(false);
@@ -182,6 +183,42 @@ export function ContractDetail({ contractId }: { contractId: string }) {
   useEffect(() => {
     fetchContract();
   }, [fetchContract]);
+
+  // Resolve document filenames from SAM.gov Content-Disposition headers
+  useEffect(() => {
+    if (!contract?.resourceLinks?.length) return;
+    const links = contract.resourceLinks.filter(Boolean);
+    if (links.length === 0) return;
+
+    // Skip if already resolved for these links
+    const allResolved = links.every((link) => docMeta[link]);
+    if (allResolved) return;
+
+    const extToLabel: Record<string, string> = {
+      ".pdf": "PDF", ".docx": "Word", ".doc": "Word",
+      ".xlsx": "Excel", ".xls": "Excel", ".csv": "CSV",
+      ".txt": "Text", ".pptx": "PowerPoint", ".ppt": "PowerPoint",
+    };
+
+    Promise.all(
+      links.map(async (link) => {
+        if (docMeta[link]) return; // already resolved
+        try {
+          const proxyUrl = `/api/documents/proxy?url=${encodeURIComponent(link)}`;
+          const res = await fetch(proxyUrl, { method: "HEAD" });
+          const cd = res.headers.get("content-disposition") || "";
+          const match = cd.match(/filename[*]?=(?:UTF-8''|"?)([^";]+)/i);
+          const rawName = match ? decodeURIComponent(match[1].replace(/\+/g, " ").replace(/"/g, "")) : null;
+          const ext = rawName ? rawName.slice(rawName.lastIndexOf(".")).toLowerCase() : "";
+          const fileType = extToLabel[ext] || ext.replace(".", "").toUpperCase() || "File";
+          const displayName = rawName || `Document`;
+          setDocMeta((prev) => ({ ...prev, [link]: { name: displayName, type: fileType } }));
+        } catch {
+          setDocMeta((prev) => ({ ...prev, [link]: { name: "Document", type: "File" } }));
+        }
+      })
+    );
+  }, [contract?.resourceLinks, docMeta]);
 
   async function updateField(updates: Record<string, unknown>) {
     setSaving(true);
@@ -435,6 +472,9 @@ export function ContractDetail({ contractId }: { contractId: string }) {
                 {contract.resourceLinks.filter(Boolean).map((link, i) => {
                   const viewUrl = `/api/documents/proxy?view=1&url=${encodeURIComponent(link)}`;
                   const downloadUrl = `/api/documents/proxy?url=${encodeURIComponent(link)}`;
+                  const meta = docMeta[link];
+                  const label = meta ? meta.name : `Document ${i + 1}`;
+                  const badge = meta?.type;
                   return (
                     <div key={i} className="flex items-center gap-2">
                       <button
@@ -442,8 +482,13 @@ export function ContractDetail({ contractId }: { contractId: string }) {
                         className="flex items-center gap-1.5 text-sm text-[var(--accent)] hover:text-[var(--accent-hover)] cursor-pointer"
                       >
                         <Eye className="w-3 h-3" />
-                        Document {i + 1}
+                        <span className="truncate max-w-[280px]">{label}</span>
                       </button>
+                      {badge && (
+                        <span className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-[var(--surface-alt)] text-[var(--text-muted)] border border-[var(--border-subtle)]">
+                          {badge}
+                        </span>
+                      )}
                       <a
                         href={downloadUrl}
                         className="text-[var(--text-tertiary)] hover:text-[var(--text-secondary)]"

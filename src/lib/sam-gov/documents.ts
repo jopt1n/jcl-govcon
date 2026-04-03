@@ -2,13 +2,16 @@ import type { SamResourceLink, DownloadedDocument } from "./types";
 import { sniffContentType } from "@/lib/content-type";
 
 /** File extensions we want to download for analysis */
-const ALLOWED_EXTENSIONS = new Set([".pdf", ".docx", ".doc"]);
+const ALLOWED_EXTENSIONS = new Set([".pdf", ".docx", ".doc", ".xlsx", ".xls", ".csv"]);
 
 /** Content types that map to analyzable documents */
 const ALLOWED_CONTENT_TYPES = new Set([
   "application/pdf",
   "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
   "application/msword",
+  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  "application/vnd.ms-excel",
+  "text/csv",
 ]);
 
 /** Max file size to download: 50 MB */

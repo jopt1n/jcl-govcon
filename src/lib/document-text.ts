@@ -25,7 +25,12 @@ export async function extractDocumentText(doc: DownloadedDocument): Promise<stri
     if (ct.includes("spreadsheet") || ct.includes("ms-excel")) {
       const XLSX = await import("xlsx");
       const wb = XLSX.read(new Uint8Array(doc.buffer), { type: "array" });
-      const text = wb.SheetNames.map((name) => XLSX.utils.sheet_to_txt(wb.Sheets[name])).join("\n").trim();
+      const text = wb.SheetNames.map((name) => {
+        const csv = XLSX.utils.sheet_to_csv(wb.Sheets[name]);
+        // Strip trailing commas from empty cells to reduce token waste
+        const cleaned = csv.split("\n").map((line: string) => line.replace(/,+$/, "")).join("\n");
+        return `[${name}]\n${cleaned}`;
+      }).join("\n\n").trim();
       return text || null;
     }
 

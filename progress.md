@@ -1,74 +1,48 @@
 # JCL GovCon — Progress
 
 ## Current State
-**Phase 9 (Action Plans + Document Intelligence)** — 98 action plans generated, document viewer v2 deployed, magic-byte sniffing live.
+**Phase 9 (Action Plans + Document Intelligence)** — XLSX extraction fixed, document labels added, all 98 action plans generated.
 
-**Branch:** `fix/batch-import-hang` (17 commits ahead of main, uncommitted action plan work ready to commit)
+**Branch:** `fix/batch-import-hang` (19+ commits ahead of main)
 
 ## What's Working
 - SAM.gov bulk ingest: 17,824 contracts
 - Round 3 classification: 28 GOOD, 71 MAYBE, 17,725 DISCARD
-- **Action plans: 98/98 generated** via xAI Batch API (verdict, bid range, tech stack, compliance, risks)
+- **Action plans: 98/98 generated** via xAI Batch API
 - **Document viewer v2:** standalone `/viewer` page + proxy with magic-byte sniffing
-- **Document text extraction:** PDF (pdf-parse), DOCX (mammoth), XLSX (SheetJS) — all via shared `extractDocumentText()`
-- **Magic-byte content sniffing:** `sniffContentType()` shared utility detects real file types from binary headers when SAM.gov sends `application/octet-stream`
+- **Document text extraction:** PDF, DOCX, **XLSX** (fixed), CSV — all via `extractDocumentText()`
+- **XLSX extraction now uses `sheet_to_csv()`** — clean readable output (was garbled UTF-16 with `sheet_to_txt`)
+- **Document labels:** contract detail shows actual filenames + file type badges instead of "Document 1"
 - Dashboard: Kanban board with action plan section on detail pages
 - 30 test files, 263 tests, all passing
 
-## Completed This Session (2026-03-24 → 2026-04-02)
+## Completed This Session (2026-04-03)
 
-### Document Viewer v2 Integration
-1. Integrated 5 pre-built files: proxy route, DocumentViewer, SpreadsheetViewer, CSS, viewer page
-2. Added `xlsx` dependency for inline spreadsheet rendering
-3. Fixed lint errors (`prefer-const`, `no-explicit-any`) in new files
-4. Added `AbortSignal.timeout(30_000)` to new proxy route
-5. Removed wasteful HEAD→GET fallback (proxy only has GET handler)
+### XLSX Extraction Fix (Root Cause: Files Never Downloaded)
+1. **Root cause found:** `ALLOWED_EXTENSIONS` in `documents.ts` excluded `.xlsx/.xls/.csv` — files were filtered before download
+2. Added `.xlsx`, `.xls`, `.csv` to `ALLOWED_EXTENSIONS` and their MIME types to `ALLOWED_CONTENT_TYPES`
+3. **Switched `sheet_to_txt()` → `sheet_to_csv()`** in `document-text.ts` — `sheet_to_txt` produced UTF-16LE garbage (105K chars of `ÿ þ S   A   A`), `sheet_to_csv` produces clean 36K chars of readable text
+4. Added trailing-comma stripping to reduce token waste from empty spreadsheet cells
+5. Added sheet name headers (`[Attach B-Specifications]`) for LLM navigation of multi-sheet workbooks
+6. **Live-tested on "U.S. Senate Hair Care POS" contract** — extracted all 4 sheets (Pricing Table, 155 Specifications, Delivery Schedule, Past Performance), 83.9% content ratio
 
-### Action Plan Feature (AI-Generated Strategic Briefs)
-6. Added `actionPlan` text column to contracts schema, pushed via `drizzle-kit push`
-7. Built `buildActionPlanPrompt()` — comprehensive prompt producing 10-field JSON:
-   - description, deadline, verdict (recommendation + confidence + reasoning), ballparkBid
-   - deliverables, techStack (8 layers), implementationSteps, estimatedEffort, compliance, risks
-8. Integrated into classifier: auto-generates after GOOD/MAYBE classification
-9. Added POST `/api/contracts/[id]` endpoint for on-demand regeneration
-10. Added shape validation for LLM output (all 10 fields checked for correct types)
-11. Built `scripts/batch-action-plans.ts` — xAI Batch API (50% discount), document extraction, pagination, bulk DB updates
-12. **Ran batch: 98/98 action plans generated successfully, 0 errors**
+### Document Labels (contract-detail.tsx)
+7. Added HEAD handler to `/api/documents/proxy` — returns filename from SAM.gov `Content-Disposition` without downloading file body
+8. Added `docMeta` state to contract detail — resolves filenames on mount via HEAD requests
+9. Documents now show actual names (e.g., "Purchase Order Clauses.pdf") with file type badges (PDF, Excel, Word) instead of "Document 1", "Document 2"
 
-### Magic-Byte Sniffing Fix
-13. Extracted `sniffContentType()` into shared `src/lib/content-type.ts`
-14. Updated `downloadDocuments()` to sniff and correct contentType after download
-15. Added XLSX text extraction (SheetJS `sheet_to_txt`) alongside PDF and DOCX
-16. Extracted shared `extractDocumentText()` into `src/lib/document-text.ts` (DRY)
-17. **Result: 10/10 documents now extracted** on Airline Analysis contract (was 0/10 before)
-
-### Action Plan UI Redesign
-18. Verdict header with color-coded banner + 10-bar confidence meter
-19. Key metrics strip: Deadline | Ballpark Bid | Effort
-20. Tech stack as 4-column hoverable card grid
-21. Implementation steps as vertical timeline with dot markers
-22. Compliance (blue panel, Shield icon) + Risks (amber panel, AlertTriangle icon)
-23. Fixed test mocks for new lucide-react icons
-
-### Prompt Evolution
-24. v1: Basic (deliverables, tools, steps, effort, risks)
-25. v2: Added verdict (PURSUE/EXPLORE/PASS), ballpark bid, compliance, tech stack blueprint (8 layers), cloud-agnostic
+### Architecture Documentation
+10. Generated comprehensive frontend architecture reference covering all components, API routes, schema, styling, and data flow
 
 ## Decisions Made
-- **Cloud-agnostic tech stacks** over AWS-default — pick best tool per job
-- **Single effort estimate** over phased timeline — simpler, less speculative
-- **Skip competitive analysis** — too speculative without FPDS data
-- **Skip proposal outline** — focus on what to build, not how to write
-- **Include compliance flags** — critical for go/no-go (FedRAMP, clearance, 508)
-- **Include go/no-go verdict** with confidence score — more actionable than GOOD/MAYBE alone
-- **Assume solo delivery** — teaming strategy deferred
-- **Two commits for magic-byte fix** — functional fix first, DRY refactor second (easier bisect)
-- **Shape validation on LLM output** — prevents crashes when Grok returns unexpected JSON structure
+- **`sheet_to_csv` over `sheet_to_txt`** — `sheet_to_txt` produces UTF-16LE with BOM markers and null bytes between chars, completely unreadable by LLMs. `sheet_to_csv` produces clean UTF-8 CSV.
+- **HEAD handler over full GET** for filename resolution — avoids downloading multi-MB files just to read the filename header
+- **Strip trailing commas** from CSV output — spreadsheets have hundreds of empty trailing cells per row, wastes LLM tokens
 
 ## Next Steps
-1. **Commit uncommitted work** — action plan feature, batch script, UI redesign, prompt v2
-2. **Push to remote** and create PR
-3. **Visual verify** action plan UI on localhost (fixed .next cache issue — needs restart)
-4. **Deploy to Railway** — go live
+1. **Push to remote** and create PR to merge `fix/batch-import-hang` into main
+2. **Re-generate action plans** for contracts that had XLSX attachments (now they'll include spreadsheet content)
+3. **Visual verify** document labels and XLSX viewer on localhost:3001
+4. **Deploy to Railway**
 5. **Email digest** — set RESEND_API_KEY, configure n8n daily workflow
-6. **Review 98 action plans** — prioritize PURSUE AGGRESSIVELY contracts
+6. **Fix broken plugins** — run `/plugin to reinstall` for hookify and ralph-loop
