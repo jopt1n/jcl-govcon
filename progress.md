@@ -1,48 +1,44 @@
 # JCL GovCon — Progress
 
 ## Current State
-**Phase 9 (Action Plans + Document Intelligence)** — XLSX extraction fixed, document labels added, all 98 action plans generated.
+**Phase 9 (Action Plans + Document Intelligence)** — Document proxy fix complete, all 98 action plans generated.
 
-**Branch:** `fix/batch-import-hang` (19+ commits ahead of main)
+**Branch:** `fix/batch-import-hang` (20+ commits ahead of main)
 
 ## What's Working
 - SAM.gov bulk ingest: 17,824 contracts
 - Round 3 classification: 28 GOOD, 71 MAYBE, 17,725 DISCARD
 - **Action plans: 98/98 generated** via xAI Batch API
 - **Document viewer v2:** standalone `/viewer` page + proxy with magic-byte sniffing
-- **Document text extraction:** PDF, DOCX, **XLSX** (fixed), CSV — all via `extractDocumentText()`
-- **XLSX extraction now uses `sheet_to_csv()`** — clean readable output (was garbled UTF-16 with `sheet_to_txt`)
-- **Document labels:** contract detail shows actual filenames + file type badges instead of "Document 1"
+- **Document proxy fixed:** inline viewing now works (PDF, DOCX, XLSX all display correctly)
+- **Document text extraction:** PDF, DOCX, XLSX, CSV — all via `extractDocumentText()`
+- **Document labels:** contract detail shows actual filenames + file type badges
 - Dashboard: Kanban board with action plan section on detail pages
 - 30 test files, 263 tests, all passing
 
 ## Completed This Session (2026-04-03)
 
-### XLSX Extraction Fix (Root Cause: Files Never Downloaded)
-1. **Root cause found:** `ALLOWED_EXTENSIONS` in `documents.ts` excluded `.xlsx/.xls/.csv` — files were filtered before download
-2. Added `.xlsx`, `.xls`, `.csv` to `ALLOWED_EXTENSIONS` and their MIME types to `ALLOWED_CONTENT_TYPES`
-3. **Switched `sheet_to_txt()` → `sheet_to_csv()`** in `document-text.ts` — `sheet_to_txt` produced UTF-16LE garbage (105K chars of `ÿ þ S   A   A`), `sheet_to_csv` produces clean 36K chars of readable text
-4. Added trailing-comma stripping to reduce token waste from empty spreadsheet cells
-5. Added sheet name headers (`[Attach B-Specifications]`) for LLM navigation of multi-sheet workbooks
-6. **Live-tested on "U.S. Senate Hair Care POS" contract** — extracted all 4 sheets (Pricing Table, 155 Specifications, Delivery Schedule, Past Performance), 83.9% content ratio
-
-### Document Labels (contract-detail.tsx)
-7. Added HEAD handler to `/api/documents/proxy` — returns filename from SAM.gov `Content-Disposition` without downloading file body
-8. Added `docMeta` state to contract detail — resolves filenames on mount via HEAD requests
-9. Documents now show actual names (e.g., "Purchase Order Clauses.pdf") with file type badges (PDF, Excel, Word) instead of "Document 1", "Document 2"
-
-### Architecture Documentation
-10. Generated comprehensive frontend architecture reference covering all components, API routes, schema, styling, and data flow
+### Document Proxy Fix (Root Cause: SAM.gov 303 Redirect + S3 Signed URL Expiry)
+1. **Root cause:** SAM.gov returns 303 redirect to S3 with **9-second signed URL expiry**. `fetch()` auto-followed redirect, losing SAM.gov's original Content-Type and Content-Disposition headers. S3 often returned `application/xml` (expired signature error) or `application/octet-stream`, causing browser to download instead of display inline.
+2. **Fix:** Added `fetchFromSam()` helper using `redirect: "manual"` to capture SAM.gov headers before following S3 redirect separately
+3. **Added magic-byte sniffing** (via `sniffContentType()`) as fallback for MIME detection — handles UUID filenames with no extension
+4. **Buffered response** instead of streaming — enables magic-byte sniffing and consistent Content-Length
+5. **HEAD handler** also updated to use `redirect: "manual"` for consistent filename resolution
+6. **Verified:** Both PDF and XLSX documents return correct Content-Type and `Content-Disposition: inline`
 
 ## Decisions Made
-- **`sheet_to_csv` over `sheet_to_txt`** — `sheet_to_txt` produces UTF-16LE with BOM markers and null bytes between chars, completely unreadable by LLMs. `sheet_to_csv` produces clean UTF-8 CSV.
-- **HEAD handler over full GET** for filename resolution — avoids downloading multi-MB files just to read the filename header
-- **Strip trailing commas** from CSV output — spreadsheets have hundreds of empty trailing cells per row, wastes LLM tokens
+- **`redirect: "manual"` over auto-follow** — SAM.gov's 303 response has correct headers (Content-Type, Content-Disposition with filename), but S3's response loses them. Manual redirect preserves this metadata.
+- **Buffer over streaming** — Streaming is faster but can't sniff magic bytes. Since documents are typically <10MB, buffering is acceptable for inline viewing.
+- **Kept both proxy endpoints** — `/api/documents/proxy` (newer, used by contract-detail) and `/api/proxy-document` (older, used by standalone viewer). Both now work correctly but via different approaches.
+
+## Pre-existing Issues (not from this session)
+- TS error in `unified-prompts.ts:301` — duplicate export of `UnifiedClassificationInput`
+- Lint errors: unused `techStackIcons` in contract-detail.tsx, unused `inArray` in digest.ts
 
 ## Next Steps
 1. **Push to remote** and create PR to merge `fix/batch-import-hang` into main
 2. **Re-generate action plans** for contracts that had XLSX attachments (now they'll include spreadsheet content)
-3. **Visual verify** document labels and XLSX viewer on localhost:3001
+3. **Visual verify** document viewer on localhost:3001 — test PDF, XLSX, DOCX inline viewing
 4. **Deploy to Railway**
 5. **Email digest** — set RESEND_API_KEY, configure n8n daily workflow
-6. **Fix broken plugins** — run `/plugin to reinstall` for hookify and ralph-loop
+6. **Fix pre-existing issues** — unified-prompts.ts duplicate export, unused vars

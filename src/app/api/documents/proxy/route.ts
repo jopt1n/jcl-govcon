@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import mammoth from "mammoth";
+import { sniffContentType } from "@/lib/content-type";
 
 const SAM_API_KEY = process.env.SAM_GOV_API_KEY;
 const ALLOWED_HOST = "sam.gov";
@@ -22,10 +23,20 @@ const MIME_BY_EXT: Record<string, string> = {
   ".zip": "application/zip",
 };
 
-function detectMimeType(filename: string | null, serverContentType: string): string {
-  // If server sent a specific type (not octet-stream), trust it
-  if (serverContentType && !serverContentType.includes("octet-stream")) {
+function detectMimeType(filename: string | null, serverContentType: string, buffer?: Buffer): string {
+  // If server sent a specific type (not octet-stream/xml error), trust it
+  if (
+    serverContentType &&
+    !serverContentType.includes("octet-stream") &&
+    !serverContentType.includes("force-download") &&
+    !serverContentType.includes("application/xml")
+  ) {
     return serverContentType;
+  }
+  // Magic-byte sniffing (handles UUID filenames, S3 errors returning XML)
+  if (buffer) {
+    const sniffed = sniffContentType(buffer);
+    if (sniffed) return sniffed;
   }
   // Detect from filename extension
   if (filename) {
@@ -33,6 +44,53 @@ function detectMimeType(filename: string | null, serverContentType: string): str
     if (MIME_BY_EXT[ext]) return MIME_BY_EXT[ext];
   }
   return serverContentType || "application/octet-stream";
+}
+
+/**
+ * SAM.gov returns a 303 redirect to a signed S3 URL with a ~9s expiry.
+ * fetch() auto-follows the redirect but loses the original SAM.gov headers
+ * (Content-Type, Content-Disposition with filename). We disable auto-redirect
+ * to capture those headers, then follow the Location manually.
+ */
+async function fetchFromSam(authedUrl: string): Promise<{
+  buffer: Buffer;
+  samContentType: string;
+  samContentDisposition: string | null;
+}> {
+  // Step 1: Hit SAM.gov with redirect: "manual" to capture headers
+  const initial = await fetch(authedUrl, {
+    redirect: "manual",
+    signal: AbortSignal.timeout(TIMEOUT_MS),
+  });
+
+  const samContentType = initial.headers.get("content-type") || "application/octet-stream";
+  const samContentDisposition = initial.headers.get("content-disposition");
+  const location = initial.headers.get("location");
+
+  // Step 2: If redirect, follow to S3
+  if (location && (initial.status === 301 || initial.status === 302 || initial.status === 303)) {
+    const s3Res = await fetch(location, {
+      signal: AbortSignal.timeout(TIMEOUT_MS),
+    });
+    if (!s3Res.ok) {
+      throw new Error(`S3 returned ${s3Res.status}`);
+    }
+    return {
+      buffer: Buffer.from(await s3Res.arrayBuffer()),
+      samContentType,
+      samContentDisposition,
+    };
+  }
+
+  // No redirect — read directly
+  if (!initial.ok) {
+    throw new Error(`SAM.gov returned ${initial.status}`);
+  }
+  return {
+    buffer: Buffer.from(await initial.arrayBuffer()),
+    samContentType,
+    samContentDisposition,
+  };
 }
 
 /**
@@ -69,43 +127,26 @@ export async function GET(req: NextRequest) {
     const separator = url.includes("?") ? "&" : "?";
     const authedUrl = `${url}${separator}api_key=${SAM_API_KEY}`;
 
-    const res = await fetch(authedUrl, {
-      signal: AbortSignal.timeout(TIMEOUT_MS),
-    });
+    const { buffer, samContentType, samContentDisposition } = await fetchFromSam(authedUrl);
 
-    if (!res.ok) {
-      return NextResponse.json(
-        { error: `SAM.gov returned ${res.status}` },
-        { status: res.status === 404 ? 404 : 502 }
-      );
-    }
-
-    const rawContentType = res.headers.get("content-type") || "application/octet-stream";
-    const contentDisposition = res.headers.get("content-disposition");
-
-    // Extract filename from Content-Disposition if available
-    const filenameMatch = contentDisposition?.match(/filename[*]?=["']?([^"';\n]+)/);
+    // Extract filename from SAM.gov's Content-Disposition (preserved from pre-redirect)
+    const filenameMatch = samContentDisposition?.match(/filename[*]?=["']?([^"';\n]+)/);
     const filename = filenameMatch?.[1] || null;
 
-    // SAM.gov sends application/octet-stream for everything — detect real type
-    const contentType = detectMimeType(filename, rawContentType);
+    // Detect real type: SAM.gov header → magic bytes → filename extension
+    const contentType = detectMimeType(filename, samContentType, buffer);
 
     // For inline viewing of DOCX files, convert to HTML and return as JSON
     // Client uses iframe srcdoc attribute with this HTML — no blob URL needed
     if (viewInline && isDocx(contentType, filename)) {
-      const buffer = Buffer.from(await res.arrayBuffer());
       const result = await mammoth.convertToHtml({ buffer });
       const html = wrapHtml(result.value, filename || "Document");
       return NextResponse.json({ html, filename });
     }
 
-    const body = res.body;
-    if (!body) {
-      return NextResponse.json({ error: "Empty response from SAM.gov" }, { status: 502 });
-    }
-
     const headers: Record<string, string> = {
       "Content-Type": contentType,
+      "Content-Length": buffer.length.toString(),
       "Cache-Control": "private, max-age=3600",
     };
 
@@ -113,11 +154,11 @@ export async function GET(req: NextRequest) {
       headers["Content-Disposition"] = filename
         ? `inline; filename="${filename}"`
         : "inline";
-    } else if (contentDisposition) {
-      headers["Content-Disposition"] = contentDisposition;
+    } else if (samContentDisposition) {
+      headers["Content-Disposition"] = samContentDisposition;
     }
 
-    return new NextResponse(body as ReadableStream, { status: 200, headers });
+    return new NextResponse(buffer as unknown as BodyInit, { status: 200, headers });
   } catch (err: any) {
     if (err.name === "TimeoutError" || err.name === "AbortError") {
       return NextResponse.json({ error: "SAM.gov request timed out" }, { status: 504 });
@@ -152,8 +193,10 @@ export async function HEAD(req: NextRequest) {
   try {
     const separator = url.includes("?") ? "&" : "?";
     const authedUrl = `${url}${separator}api_key=${SAM_API_KEY}`;
+    // Use redirect: "manual" to capture SAM.gov's headers (not S3's)
     const res = await fetch(authedUrl, {
       method: "HEAD",
+      redirect: "manual",
       signal: AbortSignal.timeout(10_000),
     });
 
