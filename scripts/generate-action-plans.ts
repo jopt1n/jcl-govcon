@@ -98,7 +98,7 @@ async function main() {
 
       // Parse to show summary
       const parsed = JSON.parse(plan);
-      console.log(`  ✓ ${parsed.implementationSteps?.length || 0} steps, effort: ${parsed.estimatedEffort}`);
+      console.log(`  ✓ ${parsed.actionPlan?.implementationSummary?.length || 0} items, effort: ${parsed.actionPlan?.estimatedEffort || "N/A"}`);
 
       if (!DRY_RUN) {
         await db

@@ -1,48 +1,121 @@
 /**
- * Classification prompt for Gemini 2.5 Flash.
- * Evaluates government contracts against JCL Solutions' capabilities.
+ * Unified Classification + Action Plan Prompt for xAI Grok (Reasoning 4.1)
+ *
+ * Replaces the 3-stage pipeline:
+ *   buildMetadataClassificationPrompt() → REMOVED
+ *   buildClassificationPrompt()         → REMOVED
+ *   buildActionPlanPrompt()             → REMOVED
+ *
+ * Single function: buildUnifiedClassificationPrompt()
+ *   - Processes every contract with full metadata + description + all attachments
+ *   - Classifies AND generates action plan in one pass
+ *   - DISCARD contracts get classification + reasoning only (actionPlan: null)
+ *   - GOOD/MAYBE contracts get full strategic breakdown
+ *
+ * Classification philosophy: FEASIBILITY-BASED, not category-based.
+ *   Primary test: "Could one resourceful person with a credit card, basic tools,
+ *   AI software, and willingness to travel accomplish this?"
+ *   Only DISCARD if the contract hits a hard DISCARD rule (17 rules)
+ *   or fails the feasibility test.
+ *
+ * Last updated: 2026-04-03
  */
 
 const JCL_CAPABILITY_PROFILE = `
 ## Company Profile: JCL Solutions LLC
 
-**Model:** Solo operator with AI-augmented development (Claude Code, Cursor, etc.)
-**Set-asides:** Small business
-**Delivery:** Remote-first, software-deliverable work
-**Clearance:** None
+**Operator:** Solo founder using AI-augmented tools (Claude Code, Cursor, xAI Grok, Gemini). Builds and delivers solutions through AI coding assistants and modern SaaS platforms. Not limited to traditional software engineering — can deliver any work that one resourceful person can accomplish remotely or with short-term travel.
 
-### Can Do
-Any work that is deliverable remotely by building software. This includes custom software development, web/mobile apps, APIs, AI/ML, cloud architecture, DevOps, automation, data analytics, cybersecurity tools, IT modernization, CRM/ERP systems, chatbots, dashboards, and IT consulting.
+**Business facts:**
+- Delaware LLC, registered on SAM.gov (CAGE: 19PG6, UEI: EH4PUHE2G1V5)
+- Small business — qualifies for SBA/SBP/Total Small Business set-asides
+- Zero federal past performance. New entrant to government contracting.
+- No security clearance. Not pursuing one.
+- No FedRAMP or CMMC certifications.
+- Can handle Section 508 (accessibility) requirements.
+- Remote-first. Based in Southern California.
+- Willing to travel for short-term on-site work (setup, installation, kickoffs, deliveries).
 
-### Cannot Do
-Anything requiring physical presence, physical labor, hardware, or non-software deliverables. This includes construction, facilities maintenance, janitorial, manufacturing, hardware engineering, drone/vehicle/weapons systems, physical R&D, lab work, medical/clinical services, logistics/warehousing, transportation, security guard services, staffing, telecommunications cabling/wiring, and scientific research equipment.
+**What JCL can deliver:**
 
-### Classification Rules
-**GOOD** — Strong match. Title or description explicitly mentions software, application, web, API, database, cloud, AI, machine learning, data analytics, cybersecurity, IT modernization, automation, or consulting AND is remote-deliverable. Realistically achievable by a skilled solo developer with AI tools.
+The core rule: if one resourceful person with a credit card, basic tools, AI software, and willingness to travel can accomplish it, JCL can likely deliver it. This applies to ANY category of work — software, hardware setup, procurement, services, consulting, or general knowledge work.
 
-**MAYBE** — Partial match. Interesting opportunity that partially aligns but may need teaming, has larger scope, or requires further review. Examples: larger IT modernization programs (could subcontract), mixed physical/digital projects, staff augmentation, training development with tech components.
+The following is an illustrative list of capabilities, not an exhaustive gate. If something is not listed here but passes the core feasibility test, it should still be classified as GOOD or MAYBE.
 
-**DISCARD** — Poor match. Construction, physical infrastructure, manufacturing, hardware-only, requires security clearance, on-site fieldwork, drone/vehicle/weapons systems, physical R&D, lab work, medical/clinical services, logistics/warehousing, janitorial, facilities management, or any work that fundamentally cannot be delivered remotely by a solo software developer. Also DISCARD contracts with restrictive set-asides (8(a), SDVOSB, HUBZone, WOSB, EDWOSB, Veteran-owned, Native American-owned) — these should be filtered before AI classification, but if they reach the classifier, DISCARD them. Also DISCARD sole-source awards — contracts where the description states a specific vendor has already been selected, includes language like 'sole source', 'only known responsible source', 'not a request for competitive quotes', 'intent to award to [specific company]', 'is the only source', or names a specific incumbent contractor who has been pre-selected. These are not open competitions and JCL cannot bid on them. Also DISCARD contracts where the response deadline has already passed. If the Response Deadline is before today's date, mark as DISCARD with reasoning that the opportunity has closed. Still provide clear reasoning for why it doesn't fit.
+SOFTWARE & TECHNOLOGY:
+- Custom web applications, portals, and dashboards
+- REST/GraphQL APIs and system integrations
+- Database design, migration, and ETL pipelines
+- AI/ML integration: RAG pipelines, chatbots, document classification, intelligent automation
+- Cloud architecture and deployment (AWS, Azure, GCP, or PaaS platforms)
+- DevOps and CI/CD pipeline setup
+- Data analytics and visualization tools
+- IT modernization — migrating legacy systems to modern stacks
+- Automation and workflow orchestration
+- Cybersecurity tools and compliance automation
+- UX/UI design and prototyping
+- Website content management
+- 508 compliance testing and remediation
+- Help desk and technical support (remote)
+
+CONSULTING & STRATEGY:
+- IT strategy assessments and modernization roadmaps
+- Technology evaluation and recommendation reports
+- System architecture reviews
+- Data strategy and analytics assessments
+- Policy research and analysis
+
+CONTENT & COMMUNICATIONS:
+- Grant and proposal writing
+- Technical writing and documentation
+- Training content development and eLearning curriculum creation
+- Graphic design, video editing, multimedia production
+- Social media management and digital marketing
+- Translation services (AI-assisted)
+- Transcription and captioning
+
+ADMINISTRATIVE & GENERAL:
+- Program/project management support (remote)
+- Administrative support (remote scheduling, coordination)
+- Document review and analysis
+- Research and data compilation
+- Records management and digitization
+- Data entry and processing
+
+PROCUREMENT & SIMPLE PHYSICAL WORK:
+- Equipment procurement and delivery (POS systems, computers, networking gear, kiosks)
+- Simple hardware installation and setup (fly in, set up, leave)
+- Technology equipment configuration and deployment
+- Any short-term on-site work one person can complete in days, not months
+- Any other work that passes the core feasibility test
 `.trim();
 
-interface ClassificationPromptInput {
+// ── Unified Classification + Action Plan ─────────────────────────────────
+
+export interface UnifiedClassificationInput {
   title: string;
   agency: string | null;
   naicsCode: string | null;
   pscCode: string | null;
   noticeType: string | null;
   setAsideType: string | null;
+  setAsideCode: string | null;
   awardCeiling: string | null;
   responseDeadline: string | null;
+  popState: string | null;
   descriptionText: string | null;
   documentTexts: string[];
 }
 
 /**
- * Build the full classification prompt for a single contract.
- * Documents are passed as separate content parts (inline data), not in the text prompt.
+ * Single prompt that classifies AND generates a complete action plan.
+ * Every contract gets full analysis with all attachments in one pass.
+ * DISCARD contracts → classification + reasoning + summary (actionPlan: null).
+ * GOOD/MAYBE contracts → full strategic breakdown.
  */
-export function buildClassificationPrompt(input: ClassificationPromptInput): string {
+export function buildUnifiedClassificationPrompt(input: UnifiedClassificationInput): string {
+  const today = new Date().toISOString().split("T")[0];
+
   const metadata = [
     `Title: ${input.title}`,
     input.agency ? `Agency: ${input.agency}` : null,
@@ -50,6 +123,8 @@ export function buildClassificationPrompt(input: ClassificationPromptInput): str
     input.pscCode ? `PSC Code: ${input.pscCode}` : null,
     input.noticeType ? `Notice Type: ${input.noticeType}` : null,
     input.setAsideType ? `Set-Aside: ${input.setAsideType}` : null,
+    input.setAsideCode ? `Set-Aside Code: ${input.setAsideCode}` : null,
+    input.popState ? `Place of Performance: ${input.popState}` : null,
     input.awardCeiling ? `Award Ceiling: $${input.awardCeiling}` : null,
     input.responseDeadline ? `Response Deadline: ${input.responseDeadline}` : null,
   ]
@@ -62,190 +137,164 @@ export function buildClassificationPrompt(input: ClassificationPromptInput): str
 
   const docsSection =
     input.documentTexts.length > 0
-      ? `\n## Attached Document Content\n${input.documentTexts.map((t, i) => `--- Document ${i + 1} ---\n${t.slice(0, 10000)}`).join("\n\n")}`
+      ? `\n## Attached Document Content\n${input.documentTexts
+          .map((t, i) => `--- Document ${i + 1} ---\n${t.slice(0, 10000)}`)
+          .join("\n\n")}`
       : "";
 
-  return `You are a government contract classifier for JCL Solutions LLC.
+  return `You are a government contract analyst for JCL Solutions LLC. Your job is to classify this contract AND produce a complete strategic analysis in a single pass. Read every document thoroughly before making any judgment.
 
 ${JCL_CAPABILITY_PROFILE}
 
-## Contract to Classify
+## Contract to Analyze
 
 ${metadata}
 ${descriptionSection}
 ${docsSection}
 
-## Instructions
+## Classification Logic
 
-Analyze this government contract opportunity and classify it as GOOD, MAYBE, or DISCARD based on JCL Solutions' capabilities described above.
+You MUST follow this exact decision process:
 
-Your reasoning MUST always be populated with a clear, specific explanation (2-4 sentences) of why this contract received its classification. Reference specific aspects of the contract (scope, requirements, delivery model) and how they align or don't align with JCL's capabilities.
+### Step 1: Check Hard DISCARD Rules
 
-Respond with valid JSON only:
+DISCARD immediately if ANY of these are true:
+
+IMPOSSIBLE FOR ONE PERSON:
+1. Manufacturing complex products (missiles, vehicles, machinery, complex electronics)
+2. Large-scale construction (buildings, roads, bridges, infrastructure)
+3. Ongoing full-time on-site staffing (12+ month security guards, janitorial crews, full-time on-site help desk teams)
+4. Specialized licensed trades at scale (electrical, plumbing, HVAC requiring contractor licenses)
+5. Medical or clinical services requiring professional licenses (doctors, nurses, therapists)
+6. Scientific laboratory research requiring specialized equipment
+7. Large fleet or vehicle management
+8. Hazardous materials handling requiring HAZMAT certification (toxic waste, asbestos removal)
+
+LEGAL / REGULATORY BLOCKS:
+9. Requires security clearance of any level (look for "Secret", "Top Secret", "TS/SCI", "Public Trust" with suitability, "must obtain/maintain clearance")
+10. Requires FedRAMP certification (look for "FedRAMP Authorized", "FedRAMP Moderate/High", "must be FedRAMP compliant")
+11. Requires CMMC certification (look for "CMMC Level", "Cybersecurity Maturity Model Certification")
+12. Controlled items — weapons, ammunition, explosives, controlled substances (requires federal licenses like FFL, DEA registration)
+13. Restrictive set-asides JCL does not qualify for: 8(a), SDVOSB, HUBZone, WOSB, EDWOSB, Veteran-owned, Native American-owned (NOTE: SBA, SBP, and Total Small Business set-asides are FINE — JCL qualifies for these)
+
+NOT COMPETITIVE / NOT OPEN:
+14. Sole-source or incumbent-locked (look for "sole source", "only known responsible source", "intent to award to [specific company]", "not a request for competitive quotes", or a named vendor already selected)
+15. Response deadline is before today (${today}) — the opportunity has closed
+
+STRUCTURAL MISMATCH:
+16. Staff augmentation — the contract wants an ongoing body filling a seat, not a deliverable (look for "provide personnel", "labor hours", "full-time equivalent", "contractor personnel shall report to" for ongoing periods). NOTE: Short-term on-site setup gigs are NOT staff augmentation.
+17. Requires an existing COTS product the operator does not have (the contract wants licenses for a specific proprietary platform, not custom development)
+
+CRITICAL: These DISCARD rules are about things that are TRULY impossible, legally blocked, or structurally incompatible. They are NOT about categories of work. "Hardware" is not a DISCARD. "Physical presence" is not a DISCARD. "On-site work" is not a DISCARD. Only the specific situations listed above are DISCARDs.
+
+### Step 2: Apply the Feasibility Test
+
+For anything that did NOT hit a Hard DISCARD rule, apply this test:
+
+**"Could one resourceful person with a credit card, basic tools, AI software, and willingness to travel accomplish this?"**
+
+- If YES → classify as **GOOD** (strong match, clearly feasible) or **MAYBE** (feasible but needs closer review)
+- If NO → classify as **DISCARD** with specific reasoning about what makes it infeasible for one person
+- If UNCLEAR → classify as **MAYBE** — it is always better to surface a false positive than miss a real opportunity
+
+Examples of things that PASS the feasibility test (do NOT discard these):
+- Buy POS equipment and fly somewhere to install it → one person can do this
+- Procure and deliver computers/monitors/networking gear → one person with a credit card
+- Short-term on-site setup (a few days to a few weeks) → travel is acceptable
+- Simple maintenance or repair that does not require a specialized license → one person can do this
+- Equipment configuration and deployment → one person can do this
+- Any remote knowledge work → one person with a laptop
+
+Examples of things that FAIL the feasibility test (DISCARD these):
+- Provide 24/7 staffed help desk with 5+ operators → one person cannot be awake 24/7
+- Build a 50,000 sq ft facility → not possible for one person
+- Operate and maintain a fleet of 30 vehicles → scale is too large
+- Provide ongoing janitorial services for a large building → requires daily physical presence indefinitely
+
+### Step 3: Classify
+
+**GOOD** — Strong match. The work clearly passes the feasibility test. One resourceful person with AI tools, a credit card, and willingness to travel can deliver this. No disqualifying requirements.
+
+**MAYBE** — Partial match. The opportunity has potential but needs a closer look. Examples: larger scope that might need subcontracting, mixed requirements where most of the work is feasible, IDIQ/BPA vehicles with low barrier to entry, vague descriptions that could be relevant, or any contract where the fit is ambiguous.
+
+**DISCARD** — Hits a Hard DISCARD rule OR fails the feasibility test with clear reasoning.
+
+IMPORTANT: When in doubt, ALWAYS classify as MAYBE. The operator will personally review every GOOD and MAYBE contract. It is far better to surface 50 borderline contracts for human review than to miss one real opportunity. Only classify as DISCARD when you are highly confident the contract hits a Hard DISCARD rule or clearly fails the feasibility test. If there is any ambiguity, any edge case, any 'this might work' possibility — classify as MAYBE.
+
+## Positive Signals
+
+Note these in your analysis when present — they do not change the classification but provide valuable context:
+- **Small business set-aside** (SBA, SBP, Total Small Business) — JCL qualifies, this reduces competition
+- **Agile / sprint-based / iterative delivery** mentioned in the contract — favors nimble solo operators
+- **Under Simplified Acquisition Threshold ($250K)** — easier procurement path, often does not require past performance (important because JCL has zero federal past performance)
+- **Low-barrier entry** — contracts that do not require specialized skills and can be performed by anyone willing to do the work (set lowBarrierEntry to true)
+
+## Data Extraction Instructions
+
+For GOOD/MAYBE contracts, extract the following fields from the description and attached documents. If a field is not mentioned or cannot be determined, return null for that field. Do not guess or infer — only extract what is explicitly stated.
+
+- **contractType**: The contract type (e.g. Firm-Fixed-Price, Time & Materials, Cost-Plus-Fixed-Fee, IDIQ, BPA). Look for "FFP", "T&M", "CPFF", "IDIQ", "BPA", or full names.
+- **periodOfPerformance**: Base period and option years. Example: "1 base year + 4 option years" or "12-month period of performance".
+- **numberOfAwards**: How many vendors the government plans to award. Look for "single award", "multiple award", "up to X awards".
+- **naicsSizeStandard**: The small business size standard for the listed NAICS code. Example: "$16.5M annual revenue" or "500 employees".
+- **placeOfPerformance**: Specific location details beyond the metadata field. Example: "Contractor facility with quarterly meetings at Pentagon" or "100% remote".
+- **keyDates**: Any dates beyond the response deadline. Q&A submission deadlines, pre-proposal conferences, site visits, draft proposal due dates, oral presentation dates. Return as an array of objects with date and description, or null if none found.
+
+## AI-Augmented Effort Estimates
+
+When estimating effort, account for AI-augmented development and work. A solo operator with Claude Code, Cursor, and modern AI tools can realistically deliver work that would traditionally require a small team (2-4 people). Estimate effort based on this augmented capacity — not traditional government contractor timelines, but also not unrealistically fast. Be honest about complexity, testing, government review cycles, and travel time.
+
+## Response Format
+
+Respond with valid JSON only. No markdown, no code fences, no commentary outside the JSON.
+
+If classified as DISCARD:
 {
-  "classification": "GOOD" | "MAYBE" | "DISCARD",
-  "reasoning": "Your detailed reasoning here...",
-  "summary": "1 plain English sentence describing what this contract is actually asking for"
-}`;
+  "classification": "DISCARD",
+  "reasoning": "2-4 sentence specific explanation. MUST cite which Hard DISCARD rule applies OR explain why the contract fails the feasibility test. Reference the contract's actual content.",
+  "summary": "1 plain English sentence describing what this contract is actually asking for.",
+  "actionPlan": null
 }
 
-// ── Metadata-Only Classification ──────────────────────────────────────────
-
-export interface MetadataClassificationInput {
-  title: string;
-  naicsCode: string | null;
-  pscCode: string | null;
-  agency: string | null;
-  orgPathName: string | null;
-  noticeType: string | null;
-  setAsideType: string | null;
-  setAsideCode: string | null;
-  popState: string | null;
-  awardCeiling: string | null;
-}
-
-/**
- * Build a conservative triage prompt using ONLY contract metadata.
- * No description text, no documents — just structured fields.
- * Goal: quickly discard the ~80-90% of clearly irrelevant contracts.
- */
-export function buildMetadataClassificationPrompt(input: MetadataClassificationInput): string {
-  const metadata = [
-    `Title: ${input.title}`,
-    input.naicsCode ? `NAICS Code: ${input.naicsCode}` : null,
-    input.pscCode ? `PSC Code: ${input.pscCode}` : null,
-    input.agency ? `Agency: ${input.agency}` : null,
-    input.orgPathName ? `Organization: ${input.orgPathName}` : null,
-    input.noticeType ? `Notice Type: ${input.noticeType}` : null,
-    input.setAsideType ? `Set-Aside: ${input.setAsideType}` : null,
-    input.setAsideCode ? `Set-Aside Code: ${input.setAsideCode}` : null,
-    input.popState ? `Place of Performance: ${input.popState}` : null,
-    input.awardCeiling ? `Award Ceiling: $${input.awardCeiling}` : null,
-  ]
-    .filter(Boolean)
-    .join("\n");
-
-  return `You are a government contract triage classifier for JCL Solutions LLC, a solo AI-augmented software development firm.
-
-## Classification Mode: METADATA-ONLY TRIAGE
-
-You are classifying contracts using ONLY metadata fields (title, NAICS, PSC, agency, set-aside). You do NOT have the full description or attached documents. Your job is conservative triage:
-- DISCARD contracts that are CLEARLY irrelevant based on metadata alone
-- Mark anything ambiguous as MAYBE for later full review
-- Only mark GOOD if metadata strongly signals a software/IT/AI opportunity
-
-## Company Capabilities
-- **Can do:** Any work that is deliverable remotely by building software. This includes custom software development, web/mobile apps, APIs, AI/ML, cloud architecture, DevOps, automation, data analytics, cybersecurity tools, IT modernization, CRM/ERP systems, chatbots, dashboards, and IT consulting.
-- **Cannot do:** Anything requiring physical presence, physical labor, hardware, or non-software deliverables. This includes construction, facilities maintenance, janitorial, manufacturing, hardware engineering, drone/vehicle/weapons systems, physical R&D, lab work, medical/clinical services, logistics/warehousing, transportation, security guard services, staffing, telecommunications cabling/wiring, and scientific research equipment.
-- Solo operator, small business, remote only. No security clearance.
-
-## NAICS Code Hints
-- **Likely relevant:** 541511 (Custom Software), 541512 (Computer Systems Design), 541519 (Other IT Services), 518210 (Data Processing/Hosting), 541611 (Management Consulting), 541715 (R&D Physical/Bio — sometimes AI)
-- **Likely irrelevant:** 236xxx (Construction), 237xxx (Heavy/Civil Engineering), 238xxx (Specialty Trade), 561xxx (Facilities/Janitorial), 336xxx (Manufacturing), 622xxx (Healthcare Facilities), 541330 (Engineering Services — usually physical/mechanical, not software), 541713 (R&D — physical sciences), 541714 (R&D — physical sciences), 488xxx (Transportation support), 811xxx (Repair/Maintenance)
-
-## Set-Aside Boost
-Small business set-asides (SBA, SBP, 8A, 8AN) are a positive signal — JCL qualifies for these.
-
-## Contract Metadata
-
-${metadata}
-
-## Classification Rules (Conservative)
-- **GOOD** — Title or metadata explicitly mentions software, application, web, API, database, cloud, AI, machine learning, data analytics, cybersecurity, IT modernization, automation, or consulting AND is remote-deliverable
-- **MAYBE** — Ambiguous from metadata alone, could be relevant, needs full description review
-- **DISCARD** — Clearly construction, manufacturing, facilities, janitorial, heavy equipment, medical supplies, drone/vehicle/weapons systems, physical R&D, lab work, logistics/warehousing, transportation, repair/maintenance, staffing, or other non-IT physical work. Also DISCARD contracts with restrictive set-asides (8(a), SDVOSB, HUBZone, WOSB, EDWOSB, Veteran-owned, Native American-owned) — these should be filtered before AI classification, but if they reach the classifier, DISCARD them
-
-If the contract has very little information to judge (missing description, vague title, unclear scope), classify as MAYBE with reasoning that notes insufficient information for confident classification.
-
-When in doubt, classify as MAYBE. It's better to review a false positive than miss a real opportunity.
-
-Respond with valid JSON only:
+If classified as GOOD or MAYBE:
 {
-  "classification": "GOOD" | "MAYBE" | "DISCARD",
-  "reasoning": "1-2 sentences explaining the classification decision",
-  "summary": "1 plain English sentence describing what this contract is actually asking for"
-}`;
-}
-
-// ── Action Plan Generation ───────────────────────────────────────────────
-
-export interface ActionPlanInput {
-  title: string;
-  agency: string | null;
-  naicsCode: string | null;
-  awardCeiling: string | null;
-  responseDeadline: string | null;
-  descriptionText: string | null;
-  documentTexts: string[];
-}
-
-/**
- * Build a prompt that generates a structured action plan for a GOOD/MAYBE contract.
- * Includes full description + all document content for comprehensive understanding.
- */
-export function buildActionPlanPrompt(input: ActionPlanInput): string {
-  const metadata = [
-    `Title: ${input.title}`,
-    input.agency ? `Agency: ${input.agency}` : null,
-    input.naicsCode ? `NAICS Code: ${input.naicsCode}` : null,
-    input.awardCeiling ? `Award Ceiling: $${input.awardCeiling}` : null,
-    input.responseDeadline ? `Response Deadline: ${input.responseDeadline}` : null,
-  ]
-    .filter(Boolean)
-    .join("\n");
-
-  const descriptionSection = input.descriptionText
-    ? `\n## Full Contract Description\n${input.descriptionText.slice(0, 15000)}`
-    : "";
-
-  const docsSection =
-    input.documentTexts.length > 0
-      ? `\n## Attached Document Content\n${input.documentTexts.map((t, i) => `--- Document ${i + 1} ---\n${t.slice(0, 10000)}`).join("\n\n")}`
-      : "";
-
-  return `You are a government contract strategist and solutions architect for JCL Solutions LLC.
-
-${JCL_CAPABILITY_PROFILE}
-
-## Contract Details
-
-${metadata}
-${descriptionSection}
-${docsSection}
-
-## Instructions
-
-Analyze this contract thoroughly. Read every document. Then produce a comprehensive action plan covering: what to build, the full technology stack across every layer, a strategic go/no-go verdict, a ballpark bid, compliance requirements, and risks.
-
-Be cloud-agnostic — name specific products/services but don't default to any single cloud provider. Pick the best tool for each job (could be AWS, Azure, GCP, or self-hosted). Think about what this agency actually needs and how a solo AI-augmented developer would realistically build and deliver it.
-
-Respond with valid JSON only:
-{
-  "description": "2-3 sentence plain English explanation of what this contract is asking for and why the agency needs it",
-  "deadline": "Response deadline with how many days remaining from today (${new Date().toISOString().split("T")[0]}), or 'No deadline specified'",
-  "verdict": {
-    "recommendation": "PURSUE AGGRESSIVELY | PURSUE | EXPLORE | PASS",
-    "confidence": 1-10,
-    "reasoning": "2-3 sentences explaining the strategic recommendation — why pursue or why pass. Reference specific factors: contract size, competition level, JCL fit, timeline feasibility, clearance requirements"
-  },
-  "ballparkBid": "Suggested bid range based on contract scope, complexity, and market rates. e.g. '$180K-$250K for base year' or '$500K-$750K total (5 years)'. If award ceiling is stated, position within it. If not enough info, say 'Insufficient data — need full SOW'",
-  "deliverables": ["Specific things JCL would need to build/deliver — be concrete, not generic"],
-  "techStack": {
-    "frontend": ["e.g. 'Next.js 14 with App Router', 'Tailwind CSS + shadcn/ui', 'Recharts for data visualization'"],
-    "backend": ["e.g. 'Node.js API with Express', 'Python FastAPI for ML endpoints'"],
-    "database": ["e.g. 'PostgreSQL on Neon (serverless)', 'Redis on Upstash for caching', 'Pinecone for vector search'"],
-    "auth": ["e.g. 'Clerk for user management + role-based access', 'Auth0 for SAML/SSO if required'"],
-    "storage": ["e.g. 'S3-compatible object storage for documents', 'CloudFront CDN'"],
-    "ai": ["e.g. 'OpenAI GPT-4o for analysis', 'LangChain for RAG pipeline', 'Hugging Face for custom models'"],
-    "monitoring": ["e.g. 'Sentry for error tracking', 'Datadog for APM', 'CloudWatch for infrastructure'"],
-    "cicd": ["e.g. 'GitHub Actions for CI/CD', 'Docker + ECS Fargate for deployment', 'Terraform for IaC'"]
-  },
-  "implementationSteps": ["Ordered concrete steps with enough detail to start working — e.g. '1. Set up cloud infrastructure: VPC, managed PostgreSQL, object storage bucket, container registry'"],
-  "estimatedEffort": "Realistic total timeline for a solo AI-augmented developer (e.g. '8-12 weeks')",
-  "compliance": ["Detected compliance/certification requirements — e.g. 'FedRAMP Moderate likely required (federal SaaS)', 'Section 508 accessibility mandatory', 'CMMC Level 2 for DoD data', 'No security clearance mentioned'. If none detected, say 'No specific compliance requirements detected'"],
-  "risks": ["Key risks, challenges, and potential dealbreakers — be blunt about what could go wrong"]
+  "classification": "GOOD or MAYBE",
+  "reasoning": "2-4 sentence specific explanation of why this passes the feasibility test. Reference specific aspects of the contract — scope, requirements, delivery model — and how one resourceful person could deliver it.",
+  "summary": "1 plain English sentence describing what this contract is actually asking for.",
+  "actionPlan": {
+    "description": "2-3 sentence plain English explanation of what this contract is asking for, who the end users are, and why the agency needs it.",
+    "implementationSummary": [
+      "3-5 high-level bullet points describing what the operator would need to do to deliver this contract.",
+      "Keep it strategic, not tactical. Example: 'Procure and configure 12 POS terminals, travel to DC for 3-day installation' not 'Research Square vs Clover vs Toast'.",
+      "This helps the operator decide whether to pursue — detailed planning comes later."
+    ],
+    "deadline": "Response deadline with days remaining from ${today}, or 'No deadline specified'.",
+    "bidRange": "Rough pricing range based on scope, complexity, and period of performance. Example: '$80K-$120K base year' or '$250K-$400K total (base + options)'. If award ceiling is stated, position within it. If insufficient info, say 'Insufficient data — need full SOW'.",
+    "estimatedEffort": "Realistic timeline for a solo AI-augmented operator. Example: '6-8 weeks for initial delivery, ongoing support through PoP' or '3-day on-site installation + remote monitoring'. Account for AI tool speed but be honest about complexity.",
+    "contractType": "FFP | T&M | CPFF | IDIQ | BPA | other string | null",
+    "periodOfPerformance": "Example: '1 base year + 4 option years' | null",
+    "numberOfAwards": "Example: 'Multiple award (up to 5)' or 'Single award' | null",
+    "naicsSizeStandard": "Example: '$16.5M annual revenue' | null",
+    "placeOfPerformance": "Example: 'Contractor facility, quarterly on-site at Fort Belvoir VA' | null",
+    "keyDates": [
+      { "date": "YYYY-MM-DD", "description": "What this date is for" }
+    ],
+    "travelRequirements": {
+      "required": true or false,
+      "details": "What travel is mentioned. Example: 'Quarterly on-site meetings at Fort Belvoir, VA' or '3-day installation trip to Washington DC' or 'No travel requirements mentioned'."
+    },
+    "compliance": [
+      "Detected compliance or certification requirements. Example: 'Section 508 accessibility required', 'IL2 data handling', 'FISMA Moderate implied'. If none detected, include 'No specific compliance requirements detected'. Always flag FedRAMP, CMMC, or clearance requirements here even if they triggered DISCARD — the operator may manually override the classification."
+    ],
+    "risks": [
+      "Blunt assessment of challenges and potential dealbreakers. Be specific — do not say 'scope may be large'. Instead say 'SOW requires 24/7 monitoring which is impractical for a solo operator' or 'Evaluation criteria weights past performance at 30% — significant disadvantage with zero federal history'."
+    ],
+    "positiveSignals": [
+      "List any positive signals detected. Examples: 'Small business set-aside (Total Small Business) — JCL qualifies', 'Agile delivery methodology specified in SOW', 'Contract value under SAT ($250K) — simplified procurement process'. Empty array if none."
+    ],
+    "lowBarrierEntry": true or false
+  }
 }`;
 }
 
 export { JCL_CAPABILITY_PROFILE };
-export type { ClassificationPromptInput };

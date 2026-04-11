@@ -6,10 +6,8 @@
 import { db } from "@/lib/db";
 import { contracts } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
-import { downloadDocuments } from "@/lib/sam-gov/documents";
-import { extractAllDocumentTexts } from "@/lib/document-text";
-import { buildClassificationPrompt, buildActionPlanPrompt } from "./prompts";
-import type { ClassificationPromptInput, ActionPlanInput } from "./prompts";
+import { buildUnifiedClassificationPrompt } from "./prompts";
+import type { UnifiedClassificationInput } from "./prompts";
 import { getGrokClient, GROK_MODEL } from "./grok-client";
 import { delay } from "@/lib/utils";
 
@@ -68,7 +66,7 @@ export function parseClassificationResponse(text: string | undefined): Classific
 }
 
 /**
- * Generate an action plan for a GOOD/MAYBE contract.
+ * Generate a unified classification + action plan for a GOOD/MAYBE contract.
  * Returns the JSON string to store in the actionPlan column, or null on failure.
  */
 export async function generateActionPlan(
@@ -76,8 +74,13 @@ export async function generateActionPlan(
     title: string;
     agency: string | null;
     naicsCode: string | null;
+    pscCode?: string | null;
+    noticeType?: string | null;
+    setAsideType?: string | null;
+    setAsideCode?: string | null;
     awardCeiling: string | null;
     responseDeadline: string | Date | null;
+    popState?: string | null;
     descriptionText: string | null;
   },
   documentTexts: string[] = []
@@ -86,20 +89,26 @@ export async function generateActionPlan(
 
   try {
     const deadline = contract.responseDeadline;
-    const input: ActionPlanInput = {
+    const input: UnifiedClassificationInput = {
       title: contract.title,
       agency: contract.agency,
       naicsCode: contract.naicsCode,
+      pscCode: contract.pscCode ?? null,
+      noticeType: contract.noticeType ?? null,
+      setAsideType: contract.setAsideType ?? null,
+      setAsideCode: contract.setAsideCode ?? null,
       awardCeiling: contract.awardCeiling,
       responseDeadline: deadline instanceof Date ? deadline.toISOString() : deadline,
+      popState: contract.popState ?? null,
       descriptionText: contract.descriptionText,
       documentTexts,
     };
 
-    const promptText = buildActionPlanPrompt(input);
+    const promptText = buildUnifiedClassificationPrompt(input);
 
     const response = await ai.chat.completions.create({
       model: GROK_MODEL,
+      temperature: 0,
       messages: [{ role: "user", content: promptText }],
       response_format: { type: "json_object" },
     });
@@ -113,19 +122,27 @@ export async function generateActionPlan(
 
     // Shape validation — ensure required fields exist with correct types
     if (
-      typeof parsed.description !== "string" ||
-      typeof parsed.deadline !== "string" ||
-      !parsed.verdict || typeof parsed.verdict.recommendation !== "string" ||
-      typeof parsed.ballparkBid !== "string" ||
-      !Array.isArray(parsed.deliverables) ||
-      !parsed.techStack || typeof parsed.techStack !== "object" ||
-      !Array.isArray(parsed.implementationSteps) ||
-      typeof parsed.estimatedEffort !== "string" ||
-      !Array.isArray(parsed.compliance) ||
-      !Array.isArray(parsed.risks)
+      typeof parsed.classification !== "string" ||
+      typeof parsed.reasoning !== "string"
     ) {
-      console.error("[classifier] Action plan response has invalid shape:", Object.keys(parsed));
+      console.error("[classifier] Unified response has invalid shape:", Object.keys(parsed));
       return null;
+    }
+
+    // For GOOD/MAYBE, validate action plan fields
+    if (parsed.actionPlan) {
+      const ap = parsed.actionPlan;
+      if (
+        typeof ap.description !== "string" ||
+        !Array.isArray(ap.implementationSummary) ||
+        typeof ap.bidRange !== "string" ||
+        typeof ap.estimatedEffort !== "string" ||
+        !Array.isArray(ap.compliance) ||
+        !Array.isArray(ap.risks)
+      ) {
+        console.error("[classifier] Action plan has invalid shape:", Object.keys(ap));
+        return null;
+      }
     }
 
     return cleaned;
@@ -155,46 +172,50 @@ export async function classifyContract(
   }
 ): Promise<ClassifyContractResult> {
   const ai = getGrokClient();
-  let documentsAnalyzed = false;
 
   try {
-    // Download documents if available
-    const downloadedDocs = await downloadDocuments(contract.resourceLinks);
-    documentsAnalyzed = downloadedDocs.length > 0;
-
     // Build prompt
     const deadline = contract.responseDeadline;
-    const promptInput: ClassificationPromptInput = {
+    const promptInput: UnifiedClassificationInput = {
       title: contract.title,
       agency: contract.agency,
       naicsCode: contract.naicsCode,
       pscCode: contract.pscCode,
       noticeType: contract.noticeType,
       setAsideType: contract.setAsideType,
+      setAsideCode: null,
       awardCeiling: contract.awardCeiling,
       responseDeadline: deadline instanceof Date ? deadline.toISOString() : deadline,
+      popState: null,
       descriptionText: contract.descriptionText,
       documentTexts: [], // PDF content not supported via OpenAI-compatible API
     };
 
-    const promptText = buildClassificationPrompt(promptInput);
+    const promptText = buildUnifiedClassificationPrompt(promptInput);
 
-    // Call Grok
+    // Call Grok — unified prompt returns classification + actionPlan in one response
     const response = await ai.chat.completions.create({
       model: GROK_MODEL,
+      temperature: 0,
       messages: [{ role: "user", content: promptText }],
       response_format: { type: "json_object" },
     });
 
-    const result = parseClassificationResponse(
-      response.choices[0]?.message?.content ?? undefined
-    );
+    const rawContent = response.choices[0]?.message?.content;
+    const result = parseClassificationResponse(rawContent ?? undefined);
 
-    // Generate action plan for GOOD/MAYBE contracts
+    // Parse actionPlan from the unified response
     let actionPlan: string | null = null;
-    if (result.classification === "GOOD" || result.classification === "MAYBE") {
-      const docTexts = await extractAllDocumentTexts(downloadedDocs);
-      actionPlan = await generateActionPlan(contract, docTexts);
+    if (rawContent) {
+      try {
+        const cleaned = rawContent.replace(/```json\s*/g, "").replace(/```\s*/g, "").trim();
+        const parsed = JSON.parse(cleaned);
+        if (parsed.actionPlan) {
+          actionPlan = JSON.stringify(parsed.actionPlan);
+        }
+      } catch {
+        // Classification already parsed above; action plan extraction failed
+      }
     }
 
     // Update database
@@ -205,7 +226,9 @@ export async function classifyContract(
         aiReasoning: result.reasoning,
         summary: result.summary,
         actionPlan,
-        documentsAnalyzed,
+        classificationRound: 4,
+        classifiedFromMetadata: false,
+        documentsAnalyzed: true,
         updatedAt: new Date(),
       })
       .where(eq(contracts.id, contract.id));
@@ -215,7 +238,7 @@ export async function classifyContract(
       noticeId: contract.noticeId,
       classification: result.classification,
       reasoning: result.reasoning,
-      documentsAnalyzed,
+      documentsAnalyzed: true,
     };
   } catch (err) {
     const errorMsg = err instanceof Error ? err.message : String(err);
@@ -226,7 +249,7 @@ export async function classifyContract(
       noticeId: contract.noticeId,
       classification: "MAYBE",
       reasoning: `Classification failed: ${errorMsg}`,
-      documentsAnalyzed,
+      documentsAnalyzed: false,
       error: errorMsg,
     };
   }

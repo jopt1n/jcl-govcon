@@ -17,6 +17,38 @@ interface BulkCrawlResult {
 }
 
 /**
+ * Run a full-year crawl by splitting into two 6-month windows (SAM.gov max range).
+ * Aggregates results from both windows.
+ */
+export async function runFullYearCrawl(): Promise<BulkCrawlResult> {
+  const now = new Date();
+  const sixMonthsAgo = new Date(now);
+  sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
+  const oneYearAgo = new Date(now);
+  oneYearAgo.setFullYear(oneYearAgo.getFullYear() - 1);
+
+  console.log(`[bulk-crawl] Full year crawl: Window 1 = ${formatSamDate(oneYearAgo)} → ${formatSamDate(sixMonthsAgo)}`);
+  const r1 = await runBulkCrawl(oneYearAgo, sixMonthsAgo);
+
+  if (r1.status === "PAUSED") {
+    console.log("[bulk-crawl] Window 1 paused — skipping window 2");
+    return r1;
+  }
+
+  console.log(`[bulk-crawl] Full year crawl: Window 2 = ${formatSamDate(sixMonthsAgo)} → ${formatSamDate(now)}`);
+  const r2 = await runBulkCrawl(sixMonthsAgo, now);
+
+  return {
+    totalFound: r1.totalFound + r2.totalFound,
+    processed: r1.processed + r2.processed,
+    newInserted: r1.newInserted + r2.newInserted,
+    skipped: r1.skipped + r2.skipped,
+    status: r2.status,
+    pagesProcessed: r1.pagesProcessed + r2.pagesProcessed,
+  };
+}
+
+/**
  * Orchestrate a metadata-only bulk crawl of all active solicitations from SAM.gov.
  * - Fetches all active opportunities (ptype=o,k,p,r) with pagination
  * - Upserts metadata into contracts table (no descriptions, no classification)
@@ -24,7 +56,13 @@ interface BulkCrawlResult {
  * - Resumes from last offset if a previous run was paused
  * - Stops when API rate limit is reached
  */
-export async function runBulkCrawl(): Promise<BulkCrawlResult> {
+export async function runBulkCrawl(windowStart?: Date, windowEnd?: Date): Promise<BulkCrawlResult> {
+  // Default to 6-month lookback if no dates provided
+  if (!windowEnd) windowEnd = new Date();
+  if (!windowStart) {
+    windowStart = new Date(windowEnd);
+    windowStart.setMonth(windowStart.getMonth() - 6);
+  }
   // DRY_RUN: log and return immediately without any API calls
   if (process.env.SAM_DRY_RUN === "true") {
     console.log("[bulk-crawl] DRY_RUN enabled — skipping crawl");
@@ -98,16 +136,12 @@ export async function runBulkCrawl(): Promise<BulkCrawlResult> {
         break;
       }
 
-      // SAM.gov requires postedFrom/postedTo — use 6-month lookback
-      const now = new Date();
-      const sixMonthsAgo = new Date(now);
-      sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
-
+      // SAM.gov requires postedFrom/postedTo — use date window from caller
       const response = await searchOpportunities({
         ptype: "o,k,p,r",
         active: "Yes",
-        postedFrom: formatSamDate(sixMonthsAgo),
-        postedTo: formatSamDate(now),
+        postedFrom: formatSamDate(windowStart),
+        postedTo: formatSamDate(windowEnd),
         limit: PAGE_SIZE,
         offset,
       });
@@ -124,14 +158,16 @@ export async function runBulkCrawl(): Promise<BulkCrawlResult> {
         break;
       }
 
-      // Upsert opportunities — update metadata, preserve user data
-      for (const opp of opportunities) {
-        try {
-          const row = mapOpportunityToContract(opp);
+      // Bulk upsert in chunks of 500 (Railway PostgreSQL — minimize round trips)
+      const CHUNK_SIZE = 500;
+      const rows = opportunities.map(mapOpportunityToContract);
 
+      for (let i = 0; i < rows.length; i += CHUNK_SIZE) {
+        const chunk = rows.slice(i, i + CHUNK_SIZE);
+        try {
           const result = await db
             .insert(contracts)
-            .values(row)
+            .values(chunk)
             .onConflictDoUpdate({
               target: contracts.noticeId,
               set: {
@@ -156,24 +192,21 @@ export async function runBulkCrawl(): Promise<BulkCrawlResult> {
                 officeCity: sql`excluded.office_city`,
                 officeState: sql`excluded.office_state`,
                 setAsideCode: sql`excluded.set_aside_code`,
+                contactEmail: sql`excluded.contact_email`,
                 solicitationNumber: sql`excluded.solicitation_number`,
                 updatedAt: sql`now()`,
               },
             })
             .returning({ id: contracts.id });
 
-          if (result.length > 0) {
-            newInserted++;
-          } else {
-            skipped++;
-          }
+          newInserted += result.length;
         } catch (err) {
-          console.error(`[bulk-crawl] Error upserting ${opp.noticeId}:`, err instanceof Error ? err.message : err);
-          skipped++;
+          console.error(`[bulk-crawl] Error upserting chunk at offset ${i}:`, err instanceof Error ? err.message : err);
+          skipped += chunk.length;
         }
-
-        processed++;
       }
+
+      processed += rows.length;
 
       offset += opportunities.length;
       pagesProcessed++;

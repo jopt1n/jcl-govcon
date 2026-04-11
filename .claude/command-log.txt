@@ -1,0 +1,29 @@
+[2026-04-11T06:50:13] git diff --name-only 2>&1
+[2026-04-11T06:50:52] npx tsc --noEmit 2>&1 | grep -v "scripts/" | head -5 && echo "---" && npm run lint 2>&1 | tail -5
+[2026-04-11T06:51:00] npm run test:run 2>&1 | tail -10
+[2026-04-11T06:51:08] npm run test:run 2>&1 | grep -A 5 "FAIL\|failed" | head -20
+[2026-04-11T06:51:49] npm run test:run 2>&1 | tail -10
+[2026-04-11T06:51:55] git status -s 2>&1
+[2026-04-11T06:51:56] git log --oneline -5 2>&1
+[2026-04-11T06:52:01] git add progress.md scripts/batch-classify.ts src/app/api/contracts/route.ts src/components/kanban/board.tsx src/components/kanban/card.tsx src/components/kanban/column.tsx src/__tests__/components/kanban/board.test.tsx
+[2026-04-11T06:52:11] git commit -m "$(cat <<'EOF'
+feat: batch classify 2,651 contracts + replace PENDING with Upcoming Deadlines column
+
+- Ran xAI Batch API classification on all PENDING contracts (118 GOOD, 206 MAYBE, 2,327 DISCARD)
+- Scoped batch-classify.ts query to PENDING only (was querying all 30K)
+- Replaced PENDING kanban column with Upcoming Deadlines (cross-classification, sorted by priority)
+- Added classification badges on cards in deadlines column
+- Fixed Load More hang: added client-side fetch timeout + page revert on failure
+- Updated board tests for new column structure
+
+Co-Authored-By: Claude Opus 4.6 (1M context) <noreply@anthropic.com>
+EOF
+)"
+[2026-04-11T06:52:53] ls scripts/
+[2026-04-11T06:52:54] cat tasks/todo.md 2>/dev/null || echo "FILE NOT FOUND"
+[2026-04-11T06:53:26] git add -A && git commit -m "$(cat <<'EOF'
+chore: checkpoint — commit all accumulated work before cleanup
+
+Co-Authored-By: Claude Opus 4.6 (1M context) <noreply@anthropic.com>
+EOF
+)"

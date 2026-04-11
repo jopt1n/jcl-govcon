@@ -9,7 +9,7 @@
 import { db } from "@/lib/db";
 import { contracts } from "@/lib/db/schema";
 import { eq, and, isNotNull } from "drizzle-orm";
-import { buildClassificationPrompt } from "./prompts";
+import { buildUnifiedClassificationPrompt } from "./prompts";
 import { parseClassificationResponse } from "./classifier";
 import { getGrokClient, GROK_MODEL } from "./grok-client";
 import { delay } from "@/lib/utils";
@@ -91,25 +91,28 @@ export async function reclassifyWithDescription(
       const oldClassification = contract.classification;
 
       try {
-        const prompt = buildClassificationPrompt({
+        const prompt = buildUnifiedClassificationPrompt({
           title: contract.title,
           agency: contract.agency,
           naicsCode: contract.naicsCode,
           pscCode: contract.pscCode,
           noticeType: contract.noticeType,
           setAsideType: contract.setAsideType,
+          setAsideCode: null,
           awardCeiling: contract.awardCeiling,
           responseDeadline: contract.responseDeadline
             ? contract.responseDeadline instanceof Date
               ? contract.responseDeadline.toISOString()
               : String(contract.responseDeadline)
             : null,
+          popState: null,
           descriptionText: contract.descriptionText,
           documentTexts: [],
         });
 
         const response = await ai.chat.completions.create({
           model: GROK_MODEL,
+          temperature: 0,
           messages: [{ role: "user", content: prompt }],
           response_format: { type: "json_object" },
         });

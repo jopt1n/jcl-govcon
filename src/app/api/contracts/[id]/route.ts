@@ -104,7 +104,9 @@ export async function PATCH(
 /**
  * POST /api/contracts/[id]
  *
- * Generate or regenerate action plan for a contract.
+ * Run unified classification + action plan for a contract.
+ * Parses classification + actionPlan from the single response.
+ * Sets classificationRound=4, classifiedFromMetadata=false, documentsAnalyzed=true.
  */
 export async function POST(
   _req: NextRequest,
@@ -125,15 +127,29 @@ export async function POST(
     const downloadedDocs = await downloadDocuments(contract.resourceLinks);
     const docTexts = await extractAllDocumentTexts(downloadedDocs);
 
-    const actionPlan = await generateActionPlan(contract, docTexts);
+    const rawResponse = await generateActionPlan(contract, docTexts);
 
-    if (!actionPlan) {
-      return NextResponse.json({ error: "Failed to generate action plan" }, { status: 500 });
+    if (!rawResponse) {
+      return NextResponse.json({ error: "Failed to generate unified classification" }, { status: 500 });
     }
+
+    // Parse the unified response: { classification, reasoning, summary, actionPlan }
+    const parsed = JSON.parse(rawResponse);
+    const classification = parsed.classification?.toUpperCase();
+    const validClassifications = ["GOOD", "MAYBE", "DISCARD"];
 
     const [updated] = await db
       .update(contracts)
-      .set({ actionPlan, updatedAt: new Date() })
+      .set({
+        classification: validClassifications.includes(classification) ? classification : contract.classification,
+        aiReasoning: parsed.reasoning || contract.aiReasoning,
+        summary: parsed.summary || contract.summary,
+        actionPlan: parsed.actionPlan ? JSON.stringify(parsed.actionPlan) : null,
+        classificationRound: 4,
+        classifiedFromMetadata: false,
+        documentsAnalyzed: true,
+        updatedAt: new Date(),
+      })
       .where(eq(contracts.id, params.id))
       .returning();
 
@@ -141,7 +157,7 @@ export async function POST(
   } catch (err) {
     console.error("[api/contracts/id] POST Error:", err);
     return NextResponse.json(
-      { error: "Failed to generate action plan", message: err instanceof Error ? err.message : String(err) },
+      { error: "Failed to generate unified classification", message: err instanceof Error ? err.message : String(err) },
       { status: 500 }
     );
   }

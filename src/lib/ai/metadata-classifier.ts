@@ -9,7 +9,7 @@
 import { db } from "@/lib/db";
 import { contracts, crawlProgress } from "@/lib/db/schema";
 import { eq, and } from "drizzle-orm";
-import { buildMetadataClassificationPrompt } from "./prompts";
+import { buildUnifiedClassificationPrompt } from "./prompts";
 import { parseClassificationResponse } from "./classifier";
 import { getGrokClient, GROK_MODEL } from "./grok-client";
 import { delay } from "@/lib/utils";
@@ -100,21 +100,24 @@ export async function classifyFromMetadata(
 
     for (const contract of chunk) {
       try {
-        const prompt = buildMetadataClassificationPrompt({
+        const prompt = buildUnifiedClassificationPrompt({
           title: contract.title,
           naicsCode: contract.naicsCode,
           pscCode: contract.pscCode,
           agency: contract.agency,
-          orgPathName: contract.orgPathName,
           noticeType: contract.noticeType,
           setAsideType: contract.setAsideType,
           setAsideCode: contract.setAsideCode,
           popState: contract.popState,
           awardCeiling: contract.awardCeiling,
+          responseDeadline: null,
+          descriptionText: null,
+          documentTexts: [],
         });
 
         const response = await ai.chat.completions.create({
           model: GROK_MODEL,
+          temperature: 0,
           messages: [{ role: "user", content: prompt }],
           response_format: { type: "json_object" },
         });

@@ -26,8 +26,8 @@ import { contracts } from "../src/lib/db/schema";
 import { eq, and, inArray, sql } from "drizzle-orm";
 import { fetchDescription } from "../src/lib/sam-gov/client";
 import { downloadDocuments } from "../src/lib/sam-gov/documents";
-import { buildClassificationPrompt } from "../src/lib/ai/prompts";
-import type { ClassificationPromptInput } from "../src/lib/ai/prompts";
+import { buildUnifiedClassificationPrompt } from "../src/lib/ai/prompts";
+import type { UnifiedClassificationInput } from "../src/lib/ai/prompts";
 import { parseClassificationResponse } from "../src/lib/ai/classifier";
 import { getGrokClient, GROK_MODEL } from "../src/lib/ai/grok-client";
 import { delay } from "../src/lib/utils";
@@ -97,6 +97,7 @@ async function callGrokWithRetry(
     try {
       const response = await ai.chat.completions.create({
         model: GROK_MODEL,
+        temperature: 0,
         messages: [{ role: "user", content: prompt }],
         response_format: { type: "json_object" },
       });
@@ -198,8 +199,10 @@ async function main() {
       pscCode: contracts.pscCode,
       noticeType: contracts.noticeType,
       setAsideType: contracts.setAsideType,
+      setAsideCode: contracts.setAsideCode,
       awardCeiling: contracts.awardCeiling,
       responseDeadline: contracts.responseDeadline,
+      popState: contracts.popState,
       descriptionText: contracts.descriptionText,
       descriptionFetched: contracts.descriptionFetched,
       resourceLinks: contracts.resourceLinks,
@@ -320,24 +323,26 @@ async function main() {
     }
 
     // ── C. Grok classification ────────────────────────────────────────
-    const promptInput: ClassificationPromptInput = {
+    const promptInput: UnifiedClassificationInput = {
       title: contract.title,
       agency: contract.agency,
       naicsCode: contract.naicsCode,
       pscCode: contract.pscCode,
       noticeType: contract.noticeType,
       setAsideType: contract.setAsideType,
+      setAsideCode: contract.setAsideCode,
       awardCeiling: contract.awardCeiling,
       responseDeadline: contract.responseDeadline
         ? (contract.responseDeadline instanceof Date
           ? contract.responseDeadline.toISOString()
           : String(contract.responseDeadline))
         : null,
+      popState: contract.popState,
       descriptionText: descriptionText,
       documentTexts: cappedDocTexts,
     };
 
-    const prompt = buildClassificationPrompt(promptInput);
+    const prompt = buildUnifiedClassificationPrompt(promptInput);
 
     let newClassification: Classification;
     let aiReasoning: string;

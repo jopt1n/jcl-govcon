@@ -86,6 +86,8 @@ export const contracts = pgTable(
     officeState: text("office_state"),
     // Set-aside code
     setAsideCode: text("set_aside_code"),
+    // Contracting officer email (scraped from SAM.gov, not AI-extracted)
+    contactEmail: text("contact_email"),
     // AI-generated action plan (JSON string with deliverables, tools, steps)
     actionPlan: text("action_plan"),
     // Computed tags for filtering

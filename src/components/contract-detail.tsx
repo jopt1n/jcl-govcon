@@ -27,34 +27,23 @@ import { cn } from "@/lib/utils";
 import { naicsDescription, pscDescription } from "@/lib/code-descriptions";
 import Link from "next/link";
 
-interface ActionPlanVerdict {
-  recommendation: string;
-  confidence: number;
-  reasoning: string;
-}
-
-interface ActionPlanTechStack {
-  frontend?: string[];
-  backend?: string[];
-  database?: string[];
-  auth?: string[];
-  storage?: string[];
-  ai?: string[];
-  monitoring?: string[];
-  cicd?: string[];
-}
-
 interface ActionPlan {
   description: string;
+  implementationSummary: string[];
   deadline: string;
-  verdict: ActionPlanVerdict;
-  ballparkBid: string;
-  deliverables: string[];
-  techStack: ActionPlanTechStack;
-  implementationSteps: string[];
+  bidRange: string;
   estimatedEffort: string;
+  contractType: string | null;
+  periodOfPerformance: string | null;
+  numberOfAwards: string | null;
+  naicsSizeStandard: string | null;
+  placeOfPerformance: string | null;
+  keyDates: Array<{ date: string; description: string }> | null;
+  travelRequirements: { required: boolean; details: string };
   compliance: string[];
   risks: string[];
+  positiveSignals: string[];
+  lowBarrierEntry: boolean;
 }
 
 interface Contract {
@@ -600,44 +589,6 @@ export function ContractDetail({ contractId }: { contractId: string }) {
   );
 }
 
-// ── Verdict color helpers ─────────────────────────────────────────────────
-
-const verdictStyles: Record<string, { bg: string; border: string; text: string; glow: string }> = {
-  "PURSUE AGGRESSIVELY": { bg: "bg-emerald-500/8", border: "border-emerald-500/25", text: "text-emerald-400", glow: "shadow-[inset_0_1px_0_0_rgba(16,185,129,0.1)]" },
-  "PURSUE": { bg: "bg-blue-500/8", border: "border-blue-500/25", text: "text-blue-400", glow: "shadow-[inset_0_1px_0_0_rgba(59,130,246,0.1)]" },
-  "EXPLORE": { bg: "bg-amber-500/8", border: "border-amber-500/25", text: "text-amber-400", glow: "shadow-[inset_0_1px_0_0_rgba(245,158,11,0.1)]" },
-  "PASS": { bg: "bg-red-500/8", border: "border-red-500/25", text: "text-red-400", glow: "shadow-[inset_0_1px_0_0_rgba(239,68,68,0.1)]" },
-};
-
-const techStackIcons: Record<string, string> = {
-  frontend: "layout",
-  backend: "server",
-  database: "database",
-  auth: "shield",
-  storage: "hard-drive",
-  ai: "brain",
-  monitoring: "activity",
-  cicd: "git-branch",
-};
-
-function ConfidenceMeter({ value }: { value: number }) {
-  return (
-    <div className="flex items-center gap-1" title={`Confidence: ${value}/10`}>
-      {Array.from({ length: 10 }).map((_, i) => (
-        <div
-          key={i}
-          className={cn(
-            "w-1.5 h-3 rounded-[1px] transition-colors",
-            i < value
-              ? value >= 8 ? "bg-emerald-400" : value >= 5 ? "bg-amber-400" : "bg-red-400"
-              : "bg-[var(--border)]"
-          )}
-        />
-      ))}
-    </div>
-  );
-}
-
 function ActionPlanSection({
   contract,
   generating,
@@ -669,7 +620,7 @@ function ActionPlanSection({
           </div>
           <div>
             <p className="text-sm font-medium text-[var(--text-primary)]">No Action Plan Yet</p>
-            <p className="text-xs text-[var(--text-muted)] mt-0.5">Generate a strategic brief with tech stack, bid range, and implementation steps.</p>
+            <p className="text-xs text-[var(--text-muted)] mt-0.5">Generate a strategic brief with bid range, implementation summary, and risks.</p>
           </div>
           <button
             onClick={onGenerate}
@@ -684,32 +635,28 @@ function ActionPlanSection({
     );
   }
 
-  const vs = verdictStyles[plan.verdict?.recommendation] ?? verdictStyles["EXPLORE"];
-
   return (
     <div className="bg-[var(--surface)] border border-[var(--border)] rounded-lg overflow-hidden">
-      {/* ── Verdict Header ────────────────────────────────────────── */}
-      {plan.verdict && (
-        <div className={cn("px-4 py-3 border-b border-[var(--border)]", vs.bg, vs.glow)}>
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <span className={cn("text-sm font-bold tracking-wide", vs.text)}>
-                {plan.verdict.recommendation}
-              </span>
-              <ConfidenceMeter value={plan.verdict.confidence} />
-            </div>
-            <button
-              onClick={onGenerate}
-              disabled={generating}
-              className="inline-flex items-center gap-1 px-2 py-1 text-xs rounded-md text-[var(--text-muted)] hover:text-[var(--accent)] hover:bg-[var(--accent)]/10 disabled:opacity-50 transition-colors"
-            >
-              <RefreshCw className={cn("w-3 h-3", generating && "animate-spin")} />
-              {generating ? "Regenerating…" : "Regenerate"}
-            </button>
-          </div>
-          <p className="text-xs text-[var(--text-secondary)] mt-1.5 leading-relaxed">{plan.verdict.reasoning}</p>
+      {/* ── Header with Regenerate ────────────────────────────────── */}
+      <div className="px-4 py-3 border-b border-[var(--border)] flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <Target className="w-4 h-4 text-[var(--accent)]" />
+          <span className="text-sm font-semibold text-[var(--text-primary)]">Action Plan</span>
+          {plan.lowBarrierEntry && (
+            <span className="px-1.5 py-0.5 text-[10px] font-semibold rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+              LOW BARRIER
+            </span>
+          )}
         </div>
-      )}
+        <button
+          onClick={onGenerate}
+          disabled={generating}
+          className="inline-flex items-center gap-1 px-2 py-1 text-xs rounded-md text-[var(--text-muted)] hover:text-[var(--accent)] hover:bg-[var(--accent)]/10 disabled:opacity-50 transition-colors"
+        >
+          <RefreshCw className={cn("w-3 h-3", generating && "animate-spin")} />
+          {generating ? "Regenerating…" : "Regenerate"}
+        </button>
+      </div>
 
       {/* ── Key Metrics Strip ─────────────────────────────────────── */}
       <div className="grid grid-cols-3 divide-x divide-[var(--border)] border-b border-[var(--border)]">
@@ -721,9 +668,9 @@ function ActionPlanSection({
         </div>
         <div className="px-4 py-2.5">
           <div className="flex items-center gap-1.5 text-[10px] uppercase tracking-wider text-[var(--text-muted)] font-semibold mb-0.5">
-            <DollarSign className="w-3 h-3" /> Ballpark Bid
+            <DollarSign className="w-3 h-3" /> Bid Range
           </div>
-          <p className="text-xs text-[var(--accent)] font-semibold">{plan.ballparkBid}</p>
+          <p className="text-xs text-[var(--accent)] font-semibold">{plan.bidRange}</p>
         </div>
         <div className="px-4 py-2.5">
           <div className="flex items-center gap-1.5 text-[10px] uppercase tracking-wider text-[var(--text-muted)] font-semibold mb-0.5">
@@ -740,50 +687,99 @@ function ActionPlanSection({
           <p className="text-sm text-[var(--text-secondary)] leading-relaxed">{plan.description}</p>
         </div>
 
-        {/* ── Deliverables ──────────────────────────────────────────── */}
-        {plan.deliverables?.length > 0 && (
+        {/* ── Contract Details Grid ─────────────────────────────────── */}
+        {(plan.contractType || plan.periodOfPerformance || plan.numberOfAwards || plan.naicsSizeStandard || plan.placeOfPerformance) && (
           <div>
-            <h4 className="text-[10px] uppercase tracking-wider text-[var(--text-muted)] font-semibold mb-2">What We&apos;d Build</h4>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
-              {plan.deliverables.map((d, i) => (
-                <div key={i} className="flex items-start gap-2 text-xs text-[var(--text-secondary)]">
-                  <span className="text-[var(--accent)] font-mono text-[10px] mt-px shrink-0">{String(i + 1).padStart(2, "0")}</span>
-                  {d}
+            <h4 className="text-[10px] uppercase tracking-wider text-[var(--text-muted)] font-semibold mb-2">Contract Details</h4>
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+              {plan.contractType && (
+                <div className="p-2 bg-[var(--surface-alt)] border border-[var(--border)] rounded-md">
+                  <div className="text-[10px] text-[var(--text-muted)] mb-0.5">Type</div>
+                  <div className="text-xs text-[var(--text-primary)] font-medium">{plan.contractType}</div>
                 </div>
-              ))}
+              )}
+              {plan.periodOfPerformance && (
+                <div className="p-2 bg-[var(--surface-alt)] border border-[var(--border)] rounded-md">
+                  <div className="text-[10px] text-[var(--text-muted)] mb-0.5">Period</div>
+                  <div className="text-xs text-[var(--text-primary)] font-medium">{plan.periodOfPerformance}</div>
+                </div>
+              )}
+              {plan.numberOfAwards && (
+                <div className="p-2 bg-[var(--surface-alt)] border border-[var(--border)] rounded-md">
+                  <div className="text-[10px] text-[var(--text-muted)] mb-0.5">Awards</div>
+                  <div className="text-xs text-[var(--text-primary)] font-medium">{plan.numberOfAwards}</div>
+                </div>
+              )}
+              {plan.naicsSizeStandard && (
+                <div className="p-2 bg-[var(--surface-alt)] border border-[var(--border)] rounded-md">
+                  <div className="text-[10px] text-[var(--text-muted)] mb-0.5">Size Standard</div>
+                  <div className="text-xs text-[var(--text-primary)] font-medium">{plan.naicsSizeStandard}</div>
+                </div>
+              )}
+              {plan.placeOfPerformance && (
+                <div className="p-2 bg-[var(--surface-alt)] border border-[var(--border)] rounded-md col-span-2">
+                  <div className="text-[10px] text-[var(--text-muted)] mb-0.5">Place of Performance</div>
+                  <div className="text-xs text-[var(--text-primary)] font-medium">{plan.placeOfPerformance}</div>
+                </div>
+              )}
             </div>
           </div>
         )}
 
-        {/* ── Tech Stack Blueprint ──────────────────────────────────── */}
-        {plan.techStack && (
+        {/* ── Implementation Summary ───────────────────────────────── */}
+        {plan.implementationSummary?.length > 0 && (
           <div>
-            <h4 className="text-[10px] uppercase tracking-wider text-[var(--text-muted)] font-semibold mb-2">Tech Stack Blueprint</h4>
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5">
-              {Object.entries(plan.techStack).map(([layer, tools]) => (
-                tools && (tools as string[]).length > 0 && (
-                  <div key={layer} className="group p-2.5 bg-[var(--surface-alt)] border border-[var(--border)] rounded-md hover:border-[var(--accent)]/30 transition-colors">
-                    <div className="text-[10px] font-bold text-[var(--accent)] uppercase tracking-wider mb-1.5">{layer}</div>
-                    {(tools as string[]).map((tool, i) => (
-                      <div key={i} className="text-[11px] text-[var(--text-secondary)] leading-snug">{tool}</div>
-                    ))}
-                  </div>
-                )
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* ── Implementation Steps (Timeline) ───────────────────────── */}
-        {plan.implementationSteps?.length > 0 && (
-          <div>
-            <h4 className="text-[10px] uppercase tracking-wider text-[var(--text-muted)] font-semibold mb-2">Implementation Steps</h4>
+            <h4 className="text-[10px] uppercase tracking-wider text-[var(--text-muted)] font-semibold mb-2">Implementation Summary</h4>
             <div className="relative pl-4 border-l-2 border-[var(--border)] space-y-2">
-              {plan.implementationSteps.map((step, i) => (
+              {plan.implementationSummary.map((item, i) => (
                 <div key={i} className="relative">
                   <div className="absolute -left-[21px] top-1 w-2.5 h-2.5 rounded-full bg-[var(--surface)] border-2 border-[var(--accent)]" />
-                  <p className="text-xs text-[var(--text-secondary)] leading-relaxed">{step}</p>
+                  <p className="text-xs text-[var(--text-secondary)] leading-relaxed">{item}</p>
                 </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* ── Key Dates ────────────────────────────────────────────── */}
+        {plan.keyDates && plan.keyDates.length > 0 && (
+          <div>
+            <h4 className="text-[10px] uppercase tracking-wider text-[var(--text-muted)] font-semibold mb-2">Key Dates</h4>
+            <div className="space-y-1.5">
+              {plan.keyDates.map((kd, i) => (
+                <div key={i} className="flex items-center gap-2 text-xs">
+                  <span className="text-[var(--accent)] font-mono shrink-0">{kd.date}</span>
+                  <span className="text-[var(--text-secondary)]">{kd.description}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* ── Travel Requirements ──────────────────────────────────── */}
+        {plan.travelRequirements && (
+          <div className="flex items-start gap-2 text-xs">
+            <span className={cn(
+              "px-1.5 py-0.5 rounded font-semibold shrink-0",
+              plan.travelRequirements.required
+                ? "bg-amber-500/10 text-amber-400 border border-amber-500/20"
+                : "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20"
+            )}>
+              {plan.travelRequirements.required ? "TRAVEL REQUIRED" : "NO TRAVEL"}
+            </span>
+            <span className="text-[var(--text-secondary)]">{plan.travelRequirements.details}</span>
+          </div>
+        )}
+
+        {/* ── Positive Signals ─────────────────────────────────────── */}
+        {plan.positiveSignals?.length > 0 && (
+          <div className="p-3 bg-emerald-500/5 border border-emerald-500/15 rounded-md">
+            <div className="flex items-center gap-1.5 text-[10px] uppercase tracking-wider text-emerald-400 font-semibold mb-2">
+              <Zap className="w-3 h-3" /> Positive Signals
+            </div>
+            <div className="space-y-1">
+              {plan.positiveSignals.map((s, i) => (
+                <p key={i} className="text-[11px] text-[var(--text-secondary)] leading-snug">{s}</p>
               ))}
             </div>
           </div>

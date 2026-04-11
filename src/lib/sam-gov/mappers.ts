@@ -12,6 +12,11 @@ export function mapOpportunityToContract(opp: SamOpportunity) {
   if (opp.typeOfSetAside) tags.push("SBA");
   if (linkUrls.length > 0) tags.push("HAS_DOCS");
 
+  // Extract contracting officer email from pointOfContact array
+  const contactEmail = (opp.pointOfContact ?? [])
+    .map((c) => c.email)
+    .find((e) => e && e.includes("@")) ?? null;
+
   return {
     noticeId: opp.noticeId,
     solicitationNumber: opp.solicitationNumber,
@@ -38,6 +43,7 @@ export function mapOpportunityToContract(opp: SamOpportunity) {
     officeCity: opp.officeAddress?.city ?? null,
     officeState: opp.officeAddress?.state ?? null,
     setAsideCode: opp.typeOfSetAside || null,
+    contactEmail,
     tags,
     classificationRound: 0,
     descriptionFetched: false,

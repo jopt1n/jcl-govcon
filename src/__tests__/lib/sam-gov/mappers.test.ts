@@ -163,6 +163,49 @@ describe("mapOpportunityToContract", () => {
     expect(result.tags).toEqual([]);
   });
 
+  it("extracts contactEmail from pointOfContact array", () => {
+    const result = mapOpportunityToContract(
+      makeOpportunity({
+        pointOfContact: [
+          { fullName: "John Smith", email: "john.smith@agency.gov", phone: null, type: "primary" },
+          { fullName: "Jane Doe", email: "jane.doe@agency.gov", phone: null, type: "secondary" },
+        ],
+      })
+    );
+    expect(result.contactEmail).toBe("john.smith@agency.gov");
+  });
+
+  it("returns null contactEmail when pointOfContact is null", () => {
+    const result = mapOpportunityToContract(
+      makeOpportunity({ pointOfContact: null })
+    );
+    expect(result.contactEmail).toBeNull();
+  });
+
+  it("returns null contactEmail when no contacts have valid emails", () => {
+    const result = mapOpportunityToContract(
+      makeOpportunity({
+        pointOfContact: [
+          { fullName: "John Smith", email: null, phone: "555-1234", type: "primary" },
+          { fullName: "Jane Doe", email: "", phone: null, type: "secondary" },
+        ],
+      })
+    );
+    expect(result.contactEmail).toBeNull();
+  });
+
+  it("skips contacts with invalid emails (no @ sign)", () => {
+    const result = mapOpportunityToContract(
+      makeOpportunity({
+        pointOfContact: [
+          { fullName: "Bad", email: "not-an-email", phone: null, type: "primary" },
+          { fullName: "Good", email: "good@agency.gov", phone: null, type: "secondary" },
+        ],
+      })
+    );
+    expect(result.contactEmail).toBe("good@agency.gov");
+  });
+
   it("returns null for new fields when source data is null", () => {
     const result = mapOpportunityToContract(
       makeOpportunity({

@@ -143,7 +143,7 @@ async function main() {
   const { db } = await import("../src/lib/db");
   const { contracts } = await import("../src/lib/db/schema");
   const { sql, and, inArray, isNull } = await import("drizzle-orm");
-  const { buildActionPlanPrompt } = await import("../src/lib/ai/prompts");
+  const { buildUnifiedClassificationPrompt } = await import("../src/lib/ai/prompts");
   const { downloadDocuments } = await import("../src/lib/sam-gov/documents");
   const { extractAllDocumentTexts } = await import("../src/lib/document-text");
 
@@ -171,8 +171,13 @@ async function main() {
       title: contracts.title,
       agency: contracts.agency,
       naicsCode: contracts.naicsCode,
+      pscCode: contracts.pscCode,
+      noticeType: contracts.noticeType,
+      setAsideType: contracts.setAsideType,
+      setAsideCode: contracts.setAsideCode,
       awardCeiling: contracts.awardCeiling,
       responseDeadline: contracts.responseDeadline,
+      popState: contracts.popState,
       descriptionText: contracts.descriptionText,
       resourceLinks: contracts.resourceLinks,
     })
@@ -213,12 +218,17 @@ async function main() {
     }
 
     const deadline = row.responseDeadline;
-    const prompt = buildActionPlanPrompt({
+    const prompt = buildUnifiedClassificationPrompt({
       title: row.title,
       agency: row.agency,
       naicsCode: row.naicsCode,
+      pscCode: row.pscCode,
+      noticeType: row.noticeType,
+      setAsideType: row.setAsideType,
+      setAsideCode: row.setAsideCode,
       awardCeiling: row.awardCeiling,
       responseDeadline: deadline instanceof Date ? deadline.toISOString() : deadline ? String(deadline) : null,
+      popState: row.popState,
       descriptionText: row.descriptionText,
       documentTexts: docTexts,
     });
@@ -258,6 +268,7 @@ async function main() {
         chat_get_completion: {
           messages: [{ role: "user", content: c.prompt }],
           model: MODEL,
+          temperature: 0,
         },
       },
     }));
@@ -336,18 +347,22 @@ let resumeDbChunksSent = 0;
 let resumeValid = 0;
 let resumeInvalid = 0;
 
-function validateActionPlanShape(parsed: any): boolean {
+function validateUnifiedResponseShape(parsed: any): boolean {
+  if (typeof parsed.classification !== "string" || typeof parsed.reasoning !== "string") {
+    return false;
+  }
+  // DISCARD responses have actionPlan: null — that's valid
+  if (parsed.actionPlan === null) return true;
+  // GOOD/MAYBE must have valid action plan fields
+  const ap = parsed.actionPlan;
   return (
-    typeof parsed.description === "string" &&
-    typeof parsed.deadline === "string" &&
-    parsed.verdict && typeof parsed.verdict.recommendation === "string" &&
-    typeof parsed.ballparkBid === "string" &&
-    Array.isArray(parsed.deliverables) &&
-    parsed.techStack && typeof parsed.techStack === "object" &&
-    Array.isArray(parsed.implementationSteps) &&
-    typeof parsed.estimatedEffort === "string" &&
-    Array.isArray(parsed.compliance) &&
-    Array.isArray(parsed.risks)
+    ap &&
+    typeof ap.description === "string" &&
+    Array.isArray(ap.implementationSummary) &&
+    typeof ap.bidRange === "string" &&
+    typeof ap.estimatedEffort === "string" &&
+    Array.isArray(ap.compliance) &&
+    Array.isArray(ap.risks)
   );
 }
 
@@ -421,7 +436,7 @@ async function importResults(batchId: string, db: any, sql: any) {
         const cleaned = content.replace(/```json\s*/g, "").replace(/```\s*/g, "").trim();
         const parsed = JSON.parse(cleaned);
 
-        if (!validateActionPlanShape(parsed)) {
+        if (!validateUnifiedResponseShape(parsed)) {
           console.warn(`[batch-ap] Invalid shape for ${noticeId}: ${Object.keys(parsed).join(", ")}`);
           invalid++;
           processed++;

@@ -9,8 +9,8 @@ import { db } from "../src/lib/db";
 import { contracts } from "../src/lib/db/schema";
 import { and, eq, inArray, isNull } from "drizzle-orm";
 import { downloadDocuments } from "../src/lib/sam-gov/documents";
-import { buildActionPlanPrompt } from "../src/lib/ai/prompts";
-import type { ActionPlanInput } from "../src/lib/ai/prompts";
+import { buildUnifiedClassificationPrompt } from "../src/lib/ai/prompts";
+import type { UnifiedClassificationInput } from "../src/lib/ai/prompts";
 import { getGrokClient, GROK_MODEL } from "../src/lib/ai/grok-client";
 
 async function main() {
@@ -98,17 +98,22 @@ async function main() {
   console.log("=".repeat(80));
 
   const deadline = row.responseDeadline;
-  const input: ActionPlanInput = {
+  const input: UnifiedClassificationInput = {
     title: row.title,
     agency: row.agency,
     naicsCode: row.naicsCode,
+    pscCode: row.pscCode,
+    noticeType: row.noticeType,
+    setAsideType: row.setAsideType,
+    setAsideCode: row.setAsideCode,
     awardCeiling: row.awardCeiling,
     responseDeadline: deadline instanceof Date ? deadline.toISOString() : deadline ? String(deadline) : null,
+    popState: row.popState,
     descriptionText: row.descriptionText,
     documentTexts: docTexts,
   };
 
-  const prompt = buildActionPlanPrompt(input);
+  const prompt = buildUnifiedClassificationPrompt(input);
   console.log(prompt);
   console.log();
   console.log(`--- Prompt length: ${prompt.length} chars ---`);
@@ -124,6 +129,7 @@ async function main() {
 
   const response = await ai.chat.completions.create({
     model: GROK_MODEL,
+    temperature: 0,
     messages: [{ role: "user", content: prompt }],
     response_format: { type: "json_object" },
   });
