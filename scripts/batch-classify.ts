@@ -1,6 +1,11 @@
 /**
- * Batch classification via xAI Batch API (50% cheaper, no rate limits).
- * Round 3: Uses full classification prompt with description text.
+ * Batch unified classification + action plan via xAI Batch API (50% cheaper).
+ * Round 4: Single prompt returns classification + action plan together.
+ *
+ * Pre-filter (code, before sending to xAI):
+ *   - Expired response deadlines → auto-DISCARD
+ *   - Restricted set-asides (8A, SDVOSB, HZ, WOSB, EDWOSB) → auto-DISCARD
+ *   - No NAICS filtering — let the LLM decide feasibility
  *
  * Usage:
  *   npx tsx scripts/batch-classify.ts
@@ -129,13 +134,13 @@ async function main() {
 
   const { db } = await import("../src/lib/db");
   const { contracts } = await import("../src/lib/db/schema");
-  const { eq, sql } = await import("drizzle-orm");
-  const { buildClassificationPrompt } = await import(
+  const { eq, and, sql } = await import("drizzle-orm");
+  const { buildUnifiedClassificationPrompt } = await import(
     "../src/lib/ai/prompts"
   );
-  const { parseClassificationResponse } = await import(
-    "../src/lib/ai/classifier"
-  );
+  const { downloadDocuments } = await import("../src/lib/sam-gov/documents");
+  const { extractAllDocumentTexts } = await import("../src/lib/document-text");
+  const { isRestrictedSetAside } = await import("../src/lib/sam-gov/set-aside-filter");
 
   // ── Import-only mode (retry import from completed batch) ────────────
   if (importBatchId) {
@@ -144,23 +149,22 @@ async function main() {
     const state = status.state ?? {};
     console.log(`[batch] Batch status: ${state.num_success ?? 0} success, ${state.num_error ?? 0} error, ${state.num_pending ?? 0} pending`);
     if ((state.num_pending ?? 0) > 0) {
-      console.error("[batch] Batch still has pending requests — use --poll-only instead");
-      process.exit(1);
+      console.warn(`[batch] WARNING: ${state.num_pending} requests still pending — importing completed results only`);
     }
-    await importResultsWithRetry(importBatchId, db, sql, parseClassificationResponse);
+    await importResultsWithRetry(importBatchId, db, sql);
     process.exit(0);
   }
 
   // ── Poll-only mode ────────────────────────────────────────────────────
   if (pollOnly) {
     console.log(`[batch] Poll-only mode for batch: ${pollOnly}`);
-    await pollAndImport(pollOnly, db, sql, parseClassificationResponse);
+    await pollAndImport(pollOnly, db, sql);
     process.exit(0);
   }
 
-  // 1. Query all contracts for Round 3 reclassification
+  // 1. Query all contracts for Round 4 unified classification
   //    Skip user-overridden contracts to preserve manual reviews
-  console.log("[batch] Querying contracts for Round 3 classification...");
+  console.log("[batch] Querying contracts for Round 4 unified classification...");
   const queryBuilder = db
     .select({
       id: contracts.id,
@@ -171,23 +175,47 @@ async function main() {
       agency: contracts.agency,
       noticeType: contracts.noticeType,
       setAsideType: contracts.setAsideType,
+      setAsideCode: contracts.setAsideCode,
       awardCeiling: contracts.awardCeiling,
       responseDeadline: contracts.responseDeadline,
+      popState: contracts.popState,
       descriptionText: contracts.descriptionText,
+      resourceLinks: contracts.resourceLinks,
     })
     .from(contracts)
-    .where(eq(contracts.userOverride, false))
+    .where(and(eq(contracts.userOverride, false), eq(contracts.classification, "PENDING")))
     .orderBy(contracts.postedDate);
 
-  let pending = limit
+  const allContracts = limit
     ? await queryBuilder.limit(limit)
     : await queryBuilder;
 
-  if (pending.length === 0) {
+  if (allContracts.length === 0) {
     console.log("[batch] No contracts to classify.");
     process.exit(0);
   }
-  console.log(`[batch] Found ${pending.length} contracts to classify`);
+
+  // ── Code pre-filter (free checks before sending to xAI) ─────────────
+  const today = new Date();
+  let preFilteredDiscard = 0;
+
+  const pending = allContracts.filter((c) => {
+    // Expired response deadline
+    if (c.responseDeadline && new Date(c.responseDeadline) < today) {
+      preFilteredDiscard++;
+      return false;
+    }
+    // Restricted set-aside codes JCL doesn't qualify for (prefix match)
+    if (isRestrictedSetAside(c.setAsideCode)) {
+      preFilteredDiscard++;
+      return false;
+    }
+    return true;
+  });
+
+  console.log(`[batch] Found ${allContracts.length} contracts total`);
+  console.log(`[batch] Pre-filtered: ${preFilteredDiscard} auto-DISCARD (expired deadlines + restricted set-asides)`);
+  console.log(`[batch] Sending to xAI: ${pending.length} contracts`);
 
   // Show description coverage stats
   const withDesc = pending.filter((c) => c.descriptionText).length;
@@ -198,51 +226,89 @@ async function main() {
     console.log("\n[batch] ═══ DRY RUN — Showing generated prompts ═══\n");
     for (let i = 0; i < Math.min(pending.length, 3); i++) {
       const contract = pending[i];
-      const prompt = buildClassificationPrompt({
+
+      let docTexts: string[] = [];
+      try {
+        const docs = await downloadDocuments(contract.resourceLinks);
+        docTexts = await extractAllDocumentTexts(docs);
+      } catch (err) {
+        console.warn(`[batch] Doc extraction failed for ${contract.noticeId}: ${err instanceof Error ? err.message : err}`);
+      }
+
+      const prompt = buildUnifiedClassificationPrompt({
         title: contract.title,
         agency: contract.agency,
         naicsCode: contract.naicsCode,
         pscCode: contract.pscCode,
         noticeType: contract.noticeType,
         setAsideType: contract.setAsideType,
+        setAsideCode: contract.setAsideCode,
         awardCeiling: contract.awardCeiling,
         responseDeadline: contract.responseDeadline
           ? new Date(contract.responseDeadline).toISOString()
           : null,
+        popState: contract.popState,
         descriptionText: contract.descriptionText,
-        documentTexts: [],
+        documentTexts: docTexts,
       });
 
       console.log(`──── Contract ${i + 1}: ${contract.noticeId} ────`);
       console.log(`Title: ${contract.title}`);
       console.log(`Has description: ${!!contract.descriptionText} (${contract.descriptionText?.length ?? 0} chars)`);
-      console.log(`\n--- PROMPT START ---`);
-      console.log(prompt);
-      console.log(`--- PROMPT END ---\n`);
+      console.log(`Documents extracted: ${docTexts.length}`);
+      console.log(`Prompt length: ${prompt.length} chars`);
+      console.log();
     }
     console.log("[batch] Dry run complete. No API calls made, no DB changes.");
     process.exit(0);
   }
 
-  // 2. Reset all target contracts to PENDING with classificationRound = 3
-  console.log("[batch] Resetting contracts to PENDING for Round 3...");
-  const resetIds = pending.map((c) => c.id);
+  // 2. Mark pre-filtered contracts as DISCARD in DB
   const { inArray } = await import("drizzle-orm");
-  // Reset in chunks to avoid query size limits
+  const preFilteredIds = allContracts
+    .filter((c) => !pending.includes(c))
+    .map((c) => c.id);
+
+  if (preFilteredIds.length > 0) {
+    console.log(`[batch] Marking ${preFilteredIds.length} pre-filtered contracts as DISCARD...`);
+    for (let i = 0; i < preFilteredIds.length; i += 500) {
+      const chunk = preFilteredIds.slice(i, i + 500);
+      await db
+        .update(contracts)
+        .set({
+          classification: "DISCARD",
+          aiReasoning: "Auto-discarded by code pre-filter (expired deadline or restricted set-aside)",
+          classificationRound: 4,
+          classifiedFromMetadata: false,
+          documentsAnalyzed: true,
+          updatedAt: new Date(),
+        })
+        .where(inArray(contracts.id, chunk));
+    }
+  }
+
+  if (pending.length === 0) {
+    console.log("[batch] All contracts were pre-filtered. Nothing to send to xAI.");
+    process.exit(0);
+  }
+
+  // 3. Reset remaining contracts to PENDING with classificationRound = 4
+  console.log("[batch] Resetting contracts to PENDING for Round 4...");
+  const resetIds = pending.map((c) => c.id);
   for (let i = 0; i < resetIds.length; i += 500) {
     const chunk = resetIds.slice(i, i + 500);
     await db
       .update(contracts)
       .set({
         classification: "PENDING",
-        classificationRound: 3,
+        classificationRound: 4,
         updatedAt: new Date(),
       })
       .where(inArray(contracts.id, chunk));
   }
-  console.log(`[batch] Reset ${resetIds.length} contracts to PENDING (round 3)`);
+  console.log(`[batch] Reset ${resetIds.length} contracts to PENDING (round 4)`);
 
-  // 3. Create or resume batch
+  // 4. Create or resume batch
   let batchId: string;
   if (resumeBatchId) {
     batchId = resumeBatchId;
@@ -250,7 +316,7 @@ async function main() {
   } else {
     const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
     const batch = await xai("POST", "/batches", {
-      name: `round3-classification-${timestamp}`,
+      name: `round4-unified-${timestamp}`,
     });
     batchId = batch.id ?? batch.batch_id;
     console.log(`[batch] Created batch: ${batchId}`);
@@ -259,52 +325,79 @@ async function main() {
     console.log(`[batch] Batch ID saved to ${batchIdFile}`);
   }
 
-  // 4. Add requests in chunks of 100
+  // 5. Extract documents and build prompts
+  console.log(`\n[batch] Phase 1: Extracting document texts...`);
+  type PreparedContract = { noticeId: string; prompt: string };
+  const prepared: PreparedContract[] = [];
   const startIdx = skip > 0 ? skip : 0;
-  for (let i = startIdx; i < pending.length; i += CHUNK_SIZE) {
-    const chunk = pending.slice(i, i + CHUNK_SIZE);
-    const batchRequests = chunk.map((contract) => {
-      const prompt = buildClassificationPrompt({
-        title: contract.title,
-        agency: contract.agency,
-        naicsCode: contract.naicsCode,
-        pscCode: contract.pscCode,
-        noticeType: contract.noticeType,
-        setAsideType: contract.setAsideType,
-        awardCeiling: contract.awardCeiling,
-        responseDeadline: contract.responseDeadline
-          ? new Date(contract.responseDeadline).toISOString()
-          : null,
-        descriptionText: contract.descriptionText,
-        documentTexts: [],
-      });
 
-      return {
-        batch_request_id: contract.noticeId,
-        batch_request: {
-          chat_get_completion: {
-            messages: [{ role: "user", content: prompt }],
-            model: MODEL,
-          },
-        },
-      };
+  for (let i = startIdx; i < pending.length; i++) {
+    const contract = pending[i];
+    const progress = `[${i + 1 - startIdx}/${pending.length - startIdx}]`;
+
+    let docTexts: string[] = [];
+    const linkCount = (contract.resourceLinks || []).length;
+    if (linkCount > 0) {
+      try {
+        const docs = await downloadDocuments(contract.resourceLinks);
+        docTexts = await extractAllDocumentTexts(docs);
+      } catch (err) {
+        console.warn(`${progress} ${contract.noticeId}: doc extraction failed (${err instanceof Error ? err.message : err})`);
+      }
+    }
+
+    const prompt = buildUnifiedClassificationPrompt({
+      title: contract.title,
+      agency: contract.agency,
+      naicsCode: contract.naicsCode,
+      pscCode: contract.pscCode,
+      noticeType: contract.noticeType,
+      setAsideType: contract.setAsideType,
+      setAsideCode: contract.setAsideCode,
+      awardCeiling: contract.awardCeiling,
+      responseDeadline: contract.responseDeadline
+        ? new Date(contract.responseDeadline).toISOString()
+        : null,
+      popState: contract.popState,
+      descriptionText: contract.descriptionText,
+      documentTexts: docTexts,
     });
+
+    prepared.push({ noticeId: contract.noticeId, prompt });
+    console.log(`${progress} ${contract.noticeId}: ${docTexts.length} docs, ${prompt.length} chars`);
+  }
+
+  console.log(`[batch] Phase 1 complete: ${prepared.length} prompts prepared\n`);
+
+  // 6. Add requests to batch in chunks of 100
+  for (let i = 0; i < prepared.length; i += CHUNK_SIZE) {
+    const chunk = prepared.slice(i, i + CHUNK_SIZE);
+    const batchRequests = chunk.map((c) => ({
+      batch_request_id: c.noticeId,
+      batch_request: {
+        chat_get_completion: {
+          messages: [{ role: "user", content: c.prompt }],
+          model: MODEL,
+          temperature: 0,
+        },
+      },
+    }));
 
     await xai("POST", `/batches/${batchId}/requests`, {
       batch_requests: batchRequests,
     });
     console.log(
-      `[batch] Added requests ${i + 1}–${Math.min(i + CHUNK_SIZE, pending.length)} of ${pending.length}`
+      `[batch] Added requests ${i + 1}–${Math.min(i + CHUNK_SIZE, prepared.length)} of ${prepared.length}`
     );
 
     // Throttle between chunk uploads
-    if (i + CHUNK_SIZE < pending.length) {
+    if (i + CHUNK_SIZE < prepared.length) {
       await sleep(CHUNK_DELAY_MS);
     }
   }
 
-  // 5-7. Poll and import results
-  await pollAndImport(batchId, db, sql, parseClassificationResponse);
+  // 7. Poll and import results
+  await pollAndImport(batchId, db, sql);
   process.exit(0);
 }
 
@@ -314,7 +407,6 @@ async function pollAndImport(
   batchId: string,
   db: any,
   sql: any,
-  parseClassificationResponse: any,
 ) {
   // Poll until done
   console.log("[batch] Polling for completion...");
@@ -337,18 +429,17 @@ async function pollAndImport(
     }
   }
 
-  await importResultsWithRetry(batchId, db, sql, parseClassificationResponse);
+  await importResultsWithRetry(batchId, db, sql);
 }
 
 async function importResultsWithRetry(
   batchId: string,
   db: any,
   sql: any,
-  parseClassificationResponse: any,
 ) {
   for (let attempt = 1; attempt <= IMPORT_MAX_RETRIES; attempt++) {
     try {
-      await importResults(batchId, db, sql, parseClassificationResponse);
+      await importResults(batchId, db, sql);
       return;
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
@@ -373,6 +464,7 @@ type ParsedResult = {
   classification: string;
   reasoning: string;
   summary: string;
+  actionPlan: string | null;
 };
 
 function extractContent(item: Record<string, unknown>): string | undefined {
@@ -418,7 +510,7 @@ async function bulkUpdateContracts(
     const values = chunk
       .map(
         (r) =>
-          `(${escapeLiteral(r.noticeId)}, ${escapeLiteral(r.classification)}, ${escapeLiteral(r.reasoning)}, ${escapeLiteral(r.summary)})`
+          `(${escapeLiteral(r.noticeId)}, ${escapeLiteral(r.classification)}, ${escapeLiteral(r.reasoning)}, ${escapeLiteral(r.summary)}, ${escapeLiteral(r.actionPlan)})`
       )
       .join(",\n");
 
@@ -429,9 +521,12 @@ async function bulkUpdateContracts(
             classification = v.classification::classification,
             ai_reasoning = v.reasoning,
             summary = v.summary,
-            classification_round = 3,
+            action_plan = v.action_plan,
+            classification_round = 4,
+            classified_from_metadata = false,
+            documents_analyzed = true,
             updated_at = NOW()
-          FROM (VALUES ${sql.raw(values)}) AS v(notice_id, classification, reasoning, summary)
+          FROM (VALUES ${sql.raw(values)}) AS v(notice_id, classification, reasoning, summary, action_plan)
           WHERE contracts.notice_id = v.notice_id
         `);
         break;
@@ -464,7 +559,6 @@ async function importResults(
   batchId: string,
   db: any,
   sql: any,
-  parseClassificationResponse: any,
 ) {
   // Resume from last successful page if retrying
   const resuming = lastSuccessfulToken !== null;
@@ -499,22 +593,38 @@ async function importResults(
       RESULTS_FETCH_TIMEOUT_MS,
     );
 
-    // Parse succeeded results
+    // Parse succeeded results — unified response: { classification, reasoning, summary, actionPlan }
     const succeeded: unknown[] = page.succeeded ?? page.results ?? [];
     for (const item of succeeded as Record<string, unknown>[]) {
       const noticeId = item.batch_request_id as string;
       try {
         const content = extractContent(item);
-        const result = parseClassificationResponse(content);
+        if (!content) {
+          errors++;
+          console.error(`[batch] Empty response for ${noticeId}`);
+          continue;
+        }
+
+        const cleaned = content.replace(/```json\s*/g, "").replace(/```\s*/g, "").trim();
+        const parsed = JSON.parse(cleaned);
+
+        const classification = parsed.classification?.toUpperCase();
+        if (!["GOOD", "MAYBE", "DISCARD"].includes(classification)) {
+          errors++;
+          console.error(`[batch] Invalid classification "${parsed.classification}" for ${noticeId}`);
+          continue;
+        }
+
         buffer.push({
           noticeId,
-          classification: result.classification,
-          reasoning: result.reasoning ?? "",
-          summary: result.summary ?? "",
+          classification,
+          reasoning: parsed.reasoning ?? "",
+          summary: parsed.summary ?? "",
+          actionPlan: parsed.actionPlan ? JSON.stringify(parsed.actionPlan) : null,
         });
         processed++;
-        if (result.classification === "GOOD") good++;
-        else if (result.classification === "MAYBE") maybe++;
+        if (classification === "GOOD") good++;
+        else if (classification === "MAYBE") maybe++;
         else discard++;
       } catch (err) {
         errors++;
@@ -591,7 +701,7 @@ async function importResults(
     finalStatus.cost_breakdown?.total_cost_usd_ticks ?? 0;
   const costUsd = costTicks / 1e10;
 
-  console.log("\n[batch] ═══ Round 3 Classification Complete ═══");
+  console.log("\n[batch] ═══ Round 4 Unified Classification Complete ═══");
   console.log(`  Total classified: ${processed}`);
   console.log(`  GOOD:    ${good}`);
   console.log(`  MAYBE:   ${maybe}`);

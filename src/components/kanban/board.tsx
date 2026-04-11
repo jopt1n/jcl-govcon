@@ -16,7 +16,7 @@ import { KanbanCard, type ContractCard } from "./card";
 import { Search, Filter, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-type Classification = "GOOD" | "MAYBE" | "DISCARD" | "PENDING";
+type ColumnId = "DEADLINES" | "GOOD" | "MAYBE" | "DISCARD";
 
 interface ColumnState {
   contracts: ContractCard[];
@@ -25,8 +25,8 @@ interface ColumnState {
   loading: boolean;
 }
 
-const COLUMNS: { id: Classification; title: string; color: string }[] = [
-  { id: "PENDING", title: "PENDING", color: "blue" },
+const COLUMNS: { id: ColumnId; title: string; color: string }[] = [
+  { id: "DEADLINES", title: "UPCOMING DEADLINES", color: "red" },
   { id: "GOOD", title: "GOOD", color: "green" },
   { id: "MAYBE", title: "MAYBE", color: "amber" },
   { id: "DISCARD", title: "DISCARD", color: "gray" },
@@ -35,8 +35,8 @@ const COLUMNS: { id: Classification; title: string; color: string }[] = [
 const LIMIT = 50;
 
 export function KanbanBoard() {
-  const [columns, setColumns] = useState<Record<Classification, ColumnState>>({
-    PENDING: { contracts: [], page: 1, total: 0, loading: true },
+  const [columns, setColumns] = useState<Record<ColumnId, ColumnState>>({
+    DEADLINES: { contracts: [], page: 1, total: 0, loading: true },
     GOOD: { contracts: [], page: 1, total: 0, loading: true },
     MAYBE: { contracts: [], page: 1, total: 0, loading: true },
     DISCARD: { contracts: [], page: 1, total: 0, loading: true },
@@ -54,14 +54,14 @@ export function KanbanBoard() {
   );
 
   const fetchColumn = useCallback(
-    async (classification: Classification, page: number, append: boolean) => {
+    async (columnId: ColumnId, page: number, append: boolean) => {
       setColumns((prev) => ({
         ...prev,
-        [classification]: { ...prev[classification], loading: true },
+        [columnId]: { ...prev[columnId], loading: true },
       }));
 
       const params = new URLSearchParams({
-        classification,
+        classification: columnId,
         page: String(page),
         limit: String(LIMIT),
       });
@@ -70,7 +70,9 @@ export function KanbanBoard() {
       if (noticeTypeFilter) params.set("noticeType", noticeTypeFilter);
 
       try {
-        const res = await fetch(`/api/contracts?${params}`);
+        const res = await fetch(`/api/contracts?${params}`, {
+          signal: AbortSignal.timeout(15_000),
+        });
         const json = await res.json();
 
         if (!res.ok || !json.data) {
@@ -79,9 +81,9 @@ export function KanbanBoard() {
 
         setColumns((prev) => ({
           ...prev,
-          [classification]: {
+          [columnId]: {
             contracts: append
-              ? [...prev[classification].contracts, ...json.data]
+              ? [...prev[columnId].contracts, ...json.data]
               : json.data,
             page,
             total: json.pagination?.total ?? 0,
@@ -89,9 +91,14 @@ export function KanbanBoard() {
           },
         }));
       } catch {
+        // On failure, revert to previous page so "Load more" reappears
         setColumns((prev) => ({
           ...prev,
-          [classification]: { ...prev[classification], loading: false },
+          [columnId]: {
+            ...prev[columnId],
+            page: append ? prev[columnId].page : 1,
+            loading: false,
+          },
         }));
       }
     },
@@ -128,11 +135,12 @@ export function KanbanBoard() {
     if (!contract) return;
 
     const targetColumn = over.id as string;
-    if (!["GOOD", "MAYBE", "DISCARD", "PENDING"].includes(targetColumn)) return;
+    // Only allow dropping into classification columns, not DEADLINES
+    if (!["GOOD", "MAYBE", "DISCARD"].includes(targetColumn)) return;
     if (contract.classification === targetColumn) return;
 
-    const sourceClassification = contract.classification as Classification;
-    const targetClassification = targetColumn as Classification;
+    const sourceClassification = contract.classification as ColumnId;
+    const targetClassification = targetColumn as ColumnId;
 
     // Optimistic update
     setColumns((prev) => {
@@ -140,7 +148,7 @@ export function KanbanBoard() {
         ...contract,
         classification: targetClassification,
       };
-      return {
+      const next = {
         ...prev,
         [sourceClassification]: {
           ...prev[sourceClassification],
@@ -154,7 +162,15 @@ export function KanbanBoard() {
           contracts: [updatedContract, ...prev[targetClassification].contracts],
           total: prev[targetClassification].total + 1,
         },
+        // Update the DEADLINES column to reflect the classification change
+        DEADLINES: {
+          ...prev.DEADLINES,
+          contracts: prev.DEADLINES.contracts.map((c) =>
+            c.id === contract.id ? { ...c, classification: targetClassification as string } : c
+          ),
+        },
       };
+      return next;
     });
 
     // Persist
@@ -168,7 +184,7 @@ export function KanbanBoard() {
         }),
       });
     } catch {
-      // Revert on failure
+      // Revert on failure — refetch all columns including deadlines
       COLUMNS.forEach((col) => fetchColumn(col.id, 1, false));
     }
   }

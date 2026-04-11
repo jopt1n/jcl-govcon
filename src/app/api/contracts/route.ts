@@ -1,13 +1,18 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { contracts } from "@/lib/db/schema";
-import { eq, ilike, and, sql, desc, type SQL } from "drizzle-orm";
+import { eq, ilike, and, gt, ne, sql, desc, asc, type SQL } from "drizzle-orm";
 
 /**
  * GET /api/contracts
  *
  * List contracts with filters, pagination, search.
  * Query params: classification, search, page, limit, agency, noticeType
+ *
+ * Special mode: classification=DEADLINES
+ *   Returns GOOD/MAYBE/DISCARD contracts with future deadlines,
+ *   grouped by classification priority (GOOD first, then MAYBE, then DISCARD)
+ *   and sorted by deadline ascending within each group.
  */
 export async function GET(req: NextRequest) {
   try {
@@ -20,9 +25,15 @@ export async function GET(req: NextRequest) {
     const noticeType = searchParams.get("noticeType");
     const offset = (page - 1) * limit;
 
+    const isDeadlines = classification === "DEADLINES";
+
     const conditions: SQL[] = [];
 
-    if (classification && ["GOOD", "MAYBE", "DISCARD", "PENDING"].includes(classification)) {
+    if (isDeadlines) {
+      // Future deadlines only, exclude PENDING
+      conditions.push(gt(contracts.responseDeadline, new Date()));
+      conditions.push(ne(contracts.classification, "PENDING"));
+    } else if (classification && ["GOOD", "MAYBE", "DISCARD", "PENDING"].includes(classification)) {
       conditions.push(eq(contracts.classification, classification as "GOOD" | "MAYBE" | "DISCARD" | "PENDING"));
     }
 
@@ -42,6 +53,14 @@ export async function GET(req: NextRequest) {
 
     const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
 
+    // Deadlines mode: sort by classification priority (GOOD=1, MAYBE=2, DISCARD=3), then deadline ASC
+    const orderClause = isDeadlines
+      ? [
+          sql`CASE classification WHEN 'GOOD' THEN 1 WHEN 'MAYBE' THEN 2 ELSE 3 END`,
+          asc(contracts.responseDeadline),
+        ]
+      : [desc(contracts.postedDate)];
+
     const [rows, countResult] = await Promise.all([
       db
         .select({
@@ -59,7 +78,7 @@ export async function GET(req: NextRequest) {
         })
         .from(contracts)
         .where(whereClause)
-        .orderBy(desc(contracts.postedDate))
+        .orderBy(...orderClause)
         .limit(limit)
         .offset(offset),
       db

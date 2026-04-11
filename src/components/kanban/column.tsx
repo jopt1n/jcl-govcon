@@ -37,6 +37,10 @@ const colorMap: Record<string, { accent: string; badge: string }> = {
     accent: "var(--pending)",
     badge: "bg-blue-500/10 text-blue-600 dark:text-blue-400",
   },
+  red: {
+    accent: "var(--urgent)",
+    badge: "bg-red-500/10 text-red-500 dark:text-red-400",
+  },
 };
 
 export function KanbanColumn({
@@ -90,7 +94,7 @@ export function KanbanColumn({
           strategy={verticalListSortingStrategy}
         >
           {contracts.map((contract) => (
-            <KanbanCard key={contract.id} contract={contract} />
+            <KanbanCard key={contract.id} contract={contract} showClassification={id === "DEADLINES"} />
           ))}
         </SortableContext>
 

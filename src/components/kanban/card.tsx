@@ -44,7 +44,13 @@ function formatCeiling(value: string | null): string {
   return `$${num.toFixed(0)}`;
 }
 
-export function KanbanCard({ contract }: { contract: ContractCard }) {
+const classificationBadge: Record<string, string> = {
+  GOOD: "bg-emerald-500/10 text-emerald-400 border-emerald-500/20",
+  MAYBE: "bg-amber-500/10 text-amber-400 border-amber-500/20",
+  DISCARD: "bg-slate-500/10 text-slate-400 border-slate-500/20",
+};
+
+export function KanbanCard({ contract, showClassification }: { contract: ContractCard; showClassification?: boolean }) {
   const {
     attributes,
     listeners,
@@ -92,6 +98,11 @@ export function KanbanCard({ contract }: { contract: ContractCard }) {
         {deadlineInfo?.warning && (
           <span className="shrink-0 text-[10px] font-bold px-1.5 py-0.5 rounded bg-amber-500/10 text-[var(--maybe)]">
             SOON
+          </span>
+        )}
+        {showClassification && classificationBadge[contract.classification] && (
+          <span className={cn("shrink-0 text-[10px] font-semibold px-1.5 py-0.5 rounded border", classificationBadge[contract.classification])}>
+            {contract.classification}
           </span>
         )}
       </div>
