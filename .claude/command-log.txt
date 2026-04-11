@@ -30,3 +30,17 @@ EOF
 [2026-04-11T06:53:52] mkdir -p scripts/archive && mv scripts/audit-docs.ts scripts/check-classified.ts scripts/check-crawl-status.ts scripts/check-doc-bytes.ts scripts/check-good-maybe-psc.ts scripts/check-good-maybe-setasides.ts scripts/check-pending.ts scripts/check-setasides.ts scripts/count-eligible.ts scripts/debug-action-plan.ts scripts/debug-prompts scripts/deep-scan-dry-run.json scripts/dry-run-unified.ts scripts/field-analysis.ts scripts/final-verification.ts scripts/find-borderline.ts scripts/find-borderline2.ts scripts/find-borderline3.ts scripts/find-docs-contract.ts scripts/find-staffaug.ts scripts/find-two-contracts.ts scripts/find-two-v2.ts scripts/find-two-v3.ts scripts/fix-sdvosbc.ts scripts/inspect-contracts.ts scripts/last-action-plan-batch-id.txt scripts/quick-check.ts scripts/reset-all-classifications.ts scripts/reset-for-rerun.ts scripts/scrape-dry-run.json scripts/set-aside-breakdown.ts scripts/show-example-contract.ts scripts/show-example-contract2.ts scripts/show-example-contract3.ts scripts/show-example-final.ts scripts/show-example-simple.ts scripts/show-nih-example.ts scripts/show-nih-example2.ts scripts/show-nih-example3.ts scripts/show-nih-example4.ts scripts/test-batch-one.ts scripts/test-crawl.ts scripts/test-db.ts scripts/test-one-write.ts scripts/test-unified-prompt.ts scripts/archive/
 [2026-04-11T06:54:03] mkdir -p docs/archive && mv tasks/todo.md docs/archive/ && rmdir tasks 2>/dev/null; ls scripts/
 [2026-04-11T06:54:22] git add -A && git status --short
+[2026-04-11T06:54:34] git commit -m "$(cat <<'EOF'
+chore: audit cleanup — fix settings, archive scripts/todo, update gitignore
+
+- Add Stop hook to .claude/settings.json for auto-checkpointing
+- Move 45 debug/one-off scripts to scripts/archive/
+- Archive tasks/todo.md to docs/archive/ (cross-referenced with plan.md)
+- Add .claude/command-log.txt to .gitignore
+- Add 2 missing backlog items to plan.md Phase 10
+- Update progress.md
+
+Co-Authored-By: Claude Opus 4.6 (1M context) <noreply@anthropic.com>
+EOF
+)"
+[2026-04-11T06:54:38] git status
