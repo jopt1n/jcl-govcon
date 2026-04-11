@@ -35,6 +35,7 @@ yarn-error.log*
 
 # claude
 CLAUDE.local.md
+.claude/command-log.txt
 
 # screenshots (review artifacts)
 review-*.png
