@@ -1,10 +1,5 @@
 "use client";
 
-import { useDroppable } from "@dnd-kit/core";
-import {
-  SortableContext,
-  verticalListSortingStrategy,
-} from "@dnd-kit/sortable";
 import { KanbanCard, type ContractCard } from "./card";
 import { cn } from "@/lib/utils";
 import { Loader2, Inbox } from "lucide-react";
@@ -53,16 +48,10 @@ export function KanbanColumn({
   onLoadMore,
   hasMore,
 }: ColumnProps) {
-  const { setNodeRef, isOver } = useDroppable({ id });
   const colors = colorMap[color] ?? colorMap.gray;
 
   return (
-    <div
-      className={cn(
-        "flex flex-col rounded-lg border border-[var(--border)] bg-[var(--surface-alt)] min-w-[300px] w-full max-w-[400px]",
-        isOver && "ring-2 ring-[var(--accent)]"
-      )}
-    >
+    <div className="flex flex-col rounded-lg border border-[var(--border)] bg-[var(--surface-alt)] min-w-[300px] w-full max-w-[400px]">
       {/* Header */}
       <div className="flex items-center justify-between px-3 py-2.5 border-b border-[var(--border)]">
         <div className="flex items-center gap-2">
@@ -77,7 +66,7 @@ export function KanbanColumn({
         <span
           className={cn(
             "text-xs font-medium px-2 py-0.5 rounded-full",
-            colors.badge
+            colors.badge,
           )}
         >
           {count.toLocaleString()}
@@ -85,18 +74,14 @@ export function KanbanColumn({
       </div>
 
       {/* Cards */}
-      <div
-        ref={setNodeRef}
-        className="flex-1 p-2 space-y-2 overflow-y-auto max-h-[calc(100vh-280px)] min-h-[200px]"
-      >
-        <SortableContext
-          items={contracts.map((c) => c.id)}
-          strategy={verticalListSortingStrategy}
-        >
-          {contracts.map((contract) => (
-            <KanbanCard key={contract.id} contract={contract} showClassification={id === "DEADLINES"} />
-          ))}
-        </SortableContext>
+      <div className="flex-1 p-2 space-y-2 overflow-y-auto max-h-[calc(100vh-280px)] min-h-[200px]">
+        {contracts.map((contract) => (
+          <KanbanCard
+            key={contract.id}
+            contract={contract}
+            showClassification={id === "DEADLINES"}
+          />
+        ))}
 
         {loading && (
           <div className="flex justify-center py-4">

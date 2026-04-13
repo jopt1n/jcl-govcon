@@ -33,37 +33,6 @@ vi.mock("lucide-react", () => {
   };
 });
 
-vi.mock("@dnd-kit/core", () => ({
-  DndContext: ({ children }: any) => (
-    <div data-testid="dnd-context">{children}</div>
-  ),
-  DragOverlay: ({ children }: any) => (
-    <div data-testid="drag-overlay">{children}</div>
-  ),
-  closestCorners: vi.fn(),
-  PointerSensor: vi.fn(),
-  useSensor: () => ({}),
-  useSensors: () => [],
-  useDroppable: () => ({ setNodeRef: vi.fn(), isOver: false }),
-}));
-
-vi.mock("@dnd-kit/sortable", () => ({
-  useSortable: () => ({
-    attributes: {},
-    listeners: {},
-    setNodeRef: vi.fn(),
-    transform: null,
-    transition: null,
-    isDragging: false,
-  }),
-  SortableContext: ({ children }: any) => <div>{children}</div>,
-  verticalListSortingStrategy: {},
-}));
-
-vi.mock("@dnd-kit/utilities", () => ({
-  CSS: { Transform: { toString: () => null } },
-}));
-
 import { KanbanBoard } from "@/components/kanban/board";
 
 const emptyResponse = {
@@ -200,10 +169,5 @@ describe("KanbanBoard", () => {
     await waitFor(() => {
       expect(screen.getByText("Clear")).toBeDefined();
     });
-  });
-
-  it("has DnD context wrapper", async () => {
-    render(<KanbanBoard />);
-    expect(screen.getByTestId("dnd-context")).toBeDefined();
   });
 });

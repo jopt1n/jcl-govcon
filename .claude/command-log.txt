@@ -239,3 +239,13 @@ main();
 [2026-04-13T04:49:56] npm run test:run 2>&1 | tail -10
 [2026-04-13T04:50:04] mv scripts/query-contract.ts scripts/query-by-noticeid.ts scripts/archive/
 [2026-04-13T04:50:11] npx tsc --noEmit 2>&1 | tail -5
+[2026-04-13T05:10:59] find /Users/joelaptin/jcl-govcon -type f -name "*.tsx" -o -name "*.ts" | grep -E "(kanban|contract)" | head -20
+[2026-04-13T05:11:12] wc -l /Users/joelaptin/jcl-govcon/src/components/contract-detail.tsx
+[2026-04-13T05:11:16] find /Users/joelaptin/jcl-govcon -type f \( -name "*.css" -o -name "*.scss" \) | head -20
+[2026-04-13T05:11:20] find /Users/joelaptin/jcl-govcon/src -type f \( -name "*.css" -o -name "*.scss" -o -name "globals.css" \) 2>/dev/null
+[2026-04-13T05:11:23] grep -r "grab\|drag\|cursor" /Users/joelaptin/jcl-govcon/src --include="*.tsx" --include="*.css" | head -15
+[2026-04-13T05:11:26] find /Users/joelaptin/jcl-govcon/src/app -type f -name "page.tsx" -o -name "layout.tsx" | head -20
+[2026-04-13T05:11:32] grep -n "useSortable\|useDraggable\|DndContext\|useDroppable" /Users/joelaptin/jcl-govcon/src/components/kanban/*.tsx
+[2026-04-13T05:11:33] grep -n "handleDragEnd\|handleDragStart\|onDragEnd\|onDragStart" /Users/joelaptin/jcl-govcon/src/components/kanban/*.tsx
+[2026-04-13T05:26:17] npx tsc --noEmit 2>&1 | tail -10
+[2026-04-13T05:26:19] npm run test:run 2>&1 | tail -10
