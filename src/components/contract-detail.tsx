@@ -74,7 +74,6 @@ interface Contract {
   updatedAt: string;
 }
 
-const CLASSIFICATIONS = ["GOOD", "MAYBE", "DISCARD", "PENDING"] as const;
 const STATUSES = [
   "IDENTIFIED",
   "PURSUING",

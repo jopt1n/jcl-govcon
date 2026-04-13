@@ -1,7 +1,7 @@
 import { Resend } from "resend";
 import { db } from "@/lib/db";
 import { contracts, settings } from "@/lib/db/schema";
-import { eq, and, gte, inArray } from "drizzle-orm";
+import { eq, and, gte } from "drizzle-orm";
 
 const resend = new Resend(process.env.RESEND_API_KEY);
 
@@ -31,13 +31,13 @@ async function getSetting<T>(key: string): Promise<T | null> {
 function todayMidnightUTC(): Date {
   const now = new Date();
   return new Date(
-    Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate())
+    Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()),
   );
 }
 
 async function getNewContracts(
   classification: "GOOD" | "MAYBE",
-  since: Date
+  since: Date,
 ): Promise<Contract[]> {
   return db
     .select()
@@ -45,8 +45,8 @@ async function getNewContracts(
     .where(
       and(
         eq(contracts.classification, classification),
-        gte(contracts.createdAt, since)
-      )
+        gte(contracts.createdAt, since),
+      ),
     );
 }
 
@@ -92,7 +92,7 @@ function buildContractRow(c: Contract): string {
 
 function buildHtml(
   goodContracts: Contract[],
-  maybeContracts: Contract[]
+  maybeContracts: Contract[],
 ): string {
   const goodRows = goodContracts.map(buildContractRow).join("");
   const maybeSection =
@@ -170,7 +170,12 @@ export async function sendDigest(): Promise<DigestResult> {
 
   // Silent on days with no new GOODs
   if (goodContracts.length === 0) {
-    return { sent: false, recipients: recipients.length, good: 0, maybe: maybeContracts.length };
+    return {
+      sent: false,
+      recipients: recipients.length,
+      good: 0,
+      maybe: maybeContracts.length,
+    };
   }
 
   // Limit maybe contracts to top 5

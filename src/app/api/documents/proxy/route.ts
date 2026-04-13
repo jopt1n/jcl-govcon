@@ -15,7 +15,8 @@ const DOCX_TYPES = new Set([
 const MIME_BY_EXT: Record<string, string> = {
   ".pdf": "application/pdf",
   ".doc": "application/msword",
-  ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  ".docx":
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
   ".xls": "application/vnd.ms-excel",
   ".xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
   ".txt": "text/plain",
@@ -23,7 +24,11 @@ const MIME_BY_EXT: Record<string, string> = {
   ".zip": "application/zip",
 };
 
-function detectMimeType(filename: string | null, serverContentType: string, buffer?: Buffer): string {
+function detectMimeType(
+  filename: string | null,
+  serverContentType: string,
+  buffer?: Buffer,
+): string {
   // If server sent a specific type (not octet-stream/xml error), trust it
   if (
     serverContentType &&
@@ -63,12 +68,16 @@ async function fetchFromSam(authedUrl: string): Promise<{
     signal: AbortSignal.timeout(TIMEOUT_MS),
   });
 
-  const samContentType = initial.headers.get("content-type") || "application/octet-stream";
+  const samContentType =
+    initial.headers.get("content-type") || "application/octet-stream";
   const samContentDisposition = initial.headers.get("content-disposition");
   const location = initial.headers.get("location");
 
   // Step 2: If redirect, follow to S3
-  if (location && (initial.status === 301 || initial.status === 302 || initial.status === 303)) {
+  if (
+    location &&
+    (initial.status === 301 || initial.status === 302 || initial.status === 303)
+  ) {
     const s3Res = await fetch(location, {
       signal: AbortSignal.timeout(TIMEOUT_MS),
     });
@@ -106,31 +115,43 @@ export async function GET(req: NextRequest) {
   const url = req.nextUrl.searchParams.get("url");
   const viewInline = req.nextUrl.searchParams.get("view") === "1";
   if (!url) {
-    return NextResponse.json({ error: "Missing url parameter" }, { status: 400 });
+    return NextResponse.json(
+      { error: "Missing url parameter" },
+      { status: 400 },
+    );
   }
 
   // Only proxy SAM.gov URLs — prevent SSRF
   try {
     const parsed = new URL(url);
     if (!parsed.hostname.endsWith(ALLOWED_HOST)) {
-      return NextResponse.json({ error: "Only SAM.gov URLs are allowed" }, { status: 403 });
+      return NextResponse.json(
+        { error: "Only SAM.gov URLs are allowed" },
+        { status: 403 },
+      );
     }
   } catch {
     return NextResponse.json({ error: "Invalid URL" }, { status: 400 });
   }
 
   if (!SAM_API_KEY) {
-    return NextResponse.json({ error: "SAM_GOV_API_KEY not configured" }, { status: 500 });
+    return NextResponse.json(
+      { error: "SAM_GOV_API_KEY not configured" },
+      { status: 500 },
+    );
   }
 
   try {
     const separator = url.includes("?") ? "&" : "?";
     const authedUrl = `${url}${separator}api_key=${SAM_API_KEY}`;
 
-    const { buffer, samContentType, samContentDisposition } = await fetchFromSam(authedUrl);
+    const { buffer, samContentType, samContentDisposition } =
+      await fetchFromSam(authedUrl);
 
     // Extract filename from SAM.gov's Content-Disposition (preserved from pre-redirect)
-    const filenameMatch = samContentDisposition?.match(/filename[*]?=["']?([^"';\n]+)/);
+    const filenameMatch = samContentDisposition?.match(
+      /filename[*]?=["']?([^"';\n]+)/,
+    );
     const filename = filenameMatch?.[1] || null;
 
     // Detect real type: SAM.gov header → magic bytes → filename extension
@@ -158,14 +179,21 @@ export async function GET(req: NextRequest) {
       headers["Content-Disposition"] = samContentDisposition;
     }
 
-    return new NextResponse(buffer as unknown as BodyInit, { status: 200, headers });
-  } catch (err: any) {
-    if (err.name === "TimeoutError" || err.name === "AbortError") {
-      return NextResponse.json({ error: "SAM.gov request timed out" }, { status: 504 });
+    return new NextResponse(buffer as unknown as BodyInit, {
+      status: 200,
+      headers,
+    });
+  } catch (err: unknown) {
+    const error = err as Error;
+    if (error.name === "TimeoutError" || error.name === "AbortError") {
+      return NextResponse.json(
+        { error: "SAM.gov request timed out" },
+        { status: 504 },
+      );
     }
     return NextResponse.json(
-      { error: "Failed to fetch document", message: err.message },
-      { status: 500 }
+      { error: "Failed to fetch document", message: error.message },
+      { status: 500 },
     );
   }
 }
@@ -201,8 +229,11 @@ export async function HEAD(req: NextRequest) {
     });
 
     const contentDisposition = res.headers.get("content-disposition") || "";
-    const rawContentType = res.headers.get("content-type") || "application/octet-stream";
-    const filenameMatch = contentDisposition.match(/filename[*]?=["']?([^"';\n]+)/);
+    const rawContentType =
+      res.headers.get("content-type") || "application/octet-stream";
+    const filenameMatch = contentDisposition.match(
+      /filename[*]?=["']?([^"';\n]+)/,
+    );
     const filename = filenameMatch?.[1] || null;
     const contentType = detectMimeType(filename, rawContentType);
 
