@@ -233,3 +233,9 @@ main();
 [2026-04-13T01:08:25] npx tsx scripts/query-contract.ts "Medical Disability" 2>&1 | grep -v ExperimentalWarning
 [2026-04-13T02:30:25] npx tsx scripts/query-contract.ts "f3ba36029e0446bb974841a379cab618" 2>&1 | grep -v ExperimentalWarning
 [2026-04-13T02:30:48] npx tsx scripts/query-by-noticeid.ts "f3ba36029e0446bb974841a379cab618" 2>&1 | grep -v ExperimentalWarning
+[2026-04-13T04:49:16] npx tsc --noEmit 2>&1 | tail -20
+[2026-04-13T04:49:19] npm run test:run 2>&1 | tail -20
+[2026-04-13T04:49:53] npx tsc --noEmit 2>&1 | tail -10
+[2026-04-13T04:49:56] npm run test:run 2>&1 | tail -10
+[2026-04-13T04:50:04] mv scripts/query-contract.ts scripts/query-by-noticeid.ts scripts/archive/
+[2026-04-13T04:50:11] npx tsc --noEmit 2>&1 | tail -5

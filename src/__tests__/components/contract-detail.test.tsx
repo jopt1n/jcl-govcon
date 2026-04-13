@@ -89,7 +89,9 @@ describe("ContractDetail", () => {
     global.fetch = vi.fn().mockReturnValue(new Promise(() => {})); // never resolves
     render(<ContractDetail contractId="test-uuid" />);
     // Loader2 is mocked as a span; the loading wrapper has a flex class
-    const container = document.querySelector(".flex.items-center.justify-center");
+    const container = document.querySelector(
+      ".flex.items-center.justify-center",
+    );
     expect(container).toBeDefined();
     expect(container).not.toBeNull();
   });
@@ -138,15 +140,15 @@ describe("ContractDetail", () => {
     });
   });
 
-  it("classification dropdown renders with options", async () => {
+  it("classification buttons render for GOOD/MAYBE/DISCARD", async () => {
     mockFetchSuccess();
     render(<ContractDetail contractId="test-uuid" />);
     await waitFor(() => {
       expect(screen.getByText("Classification")).toBeDefined();
     });
-    const select = screen.getByDisplayValue("GOOD");
-    expect(select).toBeDefined();
-    expect(select.tagName.toLowerCase()).toBe("select");
+    expect(screen.getByRole("button", { name: "GOOD" })).toBeDefined();
+    expect(screen.getByRole("button", { name: "MAYBE" })).toBeDefined();
+    expect(screen.getByRole("button", { name: "DISCARD" })).toBeDefined();
   });
 
   it("status dropdown visible only for GOOD classification", async () => {
@@ -164,7 +166,7 @@ describe("ContractDetail", () => {
     render(<ContractDetail contractId="test-uuid" />);
     await waitFor(() => {
       const textarea = screen.getByPlaceholderText(
-        "Add notes about this contract..."
+        "Add notes about this contract...",
       );
       expect(textarea).toBeDefined();
       expect((textarea as HTMLTextAreaElement).value).toBe("Some notes");
@@ -178,7 +180,7 @@ describe("ContractDetail", () => {
       const link = screen.getByText("View on SAM.gov");
       expect(link).toBeDefined();
       expect(link.closest("a")?.getAttribute("href")).toBe(
-        "https://sam.gov/opp/123"
+        "https://sam.gov/opp/123",
       );
     });
   });
