@@ -355,3 +355,12 @@ EOF
 [2026-04-14T05:17:34] git branch --show-current && git status -s && git log --oneline main..HEAD 2>/dev/null | head -30 && echo "---REMOTE---" && git ls-remote --heads origin fix/batch-import-hang 2>&1
 [2026-04-14T05:17:41] ls src/lib/ai/batch-classify.ts src/lib/notifications/ src/app/api/cron/weekly-crawl/route.ts src/app/api/cron/check-batches/route.ts src/app/inbox/page.tsx src/app/pipeline/page.tsx src/app/admin/crawl-runs/page.tsx src/app/api/contracts/export/route.ts scripts/backfill-reviewed-at.sql railway.toml 2>&1
 [2026-04-14T05:17:46] grep -c "reviewedAt\|statusChangedAt\|crawlRuns\|processingAt" src/lib/db/schema.ts; echo "---"; grep -n "reviewedAt\|crawlRuns\|processingAt\|statusChangedAt" src/lib/db/schema.ts | head -30; echo "---tests---"; ls src/lib/notifications/*.test.ts src/lib/ai/batch-classify.test.ts src/app/api/cron/*/route.test.ts src/app/api/contracts/export/route.test.ts 2>&1; echo "---test count---"; npm run test:run 2>&1 | tail -15
+[2026-04-14T07:00:17] git fetch origin main --quiet 2>&1; git diff origin/main --stat | tail -40
+[2026-04-14T07:00:28] git log --oneline --all -- src/lib/notifications/telegram.ts src/app/api/cron/weekly-crawl/route.ts | head -10
+[2026-04-14T07:00:31] git log --oneline 6838164^..HEAD 2>&1; echo "---"; git diff 6838164^ HEAD --stat | tail -50
+[2026-04-14T07:02:52] sed -n '1,120p' /Users/joelaptin/jcl-govcon/src/components/sidebar.tsx 2>&1 | head -120
+[2026-04-14T07:03:00] sed -n '1,60p' /Users/joelaptin/jcl-govcon/src/app/api/crawl-runs/latest/route.ts
+[2026-04-14T07:03:05] grep -n "importBatchResults\|pollBatch\|submitBatchClassify\|export async function\|ON CONFLICT\|classification.*PENDING" /Users/joelaptin/jcl-govcon/src/lib/ai/batch-classify.ts | head -40
+[2026-04-14T07:03:15] grep -n "escapeLiteral\|function escapeLiteral" /Users/joelaptin/jcl-govcon/src/lib/ai/batch-classify.ts | head -10
+[2026-04-14T07:03:30] npx tsc --noEmit 2>&1 | tail -20
+[2026-04-14T07:03:36] grep -rn "check-batches\|weekly-crawl\|sendWeeklyDigest" src/__tests__/ 2>&1 | head -20
