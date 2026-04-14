@@ -13,7 +13,7 @@ import { extractAllDocumentTexts } from "@/lib/document-text";
  */
 export async function GET(
   _req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: { id: string } },
 ) {
   try {
     const [contract] = await db
@@ -23,15 +23,21 @@ export async function GET(
       .limit(1);
 
     if (!contract) {
-      return NextResponse.json({ error: "Contract not found" }, { status: 404 });
+      return NextResponse.json(
+        { error: "Contract not found" },
+        { status: 404 },
+      );
     }
 
     return NextResponse.json(contract);
   } catch (err) {
     console.error("[api/contracts/id] GET Error:", err);
     return NextResponse.json(
-      { error: "Failed to fetch contract", message: err instanceof Error ? err.message : String(err) },
-      { status: 500 }
+      {
+        error: "Failed to fetch contract",
+        message: err instanceof Error ? err.message : String(err),
+      },
+      { status: 500 },
     );
   }
 }
@@ -43,24 +49,52 @@ export async function GET(
  */
 export async function PATCH(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: { id: string } },
 ) {
   try {
     const body = await req.json();
     const updates: Record<string, unknown> = {};
 
     if (body.classification !== undefined) {
-      if (!["GOOD", "MAYBE", "DISCARD", "PENDING"].includes(body.classification)) {
-        return NextResponse.json({ error: "Invalid classification" }, { status: 400 });
+      if (
+        !["GOOD", "MAYBE", "DISCARD", "PENDING"].includes(body.classification)
+      ) {
+        return NextResponse.json(
+          { error: "Invalid classification" },
+          { status: 400 },
+        );
       }
       updates.classification = body.classification;
     }
 
+    // status: only bump statusChangedAt when the value actually changes.
+    // Load the existing row once so we can diff and also return it from the
+    // 404 branch without an extra round trip.
+    let existing: typeof contracts.$inferSelect | undefined;
     if (body.status !== undefined) {
-      if (!["IDENTIFIED", "PURSUING", "BID_SUBMITTED", "WON", "LOST"].includes(body.status)) {
+      if (
+        !["IDENTIFIED", "PURSUING", "BID_SUBMITTED", "WON", "LOST"].includes(
+          body.status,
+        )
+      ) {
         return NextResponse.json({ error: "Invalid status" }, { status: 400 });
       }
+      const [row] = await db
+        .select()
+        .from(contracts)
+        .where(eq(contracts.id, params.id))
+        .limit(1);
+      existing = row;
+      if (!existing) {
+        return NextResponse.json(
+          { error: "Contract not found" },
+          { status: 404 },
+        );
+      }
       updates.status = body.status;
+      if (existing.status !== body.status) {
+        updates.statusChangedAt = new Date();
+      }
     }
 
     if (body.notes !== undefined) {
@@ -75,8 +109,35 @@ export async function PATCH(
       updates.actionPlan = body.actionPlan;
     }
 
+    // reviewedAt: allow explicit timestamps or `true` shorthand for
+    // "mark reviewed now". Null un-triages a contract.
+    if (body.reviewedAt !== undefined) {
+      if (body.reviewedAt === null) {
+        updates.reviewedAt = null;
+      } else if (body.reviewedAt === true) {
+        updates.reviewedAt = new Date();
+      } else if (typeof body.reviewedAt === "string") {
+        const parsed = new Date(body.reviewedAt);
+        if (isNaN(parsed.getTime())) {
+          return NextResponse.json(
+            { error: "Invalid reviewedAt" },
+            { status: 400 },
+          );
+        }
+        updates.reviewedAt = parsed;
+      } else {
+        return NextResponse.json(
+          { error: "Invalid reviewedAt" },
+          { status: 400 },
+        );
+      }
+    }
+
     if (Object.keys(updates).length === 0) {
-      return NextResponse.json({ error: "No valid fields to update" }, { status: 400 });
+      return NextResponse.json(
+        { error: "No valid fields to update" },
+        { status: 400 },
+      );
     }
 
     updates.updatedAt = new Date();
@@ -88,15 +149,21 @@ export async function PATCH(
       .returning();
 
     if (!updated) {
-      return NextResponse.json({ error: "Contract not found" }, { status: 404 });
+      return NextResponse.json(
+        { error: "Contract not found" },
+        { status: 404 },
+      );
     }
 
     return NextResponse.json(updated);
   } catch (err) {
     console.error("[api/contracts/id] PATCH Error:", err);
     return NextResponse.json(
-      { error: "Failed to update contract", message: err instanceof Error ? err.message : String(err) },
-      { status: 500 }
+      {
+        error: "Failed to update contract",
+        message: err instanceof Error ? err.message : String(err),
+      },
+      { status: 500 },
     );
   }
 }
@@ -110,7 +177,7 @@ export async function PATCH(
  */
 export async function POST(
   _req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: { id: string } },
 ) {
   try {
     const [contract] = await db
@@ -120,7 +187,10 @@ export async function POST(
       .limit(1);
 
     if (!contract) {
-      return NextResponse.json({ error: "Contract not found" }, { status: 404 });
+      return NextResponse.json(
+        { error: "Contract not found" },
+        { status: 404 },
+      );
     }
 
     // Extract text from documents (documents.ts sniffs real content type via magic bytes)
@@ -130,7 +200,10 @@ export async function POST(
     const rawResponse = await generateActionPlan(contract, docTexts);
 
     if (!rawResponse) {
-      return NextResponse.json({ error: "Failed to generate unified classification" }, { status: 500 });
+      return NextResponse.json(
+        { error: "Failed to generate unified classification" },
+        { status: 500 },
+      );
     }
 
     // Parse the unified response: { classification, reasoning, summary, actionPlan }
@@ -141,10 +214,14 @@ export async function POST(
     const [updated] = await db
       .update(contracts)
       .set({
-        classification: validClassifications.includes(classification) ? classification : contract.classification,
+        classification: validClassifications.includes(classification)
+          ? classification
+          : contract.classification,
         aiReasoning: parsed.reasoning || contract.aiReasoning,
         summary: parsed.summary || contract.summary,
-        actionPlan: parsed.actionPlan ? JSON.stringify(parsed.actionPlan) : null,
+        actionPlan: parsed.actionPlan
+          ? JSON.stringify(parsed.actionPlan)
+          : null,
         classificationRound: 4,
         classifiedFromMetadata: false,
         documentsAnalyzed: true,
@@ -157,8 +234,11 @@ export async function POST(
   } catch (err) {
     console.error("[api/contracts/id] POST Error:", err);
     return NextResponse.json(
-      { error: "Failed to generate unified classification", message: err instanceof Error ? err.message : String(err) },
-      { status: 500 }
+      {
+        error: "Failed to generate unified classification",
+        message: err instanceof Error ? err.message : String(err),
+      },
+      { status: 500 },
     );
   }
 }

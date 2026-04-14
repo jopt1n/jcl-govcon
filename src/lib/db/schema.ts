@@ -95,7 +95,15 @@ export const contracts = pgTable(
     // Pipeline phase tracking
     classificationRound: integer("classification_round").notNull().default(1),
     descriptionFetched: boolean("description_fetched").notNull().default(false),
-    classifiedFromMetadata: boolean("classified_from_metadata").notNull().default(false),
+    classifiedFromMetadata: boolean("classified_from_metadata")
+      .notNull()
+      .default(false),
+    // Inbox triage: null = unreviewed (shows on /inbox), non-null = triaged (shows on main Kanban)
+    reviewedAt: timestamp("reviewed_at", { withTimezone: true }),
+    // Pipeline tracking: bumped whenever status changes; powers weekly retro stats
+    statusChangedAt: timestamp("status_changed_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
       .defaultNow(),
@@ -105,9 +113,16 @@ export const contracts = pgTable(
   },
   (table) => ({
     solicitationNumberIdx: index("solicitation_number_idx").on(
-      table.solicitationNumber
+      table.solicitationNumber,
     ),
-  })
+    inboxQueryIdx: index("contracts_inbox_idx").on(
+      table.reviewedAt,
+      table.createdAt,
+    ),
+    statusChangedAtIdx: index("contracts_status_changed_at_idx").on(
+      table.statusChangedAt,
+    ),
+  }),
 );
 
 export const apiUsage = pgTable("api_usage", {
@@ -153,3 +168,52 @@ export const batchJobs = pgTable("batch_jobs", {
   completedAt: timestamp("completed_at", { withTimezone: true }),
   resultsJson: jsonb("results_json"),
 });
+
+// ── Weekly pipeline runs ───────────────────────────────────────────────────
+//
+// One row per automated weekly crawl (kind="weekly") or manual trigger
+// (kind="manual"). Spans multiple HTTP requests:
+//
+//   weekly-crawl route → INSERT row, crawl, submit xAI batch, return
+//   check-batches route (every 30 min) → atomic-claim via processingAt,
+//     poll batch, import on completion, fire Telegram digest once,
+//     set digestSentAt
+//
+// Concurrency gate: processingAt acts as a 5-minute lease. Only the winning
+// claimant processes a given row; crash recovery happens when the lease
+// expires. digestSentAt ensures the Telegram digest fires exactly once per
+// succeeded run.
+//
+// Status lifecycle: running → crawled → classifying → succeeded | failed | stalled
+export const crawlRuns = pgTable(
+  "crawl_runs",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    kind: text("kind").notNull(), // "weekly" | "manual"
+    windowStart: timestamp("window_start", { withTimezone: true }).notNull(),
+    windowEnd: timestamp("window_end", { withTimezone: true }).notNull(),
+    crawlStartedAt: timestamp("crawl_started_at", { withTimezone: true }),
+    crawlFinishedAt: timestamp("crawl_finished_at", { withTimezone: true }),
+    batchId: text("batch_id"),
+    batchStatus: text("batch_status"), // "submitted" | "running" | "completed" | "failed"
+    batchStartedAt: timestamp("batch_started_at", { withTimezone: true }),
+    batchFinishedAt: timestamp("batch_finished_at", { withTimezone: true }),
+    contractsFound: integer("contracts_found").notNull().default(0),
+    contractsClassified: integer("contracts_classified").notNull().default(0),
+    digestSentAt: timestamp("digest_sent_at", { withTimezone: true }),
+    // Atomic claim lease: non-null + fresh = another request is processing
+    processingAt: timestamp("processing_at", { withTimezone: true }),
+    status: text("status").notNull().default("running"),
+    errorStep: text("error_step"), // "crawl" | "batch_submit" | "batch_poll" | "import" | "digest" | "telegram_config"
+    error: text("error"),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => ({
+    activeBatchIdx: index("crawl_runs_active_batch_idx").on(
+      table.batchFinishedAt,
+      table.batchId,
+    ),
+  }),
+);

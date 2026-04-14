@@ -151,11 +151,11 @@ describe("ContractDetail", () => {
     expect(screen.getByRole("button", { name: "DISCARD" })).toBeDefined();
   });
 
-  it("status dropdown visible only for GOOD classification", async () => {
+  it("pipeline status dropdown is always visible regardless of classification", async () => {
     mockFetchSuccess();
     render(<ContractDetail contractId="test-uuid" />);
     await waitFor(() => {
-      expect(screen.getByText("Status")).toBeDefined();
+      expect(screen.getByText("Pipeline Status")).toBeDefined();
     });
     const statusSelect = screen.getByDisplayValue("IDENTIFIED");
     expect(statusSelect).toBeDefined();

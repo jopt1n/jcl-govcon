@@ -306,3 +306,23 @@ echo "SLUG: ${SLUG:-unknown}"
 [2026-04-13T23:07:52] grep -n "createdAt\|firstSeen\|reviewed\|recordedAt" /Users/joelaptin/jcl-govcon/src/lib/db/schema.ts
 [2026-04-13T23:07:57] ls -la /Users/joelaptin/jcl-govcon/src/lib/ai/ 2>/dev/null
 [2026-04-13T23:07:59] head -20 /Users/joelaptin/jcl-govcon/.env.example 2>/dev/null || echo "No .env.example"
+[2026-04-14T02:04:48] grep -E '"@' /Users/joelaptin/jcl-govcon/tsconfig.json 2>/dev/null; echo "---"; head -3 /Users/joelaptin/jcl-govcon/src/lib/ai/classifier.ts 2>/dev/null
+[2026-04-14T02:04:52] grep -n "^import" /Users/joelaptin/jcl-govcon/src/lib/ai/classifier.ts | head -20
+[2026-04-14T02:14:25] grep -E 'dnd-kit|"react"|"next"' /Users/joelaptin/jcl-govcon/package.json
+[2026-04-14T02:16:11] grep -E '"swr"' /Users/joelaptin/jcl-govcon/package.json
+[2026-04-14T02:17:13] grep -n "STATUSES\|status" /Users/joelaptin/jcl-govcon/src/components/contract-detail.tsx | head -30
+[2026-04-14T02:18:01] find /Users/joelaptin/jcl-govcon/src -name "*.test.ts" | head -10 && echo "---" && cat /Users/joelaptin/jcl-govcon/vitest.config.ts 2>/dev/null || cat /Users/joelaptin/jcl-govcon/vitest.config.mts 2>/dev/null
+[2026-04-14T02:19:29] npx tsc --noEmit 2>&1 | head -80
+[2026-04-14T02:19:36] npx tsc --noEmit; echo "EXIT=$?"
+[2026-04-14T02:19:42] npm run test:run 2>&1 | tail -60
+[2026-04-14T02:19:53] npm run test:run 2>&1 | grep -E "FAIL|✗|×" | head -40
+[2026-04-14T02:22:03] grep -n "GOOD classification\|status dropdown" /Users/joelaptin/jcl-govcon/src/__tests__/components/contract-detail.test.tsx | head
+[2026-04-14T02:22:29] npm run test:run 2>&1 | tail -40
+[2026-04-14T02:22:42] npm run lint 2>&1 | tail -30
+[2026-04-14T02:22:52] npm run lint 2>&1 | grep -E "^\./src" | sort -u
+[2026-04-14T02:23:03] git diff --name-only; echo "---"; git status --short 2>/dev/null | head -30
+[2026-04-14T02:23:11] sed -n '60,70p;90,100p;385,395p' /Users/joelaptin/jcl-govcon/src/lib/ai/batch-classify.ts
+[2026-04-14T02:23:47] npm run lint 2>&1 | grep -E "batch-classify\.ts|Error" | grep -v "pre-existing\|@next" | tail -30
+[2026-04-14T02:23:53] npm run lint 2>&1 | grep -B1 "batch-classify.ts$\|batch-classify.ts\b" | head -20
+[2026-04-14T02:24:01] npm run lint 2>&1 | grep -c "Error" && echo "---FILES---" && npm run lint 2>&1 | grep "^\./src" | sort -u
+[2026-04-14T02:24:17] git stash && npm run lint 2>&1 | grep -c "Error"; git stash pop

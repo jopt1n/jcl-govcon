@@ -513,24 +513,24 @@ export function ContractDetail({ contractId }: { contractId: string }) {
                   </div>
                 )}
 
-              {contract.classification === "GOOD" && (
-                <div>
-                  <label className="block text-xs font-medium text-[var(--text-muted)] mb-1">
-                    Status
-                  </label>
-                  <select
-                    value={contract.status ?? "IDENTIFIED"}
-                    onChange={(e) => updateField({ status: e.target.value })}
-                    className="px-3 py-1.5 text-sm bg-[var(--surface)] border border-[var(--border)] rounded-lg text-[var(--text-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--accent)]"
-                  >
-                    {STATUSES.map((s) => (
-                      <option key={s} value={s}>
-                        {s.replace("_", " ")}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              )}
+              {/* Status dropdown always available — lets you move any */}
+              {/* contract into the pipeline regardless of classification. */}
+              <div>
+                <label className="block text-xs font-medium text-[var(--text-muted)] mb-1">
+                  Pipeline Status
+                </label>
+                <select
+                  value={contract.status ?? "IDENTIFIED"}
+                  onChange={(e) => updateField({ status: e.target.value })}
+                  className="px-3 py-1.5 text-sm bg-[var(--surface)] border border-[var(--border)] rounded-lg text-[var(--text-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--accent)]"
+                >
+                  {STATUSES.map((s) => (
+                    <option key={s} value={s}>
+                      {s.replace("_", " ")}
+                    </option>
+                  ))}
+                </select>
+              </div>
 
               {saving && (
                 <div className="flex items-end pb-1.5">
