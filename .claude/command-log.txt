@@ -525,3 +525,17 @@ export-same-origin.test.ts. 314 → 329 tests (matches plan target).
 Co-Authored-By: Claude Opus 4.6 (1M context) <noreply@anthropic.com>
 EOF
 )"
+[2026-04-14T22:13:04] chmod +x /Users/joelaptin/jcl-govcon/scripts/smoke-weekly-pipeline.sh && git add -A && git commit -m "$(cat <<'EOF'
+chore(smoke): end-to-end shell smoke test for weekly pipeline
+
+Commit 6 of the Sedgewick cleanup. Start dev server with SAM_DRY_RUN=true,
+curl both cron routes, assert terminal states, and curl the export
+route. Not run in CI — required manual gate before merge.
+
+Catches integration bugs the Proxy-mocked unit tests cannot see
+(connection pool behavior, Drizzle query shapes, NextRequest header
+parsing, advisory lock round-trips).
+
+Co-Authored-By: Claude Opus 4.6 (1M context) <noreply@anthropic.com>
+EOF
+)"
