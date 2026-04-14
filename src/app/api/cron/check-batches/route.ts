@@ -217,25 +217,46 @@ export async function POST(req: NextRequest) {
 }
 
 /**
- * Advance a single claimed row through one of three paths:
- *   A. Row has an active batch → poll, maybe import
- *   B. Row succeeded but needs a digest → send digest
- *   C. Row is stalled → mark stalled + alert
+ * Immutable snapshot of a candidate row as observed at scan time.
+ * Pass this by value through the sub-handlers — never mutate to re-enter
+ * a later branch. The `transitionedToSucceeded` bit on PollResult is the
+ * channel for "path A just flipped this row to succeeded in-request."
  */
-async function processRow(row: {
+type RowSnapshot = {
   id: string;
   batchId: string | null;
   batchStartedAt: Date | null;
   batchFinishedAt: Date | null;
   digestSentAt: Date | null;
   status: string;
-}): Promise<{ runId: string; outcome: string }> {
+};
+
+type PollOutcome =
+  | "still_running"
+  | "batch_failed"
+  | "stalled"
+  | "poll_error"
+  | "import_failed"
+  | "imported"
+  | "no_op";
+
+type PollResult = {
+  outcome: PollOutcome;
+  /** Only true when outcome === "imported". Signals processRow to invoke
+   * maybeSendDigest even though the snapshot still has status !== "succeeded". */
+  transitionedToSucceeded: boolean;
+};
+
+/**
+ * Path A (poll) + Path C (stalled). Never mutates its argument.
+ */
+async function pollAndImport(snapshot: RowSnapshot): Promise<PollResult> {
   // ── Path C: Stalled guard ───────────────────────────────────────────
   if (
-    row.batchId &&
-    !row.batchFinishedAt &&
-    row.batchStartedAt &&
-    Date.now() - row.batchStartedAt.getTime() >
+    snapshot.batchId &&
+    !snapshot.batchFinishedAt &&
+    snapshot.batchStartedAt &&
+    Date.now() - snapshot.batchStartedAt.getTime() >
       STALLED_AFTER_HOURS * 60 * 60 * 1000
   ) {
     await db
@@ -245,191 +266,246 @@ async function processRow(row: {
         errorStep: "batch_poll",
         error: `Batch stalled: running longer than ${STALLED_AFTER_HOURS}h`,
       })
-      .where(eq(crawlRuns.id, row.id));
+      .where(eq(crawlRuns.id, snapshot.id));
     log({
       kind: "check-batches",
-      runId: row.id,
+      runId: snapshot.id,
       step: "stalled",
       status: "ok",
       durationMs: 0,
-      data: { batchId: row.batchId },
+      data: { batchId: snapshot.batchId },
     });
     await alert(
-      row.id,
-      `xAI batch stalled (>${STALLED_AFTER_HOURS}h). BatchId: ${row.batchId}`,
+      snapshot.id,
+      `xAI batch stalled (>${STALLED_AFTER_HOURS}h). BatchId: ${snapshot.batchId}`,
     );
-    return { runId: row.id, outcome: "stalled" };
+    return { outcome: "stalled", transitionedToSucceeded: false };
   }
 
-  // ── Path A: Poll active batch ───────────────────────────────────────
-  if (row.batchId && !row.batchFinishedAt) {
-    const stepStart = Date.now();
-    let pollResult;
-    try {
-      pollResult = await pollBatch(row.batchId);
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      log({
-        kind: "check-batches",
-        runId: row.id,
-        step: "poll",
-        status: "error",
-        durationMs: Date.now() - stepStart,
-        error: msg,
-      });
-      // Transient poll failure: don't mark the row failed, just leave it.
-      // Next cron fire will retry.
-      return { runId: row.id, outcome: "poll_error" };
-    }
+  // Not an active batch — nothing to poll. Let maybeSendDigest decide.
+  if (!snapshot.batchId || snapshot.batchFinishedAt) {
+    return { outcome: "no_op", transitionedToSucceeded: false };
+  }
 
-    await db
-      .update(crawlRuns)
-      .set({ batchStatus: pollResult.status })
-      .where(eq(crawlRuns.id, row.id));
+  const stepStart = Date.now();
+  let pollResult;
+  try {
+    pollResult = await pollBatch(snapshot.batchId);
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    log({
+      kind: "check-batches",
+      runId: snapshot.id,
+      step: "poll",
+      status: "error",
+      durationMs: Date.now() - stepStart,
+      error: msg,
+    });
+    return { outcome: "poll_error", transitionedToSucceeded: false };
+  }
 
-    if (pollResult.status === "running") {
-      log({
-        kind: "check-batches",
-        runId: row.id,
-        step: "poll",
-        status: "ok",
-        durationMs: Date.now() - stepStart,
-        data: {
-          batchStatus: "running",
-          success: pollResult.numSuccess,
-          pending: pollResult.numPending,
-        },
-      });
-      return { runId: row.id, outcome: "still_running" };
-    }
+  await db
+    .update(crawlRuns)
+    .set({ batchStatus: pollResult.status })
+    .where(eq(crawlRuns.id, snapshot.id));
 
-    if (pollResult.status === "failed") {
-      await db
-        .update(crawlRuns)
-        .set({
-          status: "failed",
-          errorStep: "batch_poll",
-          error: `Batch reported failed state: ${pollResult.numError} errors of ${pollResult.total}`,
-          batchFinishedAt: new Date(),
-        })
-        .where(eq(crawlRuns.id, row.id));
-      log({
-        kind: "check-batches",
-        runId: row.id,
-        step: "poll",
-        status: "error",
-        durationMs: Date.now() - stepStart,
-        error: "batch failed",
-      });
-      await alert(
-        row.id,
-        `xAI batch failed. ${pollResult.numError} errors of ${pollResult.total}. BatchId: ${row.batchId}`,
-      );
-      return { runId: row.id, outcome: "batch_failed" };
-    }
+  if (pollResult.status === "running") {
+    log({
+      kind: "check-batches",
+      runId: snapshot.id,
+      step: "poll",
+      status: "ok",
+      durationMs: Date.now() - stepStart,
+      data: {
+        batchStatus: "running",
+        success: pollResult.numSuccess,
+        pending: pollResult.numPending,
+      },
+    });
+    return { outcome: "still_running", transitionedToSucceeded: false };
+  }
 
-    // completed → import
-    const importStart = Date.now();
-    let importResult;
-    try {
-      importResult = await importBatchResults(row.batchId);
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      await db
-        .update(crawlRuns)
-        .set({
-          status: "failed",
-          errorStep: "import",
-          error: msg,
-        })
-        .where(eq(crawlRuns.id, row.id));
-      log({
-        kind: "check-batches",
-        runId: row.id,
-        step: "import",
-        status: "error",
-        durationMs: Date.now() - importStart,
-        error: msg,
-      });
-      await alert(row.id, `import failed: ${msg}`);
-      return { runId: row.id, outcome: "import_failed" };
-    }
-
+  if (pollResult.status === "failed") {
     await db
       .update(crawlRuns)
       .set({
+        status: "failed",
+        errorStep: "batch_poll",
+        error: `Batch reported failed state: ${pollResult.numError} errors of ${pollResult.total}`,
         batchFinishedAt: new Date(),
-        batchStatus: "completed",
-        contractsClassified: importResult.classified,
-        status: "succeeded",
       })
-      .where(eq(crawlRuns.id, row.id));
-
+      .where(eq(crawlRuns.id, snapshot.id));
     log({
       kind: "check-batches",
-      runId: row.id,
+      runId: snapshot.id,
+      step: "poll",
+      status: "error",
+      durationMs: Date.now() - stepStart,
+      error: "batch failed",
+    });
+    await alert(
+      snapshot.id,
+      `xAI batch failed. ${pollResult.numError} errors of ${pollResult.total}. BatchId: ${snapshot.batchId}`,
+    );
+    return { outcome: "batch_failed", transitionedToSucceeded: false };
+  }
+
+  // completed → import
+  const importStart = Date.now();
+  let importResult;
+  try {
+    importResult = await importBatchResults(snapshot.batchId);
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    await db
+      .update(crawlRuns)
+      .set({
+        status: "failed",
+        errorStep: "import",
+        error: msg,
+      })
+      .where(eq(crawlRuns.id, snapshot.id));
+    log({
+      kind: "check-batches",
+      runId: snapshot.id,
       step: "import",
-      status: "ok",
+      status: "error",
       durationMs: Date.now() - importStart,
+      error: msg,
+    });
+    await alert(snapshot.id, `import failed: ${msg}`);
+    return { outcome: "import_failed", transitionedToSucceeded: false };
+  }
+
+  await db
+    .update(crawlRuns)
+    .set({
+      batchFinishedAt: new Date(),
+      batchStatus: "completed",
+      contractsClassified: importResult.classified,
+      status: "succeeded",
+    })
+    .where(eq(crawlRuns.id, snapshot.id));
+
+  log({
+    kind: "check-batches",
+    runId: snapshot.id,
+    step: "import",
+    status: "ok",
+    durationMs: Date.now() - importStart,
+    data: {
+      classified: importResult.classified,
+      good: importResult.good,
+      maybe: importResult.maybe,
+      discard: importResult.discard,
+    },
+  });
+
+  return { outcome: "imported", transitionedToSucceeded: true };
+}
+
+/**
+ * Path B (digest). Uses transitionedThisCall to decide whether to treat
+ * the snapshot as succeeded even though the original snapshot says
+ * otherwise. Returns null when there is no digest work to do.
+ */
+async function maybeSendDigest(
+  snapshot: RowSnapshot,
+  transitionedThisCall: boolean,
+): Promise<{ runId: string; outcome: string } | null> {
+  const isSucceeded = transitionedThisCall || snapshot.status === "succeeded";
+  const digestAlreadySent = !transitionedThisCall && snapshot.digestSentAt;
+
+  if (!isSucceeded || digestAlreadySent) {
+    return null;
+  }
+
+  const digestStart = Date.now();
+  try {
+    const digestResult = await sendWeeklyDigest(snapshot.id);
+    log({
+      kind: "check-batches",
+      runId: snapshot.id,
+      step: "digest",
+      status: "ok",
+      durationMs: Date.now() - digestStart,
       data: {
-        classified: importResult.classified,
-        good: importResult.good,
-        maybe: importResult.maybe,
-        discard: importResult.discard,
+        good: digestResult.good,
+        maybe: digestResult.maybe,
+        triaged: digestResult.triaged,
+        messageLength: digestResult.messageLength,
       },
     });
-
-    // Fall through to the digest send below by pretending this row is now
-    // in the "succeeded, digest not sent" state. Refresh the row state for
-    // the digest check.
-    row.status = "succeeded";
-    row.digestSentAt = null;
-  }
-
-  // ── Path B: Fire digest on succeeded row ────────────────────────────
-  if (row.status === "succeeded" && !row.digestSentAt) {
-    const digestStart = Date.now();
-    try {
-      const digestResult = await sendWeeklyDigest(row.id);
-      log({
-        kind: "check-batches",
-        runId: row.id,
-        step: "digest",
-        status: "ok",
-        durationMs: Date.now() - digestStart,
-        data: {
-          good: digestResult.good,
-          maybe: digestResult.maybe,
-          triaged: digestResult.triaged,
-          messageLength: digestResult.messageLength,
-        },
-      });
-      return { runId: row.id, outcome: "digest_sent" };
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      // Retry-friendly: leave status='succeeded' and digestSentAt=NULL so
-      // the next check-batches fire re-selects this row and retries the
-      // send. Record the last error on the row for the admin page without
-      // flipping status. Don't re-alert via Telegram since the failure IS
-      // Telegram in most cases.
-      await db
-        .update(crawlRuns)
-        .set({
-          errorStep: "digest",
-          error: msg,
-        })
-        .where(eq(crawlRuns.id, row.id));
-      log({
-        kind: "check-batches",
-        runId: row.id,
-        step: "digest",
-        status: "error",
-        durationMs: Date.now() - digestStart,
+    return { runId: snapshot.id, outcome: "digest_sent" };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    // Retry-friendly: leave status='succeeded' and digestSentAt=NULL so
+    // the next check-batches fire re-selects this row and retries. Record
+    // the last error without flipping status. Don't re-alert via Telegram
+    // since the failure IS Telegram in most cases.
+    await db
+      .update(crawlRuns)
+      .set({
+        errorStep: "digest",
         error: msg,
-      });
-      return { runId: row.id, outcome: "digest_failed" };
-    }
+      })
+      .where(eq(crawlRuns.id, snapshot.id));
+    log({
+      kind: "check-batches",
+      runId: snapshot.id,
+      step: "digest",
+      status: "error",
+      durationMs: Date.now() - digestStart,
+      error: msg,
+    });
+    return { runId: snapshot.id, outcome: "digest_failed" };
+  }
+}
+
+/**
+ * Advance a single claimed row through:
+ *   A. Stalled guard (early return)
+ *   B. Poll active batch → maybe import (may transition to succeeded)
+ *   C. Digest send on succeeded rows
+ *
+ * Terminal poll outcomes (still_running, batch_failed, stalled, poll_error,
+ * import_failed) short-circuit before the digest phase — batch_failed
+ * explicitly does NOT fall through to digest, even though the prior
+ * implementation happened to skip it as a coincidence of row state.
+ */
+async function processRow(candidate: {
+  id: string;
+  batchId: string | null;
+  batchStartedAt: Date | null;
+  batchFinishedAt: Date | null;
+  digestSentAt: Date | null;
+  status: string;
+}): Promise<{ runId: string; outcome: string }> {
+  const snapshot: RowSnapshot = {
+    id: candidate.id,
+    batchId: candidate.batchId,
+    batchStartedAt: candidate.batchStartedAt,
+    batchFinishedAt: candidate.batchFinishedAt,
+    digestSentAt: candidate.digestSentAt,
+    status: candidate.status,
+  };
+
+  const pollResult = await pollAndImport(snapshot);
+  if (
+    pollResult.outcome === "still_running" ||
+    pollResult.outcome === "batch_failed" ||
+    pollResult.outcome === "stalled" ||
+    pollResult.outcome === "poll_error" ||
+    pollResult.outcome === "import_failed"
+  ) {
+    return { runId: snapshot.id, outcome: pollResult.outcome };
   }
 
-  return { runId: row.id, outcome: "nothing_to_do" };
+  const digestResult = await maybeSendDigest(
+    snapshot,
+    pollResult.transitionedToSucceeded,
+  );
+  if (digestResult) return digestResult;
+
+  return { runId: snapshot.id, outcome: "nothing_to_do" };
 }

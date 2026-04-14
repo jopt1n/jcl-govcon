@@ -202,6 +202,34 @@ describe("POST /api/cron/check-batches", () => {
     expect(json.processed).toBe(1);
   });
 
+  it("batch_failed short-circuits before digest (pins #9 behavior)", async () => {
+    candidates = [
+      {
+        id: "run-1",
+        batchId: "batch-a",
+        batchStartedAt: new Date(),
+        batchFinishedAt: null,
+        digestSentAt: null,
+        status: "classifying",
+      },
+    ];
+    mockPollBatch.mockResolvedValue({
+      status: "failed",
+      numSuccess: 0,
+      numPending: 0,
+      numError: 5,
+      total: 5,
+    });
+    const { POST } = await import("@/app/api/cron/check-batches/route");
+    await POST(req());
+
+    // Explicit pin: sendWeeklyDigest must NOT be called on batch_failed.
+    // The pre-split code accidentally skipped digest as a coincidence of
+    // row state; the new code makes this an explicit early return.
+    expect(mockSendWeeklyDigest).not.toHaveBeenCalled();
+    expect(mockImportBatchResults).not.toHaveBeenCalled();
+  });
+
   it("digest-retry regression: digest failure leaves status=succeeded, errorStep=digest", async () => {
     candidates = [
       {

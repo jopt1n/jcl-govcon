@@ -437,3 +437,28 @@ render paths. 310 → 312 tests.
 Co-Authored-By: Claude Opus 4.6 (1M context) <noreply@anthropic.com>
 EOF
 )"
+[2026-04-14T20:35:03] npx tsc --noEmit 2>&1 | tail -10 && npm run test:run 2>&1 | tail -6
+[2026-04-14T20:35:20] git add -A && git commit -m "$(cat <<'EOF'
+refactor(check-batches): split processRow with immutable RowSnapshot
+
+#9 from Sedgewick cleanup. Split processRow into pollAndImport +
+maybeSendDigest, both receiving an explicit RowSnapshot by value. The
+prior implementation mutated row.status and row.digestSentAt to fall
+through from path A into path B within the same call — a future
+refactor would almost certainly reintroduce the same bug.
+
+The transitionedToSucceeded bit on PollResult is the explicit channel
+for "path A just flipped this row to succeeded in-request," replacing
+the parameter mutation.
+
+Also pins a subtle behavior: batch_failed now has an explicit early
+return before the digest phase. The old code skipped digest on
+batch_failed only as a coincidence of row state (status !== 'succeeded').
+New test asserts sendWeeklyDigest is NOT called on batch_failed so a
+future contributor can't accidentally let it fall through.
+
+312 → 313 tests.
+
+Co-Authored-By: Claude Opus 4.6 (1M context) <noreply@anthropic.com>
+EOF
+)"
