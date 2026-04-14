@@ -375,3 +375,10 @@ EOF
 [2026-04-14T19:06:01] ls src/middleware.ts middleware.ts 2>&1; echo "---"; grep -rn "cookies\(\)\|getCookie\|setCookie\|NextAuth\|iron-session" src/ 2>&1 | head -10
 [2026-04-14T19:06:29] ls src/__tests__/api/contracts/ && echo "---" && sed -n '1,60p' src/__tests__/api/contracts/route.test.ts
 [2026-04-14T19:06:36] sed -n '348,405p' src/lib/ai/batch-classify.ts
+[2026-04-14T19:11:03] git log --oneline -10 && echo "---" && git diff origin/main --stat | tail -5 && echo "---" && git stash list 2>&1
+[2026-04-14T19:14:07] grep -n "In \`weekly-crawl/route.ts\`\|Also scope the pre-check\|since: sevenDaysAgo\|submitBatchClassify, when" /Users/joelaptin/.claude/plans/nifty-prancing-stonebraker.md
+[2026-04-14T19:14:30] grep -n "^## " /Users/joelaptin/.claude/plans/nifty-prancing-stonebraker.md | tail -15
+[2026-04-14T19:19:21] grep -n "createdAtIdx\|createdAt.*index\|index.*created_at" /Users/joelaptin/jcl-govcon/src/lib/db/schema.ts
+[2026-04-14T19:19:26] grep -n "db.execute\|db\.execute" /Users/joelaptin/jcl-govcon/src/__tests__/api/contracts/route.test.ts /Users/joelaptin/jcl-govcon/src/__tests__/api/cron-auth.test.ts 2>&1; echo "---"; grep -n "vi.stubEnv\|process.env.NODE_ENV" /Users/joelaptin/jcl-govcon/src/__tests__/ -r 2>&1 | head -10
+[2026-04-14T19:21:36] grep -n "^##\|export-same-origin\|backfill.test.ts\|GSTACK REVIEW REPORT" /Users/joelaptin/.claude/plans/nifty-prancing-stonebraker.md
+[2026-04-14T19:31:22] which codex 2>/dev/null && echo "CODEX_AVAILABLE" || echo "CODEX_NOT_AVAILABLE"
