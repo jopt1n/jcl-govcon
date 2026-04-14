@@ -382,3 +382,14 @@ EOF
 [2026-04-14T19:19:26] grep -n "db.execute\|db\.execute" /Users/joelaptin/jcl-govcon/src/__tests__/api/contracts/route.test.ts /Users/joelaptin/jcl-govcon/src/__tests__/api/cron-auth.test.ts 2>&1; echo "---"; grep -n "vi.stubEnv\|process.env.NODE_ENV" /Users/joelaptin/jcl-govcon/src/__tests__/ -r 2>&1 | head -10
 [2026-04-14T19:21:36] grep -n "^##\|export-same-origin\|backfill.test.ts\|GSTACK REVIEW REPORT" /Users/joelaptin/.claude/plans/nifty-prancing-stonebraker.md
 [2026-04-14T19:31:22] which codex 2>/dev/null && echo "CODEX_AVAILABLE" || echo "CODEX_NOT_AVAILABLE"
+[2026-04-14T20:24:33] ls /Users/joelaptin/jcl-govcon/TODOS.md 2>&1 || echo "NOT_FOUND"
+[2026-04-14T20:26:38] npx tsc --noEmit 2>&1 | head -60
+[2026-04-14T20:26:53] npx tsc --noEmit 2>&1 | head -60
+[2026-04-14T20:26:59] ls /Users/joelaptin/jcl-govcon/src/__tests__/api/
+[2026-04-14T20:27:13] mkdir -p /Users/joelaptin/jcl-govcon/src/__tests__/api/cron
+[2026-04-14T20:28:03] npx vitest run src/__tests__/api/cron/weekly-crawl.test.ts 2>&1 | tail -80
+[2026-04-14T20:28:47] npx vitest run src/__tests__/api/cron/check-batches.test.ts 2>&1 | tail -40
+[2026-04-14T20:28:51] npx tsc --noEmit 2>&1 | tail -20 && npm run test:run 2>&1 | tail -10
+[2026-04-14T20:29:05] grep -n "NODE_ENV" /Users/joelaptin/jcl-govcon/src/__tests__/api/cron/weekly-crawl.test.ts /Users/joelaptin/jcl-govcon/src/__tests__/api/cron/check-batches.test.ts
+[2026-04-14T20:29:28] npx tsc --noEmit 2>&1 | tail -10 && npm run test:run 2>&1 | tail -6
+[2026-04-14T20:29:40] git add -A && git status && git diff --stat HEAD

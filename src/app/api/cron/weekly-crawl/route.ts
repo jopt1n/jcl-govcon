@@ -26,17 +26,26 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { crawlRuns, contracts } from "@/lib/db/schema";
-import { eq, and } from "drizzle-orm";
+import { eq, and, sql } from "drizzle-orm";
 import { authorize } from "@/lib/auth";
 import { runBulkCrawl } from "@/lib/sam-gov/bulk-crawl";
 import { submitBatchClassify } from "@/lib/ai/batch-classify";
-import { sendTelegram } from "@/lib/notifications/telegram";
+import {
+  sendTelegram,
+  requireTelegramConfig,
+  TelegramConfigError,
+} from "@/lib/notifications/telegram";
+
+// Stable arbitrary int key for pg_try_advisory_lock. Scoped to the
+// weekly-crawl route only. Session-scoped (NOT xact-scoped) so we don't
+// pin a Railway pool connection inside a multi-minute transaction.
+const WEEKLY_CRAWL_LOCK_KEY = 7_242_023;
 
 type CronLog = {
   kind: "weekly-crawl";
   runId: string | null;
   step: string;
-  status: "ok" | "error";
+  status: "ok" | "error" | "skip";
   durationMs: number;
   counts?: Record<string, number>;
   error?: string;
@@ -68,6 +77,93 @@ export async function POST(req: NextRequest) {
   const sevenDaysAgo = new Date(now);
   sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
 
+  // ── Preflight: Telegram config ───────────────────────────────────────
+  // Fail loud in prod when Telegram env is missing, rather than halfway
+  // through on the first alert/digest call. Leaves a failed crawl_runs row
+  // behind so /admin/crawl-runs surfaces the problem.
+  try {
+    requireTelegramConfig();
+  } catch (err) {
+    if (err instanceof TelegramConfigError) {
+      const msg = err.message;
+      let runId: string | null = null;
+      try {
+        const inserted = await db
+          .insert(crawlRuns)
+          .values({
+            kind: "weekly",
+            windowStart: sevenDaysAgo,
+            windowEnd: now,
+            status: "failed",
+            errorStep: "telegram_config",
+            error: msg,
+          })
+          .returning({ id: crawlRuns.id });
+        runId = inserted[0].id;
+      } catch (insertErr) {
+        console.error(
+          "[weekly-crawl] Failed to record telegram_config failure row:",
+          insertErr,
+        );
+      }
+      log({
+        kind: "weekly-crawl",
+        runId,
+        step: "telegram_config",
+        status: "error",
+        durationMs: 0,
+        error: msg,
+      });
+      return NextResponse.json(
+        { error: "Telegram config missing", runId, message: msg },
+        { status: 500 },
+      );
+    }
+    throw err;
+  }
+
+  // ── Preflight: Advisory lock for single-writer semantics ────────────
+  // Session-scoped (not xact-scoped) so the multi-minute crawl+submit body
+  // below does NOT hold a pinned transaction. Released explicitly in the
+  // finally block. On crash, Postgres releases session locks automatically
+  // when the connection is returned to the pool.
+  const acquireResult = await db.execute(
+    sql`SELECT pg_try_advisory_lock(${WEEKLY_CRAWL_LOCK_KEY}) AS locked`,
+  );
+  const locked =
+    (acquireResult as { rows?: Array<{ locked: boolean }> }).rows?.[0]
+      ?.locked ?? false;
+
+  if (!locked) {
+    log({
+      kind: "weekly-crawl",
+      runId: null,
+      step: "preflight",
+      status: "skip",
+      durationMs: 0,
+      error: "another weekly-crawl is in progress",
+    });
+    return NextResponse.json({
+      ok: true,
+      skipped: "another weekly-crawl in progress",
+    });
+  }
+
+  try {
+    return await runWeeklyCrawl(sevenDaysAgo, now);
+  } finally {
+    await db
+      .execute(sql`SELECT pg_advisory_unlock(${WEEKLY_CRAWL_LOCK_KEY})`)
+      .catch((err) => {
+        console.error("[weekly-crawl] Failed to release advisory lock:", err);
+      });
+  }
+}
+
+async function runWeeklyCrawl(
+  sevenDaysAgo: Date,
+  now: Date,
+): Promise<NextResponse> {
   // ── Step 1: Create crawl_runs row ────────────────────────────────────
   let runId: string;
   try {

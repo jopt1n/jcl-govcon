@@ -59,6 +59,47 @@ function isProd(): boolean {
 }
 
 /**
+ * Read Telegram config from env. Single source of truth for the env read +
+ * prod-vs-dev branching. In prod, throws TelegramConfigError if either var
+ * is missing. In dev/test, warns and returns null (callers treat null as a
+ * no-op).
+ *
+ * NODE_ENV is read per-call so tests that mutate process.env.NODE_ENV inside
+ * the test process affect subsequent calls.
+ */
+export function readTelegramConfig(): { token: string; chatId: string } | null {
+  const token = process.env.TELEGRAM_BOT_TOKEN;
+  const chatId = process.env.TELEGRAM_CHAT_ID;
+
+  if (token && chatId) {
+    return { token, chatId };
+  }
+
+  const missing =
+    !token && !chatId
+      ? "TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID"
+      : !token
+        ? "TELEGRAM_BOT_TOKEN"
+        : "TELEGRAM_CHAT_ID";
+
+  if (isProd()) {
+    throw new TelegramConfigError(missing);
+  }
+  console.warn(`[telegram] ${missing} not set. Skipping (dev/test mode).`);
+  return null;
+}
+
+/**
+ * Preflight check for cron routes. Throws TelegramConfigError in prod when
+ * config is missing; no-ops in dev/test. Call this at the top of a cron
+ * route (after authorize) so the route fails loudly before doing any work
+ * rather than halfway through on the alert/digest path.
+ */
+export function requireTelegramConfig(): void {
+  readTelegramConfig();
+}
+
+/**
  * Send a text message to the configured Telegram chat.
  *
  * In production, throws if env is missing or the API is unreachable after
@@ -72,25 +113,13 @@ export async function sendTelegram(
   text: string,
   opts: SendOptions = {},
 ): Promise<void> {
-  const token = process.env.TELEGRAM_BOT_TOKEN;
-  const chatId = process.env.TELEGRAM_CHAT_ID;
-
-  if (!token || !chatId) {
-    const missing =
-      !token && !chatId
-        ? "TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID"
-        : !token
-          ? "TELEGRAM_BOT_TOKEN"
-          : "TELEGRAM_CHAT_ID";
-
-    if (isProd()) {
-      throw new TelegramConfigError(missing);
-    }
-    console.warn(
-      `[telegram] ${missing} not set. Skipping send (dev/test mode). Text: ${text.slice(0, 80)}...`,
-    );
+  const config = readTelegramConfig();
+  if (!config) {
+    // dev/test mode with missing config — readTelegramConfig warned
+    console.warn(`[telegram] Skipping send. Text: ${text.slice(0, 80)}...`);
     return;
   }
+  const { token, chatId } = config;
 
   const url = `${API_BASE}/bot${token}/sendMessage`;
   const body: Record<string, unknown> = {

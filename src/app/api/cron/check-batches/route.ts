@@ -31,7 +31,11 @@ import { eq, and, isNull, isNotNull, or, sql } from "drizzle-orm";
 import { authorize } from "@/lib/auth";
 import { pollBatch, importBatchResults } from "@/lib/ai/batch-classify";
 import { sendWeeklyDigest } from "@/lib/notifications/weekly-digest";
-import { sendTelegram } from "@/lib/notifications/telegram";
+import {
+  sendTelegram,
+  requireTelegramConfig,
+  TelegramConfigError,
+} from "@/lib/notifications/telegram";
 
 type CronLog = {
   kind: "check-batches";
@@ -94,6 +98,31 @@ async function releaseClaim(runId: string): Promise<void> {
 export async function POST(req: NextRequest) {
   if (!authorize(req)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  // ── Preflight: Telegram config ───────────────────────────────────────
+  // This route has no per-run artifact to leave behind (it processes
+  // existing rows), so just log and return 500. The weekly-crawl failure
+  // that fired earlier is the primary signal.
+  try {
+    requireTelegramConfig();
+  } catch (err) {
+    if (err instanceof TelegramConfigError) {
+      const msg = err.message;
+      log({
+        kind: "check-batches",
+        runId: null,
+        step: "telegram_config",
+        status: "error",
+        durationMs: 0,
+        error: msg,
+      });
+      return NextResponse.json(
+        { error: "Telegram config missing", message: msg },
+        { status: 500 },
+      );
+    }
+    throw err;
   }
 
   const startedAt = Date.now();

@@ -50,6 +50,15 @@ Deferred work surfaced during the `/review` pass on `fix/batch-import-hang` (202
 
 ---
 
+### Drain the ~332 stuck PENDING rows from the prior batch run
+
+**Files:** `scripts/batch-classify.ts` (unchanged CLI wrapper)
+**Why:** After Commit 4 of the Sedgewick cleanup lands, `submitBatchClassify({ since })` scopes the weekly-crawl path to the current 7-day window, so the ~332 pre-existing PENDING rows (createdAt well before this week) will be orphaned — they'll never be picked up by the weekly cron. The CLI script remains the manual backfill tool.
+**Fix:** One-shot manual run: `npx tsx scripts/batch-classify.ts --pending-only` (no `--since` flag). Safe to run anytime after Commit 4 lands on `fix/batch-import-hang`. Will cost ~$1.30 at xAI batch pricing (332 × ~$0.004).
+**Priority:** P2 follow-up. Not a blocker for merge.
+
+---
+
 ## P3
 
 ### `importBatchResults` builds SQL with manual string escaping
