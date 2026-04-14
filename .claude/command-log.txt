@@ -268,3 +268,41 @@ docs: session handoff
 Co-Authored-By: Claude Opus 4.6 (1M context) <noreply@anthropic.com>
 EOF
 )"
+[2026-04-13T22:06:47] _UPD=$(~/.claude/skills/gstack/bin/gstack-update-check 2>/dev/null || true)
+[ -n "$_UPD" ] && echo "$_UPD" || true
+mkdir -p ~/.gstack/sessions
+touch ~/.gstack/sessions/"$PPID"
+_PROACTIVE=$(~/.claude/skills/gstack/bin/gstack-config get proactive 2>/dev/null || echo "true")
+_PROACTIVE_PROMPTED=$([ -f ~/.gstack/.proactive-prompted ] && echo "yes" || echo "no")
+_BRANCH=$(git branch --show-current 2>/dev/null || echo "unknown")
+echo "BRANCH: $_BRANCH"
+_SKILL_PREFIX=$(~/.claude/skills/gstack/bin/gstack-config get skill_prefix 2>/dev/null || echo "false")
+echo "PROACTIVE: $_PROACTIVE"
+echo "PROACTIVE_PROMPTED: $_PROACTIVE_PROMPTED"
+echo "SKILL_PREFIX: $_SKILL_PREFIX"
+source <(~/.claude/skills/gstack/bin/gstack-repo-mode 2>/dev/null) || true
+echo "REPO_MODE: ${REPO_MODE:-unknown}"
+_LAKE_SEEN=$([ -f ~/.gstack/.completeness-intro-seen ] && echo "yes" || echo "no")
+echo "LAKE_INTRO: $_LAKE_SEEN"
+_TEL=$(~/.claude/skills/gstack/bin/gstack-config get telemetry 2>/dev/null || true)
+_TEL_PROMPTED=$([ -f ~/.gstack/.telemetry-prompted ] && echo "yes" || echo "no")
+echo "TELEMETRY: ${_TEL:-off}"
+echo "TEL_PROMPTED: $_TEL_PROMPTED"
+eval "$(~/.claude/skills/gstack/bin/gstack-slug 2>/dev/null)" 2>/dev/null || true
+echo "SLUG: ${SLUG:-unknown}"
+[2026-04-13T23:07:26] find /Users/joelaptin/jcl-govcon -maxdepth 2 -type f \( -name "railway.*" -o -name "Procfile" -o -name "nixpacks.toml" -o -name "package.json" \) | head -20
+[2026-04-13T23:07:29] ls -la /Users/joelaptin/jcl-govcon/scripts/ 2>/dev/null || echo "No scripts directory"
+[2026-04-13T23:07:30] ls -la /Users/joelaptin/jcl-govcon/src/app/api/ 2>/dev/null | grep -E "crawl|digest|ingest|cron|batch"
+[2026-04-13T23:07:33] find /Users/joelaptin/jcl-govcon/src/app/api -type f -name "route.ts" | head -20
+[2026-04-13T23:07:34] find /Users/joelaptin/jcl-govcon/src/app/api/contracts -type f -name "*.ts" -o -name "*.js" 2>/dev/null | head -20
+[2026-04-13T23:07:41] find /Users/joelaptin/jcl-govcon/src/app/api/contracts -type f \( -name "*.ts" -o -name "*.js" \) 2>/dev/null
+[2026-04-13T23:07:42] find /Users/joelaptin/jcl-govcon/src/lib/email -type f -name "*.ts" 2>/dev/null | head -10
+[2026-04-13T23:07:42] grep -r "sendDigest\|resend\|Resend" /Users/joelaptin/jcl-govcon/src/lib/email --include="*.ts" 2>/dev/null | head -20
+[2026-04-13T23:07:44] grep -r "IDENTIFIED\|PURSUING\|BID_SUBMITTED\|pipeline" /Users/joelaptin/jcl-govcon/src --include="*.ts" --include="*.tsx" | head -20
+[2026-04-13T23:07:45] grep -r "cron\|schedule\|recurring" /Users/joelaptin/jcl-govcon --include="*.ts" --include="*.toml" --include="*.json" 2>/dev/null | grep -v node_modules | grep -v ".next"
+[2026-04-13T23:07:47] grep -r "New\|Inbox\|reviewed\|seen" /Users/joelaptin/jcl-govcon/src --include="*.ts" --include="*.tsx" | grep -i "new\|inbox\|reviewed\|seen" | head -15
+[2026-04-13T23:07:47] grep -r "GoHighLevel\|HubSpot\|CRM\|integration" /Users/joelaptin/jcl-govcon/src --include="*.ts" --include="*.tsx" -i | head -10
+[2026-04-13T23:07:50] grep -r "n8n\|webhook\|trigger\|cron" /Users/joelaptin/jcl-govcon --include="*.md" --include="*.ts" --include="*.env*" 2>/dev/null | grep -v node_modules | head -15
+[2026-04-13T23:07:52] grep -n "createdAt\|firstSeen\|reviewed\|recordedAt" /Users/joelaptin/jcl-govcon/src/lib/db/schema.ts
+[2026-04-13T23:07:57] ls -la /Users/joelaptin/jcl-govcon/src/lib/ai/ 2>/dev/null
+[2026-04-13T23:07:59] head -20 /Users/joelaptin/jcl-govcon/.env.example 2>/dev/null || echo "No .env.example"
