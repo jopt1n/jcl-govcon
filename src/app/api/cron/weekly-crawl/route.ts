@@ -26,7 +26,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { crawlRuns, contracts } from "@/lib/db/schema";
-import { eq, and, sql } from "drizzle-orm";
+import { eq, and, gte, sql } from "drizzle-orm";
 import { authorize } from "@/lib/auth";
 import { runBulkCrawl } from "@/lib/sam-gov/bulk-crawl";
 import { submitBatchClassify } from "@/lib/ai/batch-classify";
@@ -251,9 +251,14 @@ async function runWeeklyCrawl(
     },
   });
 
-  // ── Step 3: Check if any PENDING contracts exist ────────────────────
-  // If the crawl found nothing new (or all were pre-filtered), skip batch
-  // submission and mark succeeded so check-batches fires an empty digest.
+  // ── Step 3: Check if any PENDING contracts exist in this window ─────
+  // Scoped to createdAt >= sevenDaysAgo so the ~332 pre-existing stuck
+  // PENDING rows don't defeat the fast-path skip. The WHERE clause here
+  // MUST be an exact structural match for submitBatchClassify's WHERE
+  // below (userOverride=false, classification='PENDING', createdAt >=
+  // sevenDaysAgo) — if they drift, the skip/throw paths become
+  // nondeterministic. Same captured Date is passed to both queries to
+  // eliminate any timestamp drift between calls.
   const pendingRows = await db
     .select({ id: contracts.id })
     .from(contracts)
@@ -261,6 +266,7 @@ async function runWeeklyCrawl(
       and(
         eq(contracts.classification, "PENDING"),
         eq(contracts.userOverride, false),
+        gte(contracts.createdAt, sevenDaysAgo),
       ),
     )
     .limit(1);
@@ -303,7 +309,10 @@ async function runWeeklyCrawl(
 
   let submitResult;
   try {
-    submitResult = await submitBatchClassify({ pendingOnly: true });
+    submitResult = await submitBatchClassify({
+      pendingOnly: true,
+      since: sevenDaysAgo,
+    });
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     await db

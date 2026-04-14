@@ -462,3 +462,33 @@ future contributor can't accidentally let it fall through.
 Co-Authored-By: Claude Opus 4.6 (1M context) <noreply@anthropic.com>
 EOF
 )"
+[2026-04-14T20:36:01] grep -n "^import\|from \"drizzle-orm\"" /Users/joelaptin/jcl-govcon/src/lib/ai/batch-classify.ts | head -10
+[2026-04-14T22:08:01] grep -n "createdAt\|index(" /Users/joelaptin/jcl-govcon/src/lib/db/schema.ts | head -30
+[2026-04-14T22:08:35] npx tsc --noEmit 2>&1 | tail -10 && npm run test:run 2>&1 | tail -10
+[2026-04-14T22:08:47] npx vitest run src/__tests__/api/cron/weekly-crawl.test.ts 2>&1 | grep -A3 "FAIL\|×" | head -40
+[2026-04-14T22:09:04] npm run test:run 2>&1 | tail -8
+[2026-04-14T22:09:24] git add -A && git commit -m "$(cat <<'EOF'
+feat(batch-classify): scope weekly cron to this window via since filter
+
+#3 from Sedgewick cleanup. Add since?: Date to SubmitOptions. weekly-crawl
+passes the same captured sevenDaysAgo Date to both the pre-check SELECT
+and submitBatchClassify, eliminating timestamp drift and preventing the
+~332 pre-existing stuck PENDING rows from being re-submitted on every
+weekly cron fire. CLI script (scripts/batch-classify.ts) left unchanged
+as the manual backfill path.
+
+WHERE clauses are structurally identical between the pre-check and the
+submit query (userOverride=false, classification='PENDING', createdAt >=
+sevenDaysAgo) so the skip/throw paths stay deterministic.
+
+Adds standalone contracts_created_at_idx — the composite (reviewedAt,
+createdAt) index does not reliably serve WHERE createdAt >= X queries
+when reviewedAt isn't in the filter. Also adds a one-line block comment
+above escapeLiteral documenting the standard_conforming_strings
+assumption (replaces dropped #6 from the plan).
+
+313 → 314 tests.
+
+Co-Authored-By: Claude Opus 4.6 (1M context) <noreply@anthropic.com>
+EOF
+)"

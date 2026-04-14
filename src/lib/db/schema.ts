@@ -122,6 +122,10 @@ export const contracts = pgTable(
     statusChangedAtIdx: index("contracts_status_changed_at_idx").on(
       table.statusChangedAt,
     ),
+    // Standalone createdAt index for the weekly-crawl since-filter queries.
+    // The composite (reviewedAt, createdAt) index does not reliably serve
+    // `WHERE createdAt >= X` when reviewedAt isn't in the filter.
+    createdAtIdx: index("contracts_created_at_idx").on(table.createdAt),
   }),
 );
 

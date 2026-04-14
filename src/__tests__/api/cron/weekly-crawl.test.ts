@@ -39,6 +39,7 @@ function makeChain(resolveValue: unknown) {
 vi.mock("drizzle-orm", () => ({
   eq: vi.fn(),
   and: vi.fn((...args: unknown[]) => args),
+  gte: vi.fn(),
   sql: Object.assign(
     (strings: TemplateStringsArray) => ({ __sql: strings.join("?") }),
     { raw: vi.fn() },
@@ -279,6 +280,28 @@ describe("POST /api/cron/weekly-crawl", () => {
       expect(json.status).toBe("classifying");
       expect(json.batchId).toBe("batch-abc");
       expect(mockSubmitBatchClassify).toHaveBeenCalled();
+    });
+  });
+
+  describe("#3 since filter", () => {
+    it("passes a `since` Date to submitBatchClassify", async () => {
+      mockRunBulkCrawl.mockResolvedValue({ totalFound: 10, newInserted: 3 });
+      selectResult = [{ id: "c1" }];
+      mockSubmitBatchClassify.mockResolvedValue({
+        batchId: "batch-abc",
+        submitted: 3,
+        preFilteredDiscard: 0,
+      });
+      const { POST } = await import("@/app/api/cron/weekly-crawl/route");
+
+      await POST(req());
+      const call = mockSubmitBatchClassify.mock.calls[0]?.[0];
+      expect(call).toBeDefined();
+      expect(call.pendingOnly).toBe(true);
+      expect(call.since).toBeInstanceOf(Date);
+      // Assert the Date is ~7 days ago (±5s clock tolerance)
+      const expected = Date.now() - 7 * 24 * 60 * 60 * 1000;
+      expect(Math.abs(call.since.getTime() - expected)).toBeLessThan(5_000);
     });
   });
 });

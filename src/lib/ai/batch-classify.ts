@@ -25,7 +25,7 @@
 
 import { db } from "@/lib/db";
 import { contracts } from "@/lib/db/schema";
-import { eq, and, inArray, sql } from "drizzle-orm";
+import { eq, and, gte, inArray, sql } from "drizzle-orm";
 import { buildUnifiedClassificationPrompt } from "./prompts";
 import { downloadDocuments } from "@/lib/sam-gov/documents";
 import { extractAllDocumentTexts } from "@/lib/document-text";
@@ -117,6 +117,12 @@ async function xai(
   throw new Error(`xAI ${method} ${path}: exhausted retries`);
 }
 
+// Assumes `standard_conforming_strings=on` (Postgres default ≥9.1). Unusual
+// input (NULL bytes, invalid UTF-8) causes Postgres to reject the chunk,
+// which is handled by the retry loop below and eventually logged to
+// failedChunks — loud failure is better than silent mutation for a
+// classifier pipeline. A future refactor can migrate this to Drizzle's
+// parameterized bulk-insert API when the 500-row chunking is revisited.
 function escapeLiteral(val: string | null | undefined): string {
   if (val == null) return "NULL";
   return `'${String(val).replace(/'/g, "''")}'`;
@@ -127,6 +133,14 @@ function escapeLiteral(val: string | null | undefined): string {
 export type SubmitOptions = {
   /** Only classify contracts with classification='PENDING'. Default true. */
   pendingOnly?: boolean;
+  /**
+   * Only classify contracts created on or after this timestamp. When
+   * omitted, no time scoping is applied — used by the manual CLI backfill
+   * path. The weekly cron passes windowStart here to scope to the current
+   * 7-day window, preventing pre-existing stuck PENDING rows from being
+   * re-submitted on every cron fire.
+   */
+  since?: Date;
   /** Max number of contracts to query. Default: unlimited. */
   limit?: number;
   /** Callback for progress messages. Defaults to console.log. */
@@ -160,12 +174,15 @@ export async function submitBatchClassify(
 
   log("[batch-lib] Querying contracts for unified classification...");
 
-  const whereExpr = pendingOnly
-    ? and(
-        eq(contracts.userOverride, false),
-        eq(contracts.classification, "PENDING"),
-      )
-    : eq(contracts.userOverride, false);
+  const baseClauses = [eq(contracts.userOverride, false)];
+  if (pendingOnly) {
+    baseClauses.push(eq(contracts.classification, "PENDING"));
+  }
+  if (opts.since) {
+    baseClauses.push(gte(contracts.createdAt, opts.since));
+  }
+  const whereExpr =
+    baseClauses.length === 1 ? baseClauses[0] : and(...baseClauses);
 
   const queryBuilder = db
     .select({
