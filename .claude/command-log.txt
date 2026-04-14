@@ -352,3 +352,6 @@ EOF
 [2026-04-14T04:32:42] grep -ri "waffle" /Users/joelaptin/jcl-govcon --include="*.md" -l 2>/dev/null | head -20
 [2026-04-14T04:32:54] ls tasks/ 2>&1; ls plans/ 2>&1; ls docs/ 2>&1 | head; cat progress.md 2>&1 | head -80
 [2026-04-14T04:32:59] ls /Users/joelaptin/.claude/plans/ 2>&1 | grep -i waffle; ls /Users/joelaptin/.claude/plans/ 2>&1 | tail -20
+[2026-04-14T05:17:34] git branch --show-current && git status -s && git log --oneline main..HEAD 2>/dev/null | head -30 && echo "---REMOTE---" && git ls-remote --heads origin fix/batch-import-hang 2>&1
+[2026-04-14T05:17:41] ls src/lib/ai/batch-classify.ts src/lib/notifications/ src/app/api/cron/weekly-crawl/route.ts src/app/api/cron/check-batches/route.ts src/app/inbox/page.tsx src/app/pipeline/page.tsx src/app/admin/crawl-runs/page.tsx src/app/api/contracts/export/route.ts scripts/backfill-reviewed-at.sql railway.toml 2>&1
+[2026-04-14T05:17:46] grep -c "reviewedAt\|statusChangedAt\|crawlRuns\|processingAt" src/lib/db/schema.ts; echo "---"; grep -n "reviewedAt\|crawlRuns\|processingAt\|statusChangedAt" src/lib/db/schema.ts | head -30; echo "---tests---"; ls src/lib/notifications/*.test.ts src/lib/ai/batch-classify.test.ts src/app/api/cron/*/route.test.ts src/app/api/contracts/export/route.test.ts 2>&1; echo "---test count---"; npm run test:run 2>&1 | tail -15
