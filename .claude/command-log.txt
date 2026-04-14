@@ -364,3 +364,7 @@ EOF
 [2026-04-14T07:03:15] grep -n "escapeLiteral\|function escapeLiteral" /Users/joelaptin/jcl-govcon/src/lib/ai/batch-classify.ts | head -10
 [2026-04-14T07:03:30] npx tsc --noEmit 2>&1 | tail -20
 [2026-04-14T07:03:36] grep -rn "check-batches\|weekly-crawl\|sendWeeklyDigest" src/__tests__/ 2>&1 | head -20
+[2026-04-14T07:29:11] ls TODOS.md tasks/ 2>&1
+[2026-04-14T07:29:17] sed -n '1,20p' src/lib/auth.ts
+[2026-04-14T07:29:24] grep -n "export\|/api/contracts/export" src/app/pipeline/page.tsx | head -20
+[2026-04-14T07:30:56] npx tsc --noEmit 2>&1 | tail -10 && echo "---TESTS---" && npm run test:run 2>&1 | tail -5

@@ -23,13 +23,19 @@ SET reviewed_at = created_at
 WHERE reviewed_at IS NULL;
 
 -- Seed status_changed_at from updated_at so the weekly retro query has a
--- sensible baseline. Not strictly required (column has a default), but
--- ensures the first weekly run doesn't falsely report every contract as a
--- "transition this week".
+-- sensible baseline. Without this, drizzle-kit push adds the column with
+-- DEFAULT NOW(), which fills every existing row with the migration
+-- timestamp, and the first weekly digest then reports every contract as a
+-- "transition this week". We want the baseline to reflect the last real
+-- change to each row, which is updated_at.
+--
+-- Condition: overwrite any status_changed_at that is NEWER than updated_at
+-- (i.e. the auto-defaulted migration timestamp), but leave rows alone if a
+-- status transition has already happened after this backfill runs.
 UPDATE contracts
 SET status_changed_at = updated_at
-WHERE status_changed_at IS NULL
-   OR status_changed_at < updated_at;
+WHERE updated_at IS NOT NULL
+  AND status_changed_at > updated_at;
 
 -- Verify: every row has a reviewed_at after the UPDATE.
 DO $$

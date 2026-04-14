@@ -378,10 +378,14 @@ async function processRow(row: {
       return { runId: row.id, outcome: "digest_sent" };
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
+      // Retry-friendly: leave status='succeeded' and digestSentAt=NULL so
+      // the next check-batches fire re-selects this row and retries the
+      // send. Record the last error on the row for the admin page without
+      // flipping status. Don't re-alert via Telegram since the failure IS
+      // Telegram in most cases.
       await db
         .update(crawlRuns)
         .set({
-          status: "failed",
           errorStep: "digest",
           error: msg,
         })
@@ -394,8 +398,6 @@ async function processRow(row: {
         durationMs: Date.now() - digestStart,
         error: msg,
       });
-      // Don't re-alert via Telegram since the failure IS Telegram (in most
-      // cases). Logging + admin page is enough.
       return { runId: row.id, outcome: "digest_failed" };
     }
   }
