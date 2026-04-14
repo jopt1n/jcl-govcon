@@ -348,3 +348,7 @@ Pending: drizzle-kit push, backfill SQL, Railway env vars, smoke test.
 Co-Authored-By: Claude Opus 4.6 (1M context) <noreply@anthropic.com>
 EOF
 )" && git status
+[2026-04-14T04:32:39] git log --oneline -30 && echo "---" && ls tasks/ 2>/dev/null
+[2026-04-14T04:32:42] grep -ri "waffle" /Users/joelaptin/jcl-govcon --include="*.md" -l 2>/dev/null | head -20
+[2026-04-14T04:32:54] ls tasks/ 2>&1; ls plans/ 2>&1; ls docs/ 2>&1 | head; cat progress.md 2>&1 | head -80
+[2026-04-14T04:32:59] ls /Users/joelaptin/.claude/plans/ 2>&1 | grep -i waffle; ls /Users/joelaptin/.claude/plans/ 2>&1 | tail -20
