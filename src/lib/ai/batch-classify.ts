@@ -57,12 +57,17 @@ function sleep(ms: number): Promise<void> {
   return new Promise((r) => setTimeout(r, ms));
 }
 
+// xAI's REST responses are heterogeneous (batch create, batch poll, page
+// of results all have different shapes) and typing them upfront would add
+// noise without catching real bugs. Call sites index defensively into
+// optional fields, so `any` is the pragmatic return type.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 async function xai(
   method: string,
   path: string,
   body?: unknown,
   timeoutMs = FETCH_TIMEOUT_MS,
-): Promise<Record<string, unknown>> {
+): Promise<any> {
   const apiKey = getApiKey();
   for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
     try {
