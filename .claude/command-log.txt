@@ -492,3 +492,36 @@ assumption (replaces dropped #6 from the plan).
 Co-Authored-By: Claude Opus 4.6 (1M context) <noreply@anthropic.com>
 EOF
 )"
+[2026-04-14T22:10:40] ls /Users/joelaptin/jcl-govcon/src/__tests__/lib/auth.test.ts 2>&1 || echo "NEW"
+[2026-04-14T22:11:12] npx vitest run src/__tests__/lib/auth.test.ts 2>&1 | tail -25
+[2026-04-14T22:11:41] npx vitest run src/__tests__/api/contracts/export-same-origin.test.ts 2>&1 | tail -30
+[2026-04-14T22:11:52] npx vitest run src/__tests__/api/contracts/export-same-origin.test.ts 2>&1 | tail -10
+[2026-04-14T22:11:56] npx tsc --noEmit 2>&1 | tail -10 && npm run test:run 2>&1 | tail -6
+[2026-04-14T22:12:08] npm run lint 2>&1 | tail -15
+[2026-04-14T22:12:14] npm run lint 2>&1 | grep -E "^\./(src/__tests__/(api/cron/|api/contracts/export-|lib/auth|lib/notifications/weekly-digest)|src/(lib/auth|lib/notifications/weekly-digest|app/api/cron))" | head -20
+[2026-04-14T22:12:32] git add -A && git commit -m "$(cat <<'EOF'
+feat(export): same-origin guard for CSV export route
+
+#4 from Sedgewick cleanup. Add requireSameOrigin() helper to auth.ts
+and gate /api/contracts/export GET behind it. Blocks curl, crawlers,
+bots, and cross-origin requests by checking Origin/Referer against an
+allowlist built from NEXT_PUBLIC_APP_URL and the request's own Host
+header. Self-host fallback accommodates Railway's dual *.railway.app +
+custom domain model.
+
+Not user authentication — minimum-viable fix for a single-user internal
+tool. Full session auth tracked separately. NODE_ENV is read per-call
+(not captured at module load) so tests mutating it via vi.stubEnv work.
+
+Also bundles the two comment-only plan cleanups:
+- Load-bearing comment on scripts/backfill-reviewed-at.sql documenting
+  the `>` vs `<` regression story (replaces dropped grep test).
+- Block comment above escapeLiteral in batch-classify.ts documenting
+  standard_conforming_strings assumption and future refactor path.
+
+Adds 9 direct unit tests in auth.test.ts and 6 integration tests in
+export-same-origin.test.ts. 314 → 329 tests (matches plan target).
+
+Co-Authored-By: Claude Opus 4.6 (1M context) <noreply@anthropic.com>
+EOF
+)"

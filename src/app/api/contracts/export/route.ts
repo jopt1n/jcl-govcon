@@ -17,6 +17,7 @@ import { NextRequest } from "next/server";
 import { db } from "@/lib/db";
 import { contracts } from "@/lib/db/schema";
 import { inArray, desc } from "drizzle-orm";
+import { requireSameOrigin } from "@/lib/auth";
 
 type ContractStatus =
   | "IDENTIFIED"
@@ -58,6 +59,13 @@ function formatRow(values: unknown[]): string {
 }
 
 export async function GET(req: NextRequest) {
+  if (!requireSameOrigin(req)) {
+    return new Response(JSON.stringify({ error: "Forbidden" }), {
+      status: 403,
+      headers: { "Content-Type": "application/json" },
+    });
+  }
+
   const { searchParams } = new URL(req.url);
   const statusParam = searchParams.get("status");
 

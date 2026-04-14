@@ -32,6 +32,13 @@ WHERE reviewed_at IS NULL;
 -- Condition: overwrite any status_changed_at that is NEWER than updated_at
 -- (i.e. the auto-defaulted migration timestamp), but leave rows alone if a
 -- status transition has already happened after this backfill runs.
+--
+-- CRITICAL: the WHERE clause below must be `status_changed_at > updated_at`
+-- (NOT `<`). drizzle-kit adds `status_changed_at` with DEFAULT NOW(), which
+-- fills existing rows with the migration timestamp. Those timestamps are
+-- NEWER than updated_at, so we want to overwrite them with updated_at. The
+-- broken version (`<`) never matched any row, which is how the bug shipped
+-- in the first place. Regression story: 00c12be.
 UPDATE contracts
 SET status_changed_at = updated_at
 WHERE updated_at IS NOT NULL
