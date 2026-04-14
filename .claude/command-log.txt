@@ -393,3 +393,47 @@ EOF
 [2026-04-14T20:29:05] grep -n "NODE_ENV" /Users/joelaptin/jcl-govcon/src/__tests__/api/cron/weekly-crawl.test.ts /Users/joelaptin/jcl-govcon/src/__tests__/api/cron/check-batches.test.ts
 [2026-04-14T20:29:28] npx tsc --noEmit 2>&1 | tail -10 && npm run test:run 2>&1 | tail -6
 [2026-04-14T20:29:40] git add -A && git status && git diff --stat HEAD
+[2026-04-14T20:29:50] git commit -m "$(cat <<'EOF'
+feat(cron): telegram config preflight + weekly-crawl advisory lock
+
+#10 from Sedgewick review cleanup. Cron routes now fail loud at the top
+when Telegram config is missing in prod, leaving a failed crawl_runs row
+for /admin/crawl-runs. weekly-crawl wraps the entire run in a session-
+scoped pg_try_advisory_lock with explicit finally release, eliminating
+the TOCTOU window in the earlier "check for recent rows" concurrent-fire
+guard. Session-scoped (not xact-scoped) avoids pinning a Railway pool
+connection for the multi-minute crawl+submit body.
+
+Also bundles the #10 + #5 test coverage (new weekly-crawl.test.ts,
+check-batches.test.ts) — distributed test rollout per plan execution
+order. 295 → 310 tests, all green.
+
+Co-Authored-By: Claude Opus 4.6 (1M context) <noreply@anthropic.com>
+EOF
+)"
+[2026-04-14T20:30:45] npx tsc --noEmit 2>&1 | tail -20 && npm run test:run 2>&1 | tail -15
+[2026-04-14T20:30:59] ls /Users/joelaptin/jcl-govcon/src/__tests__/lib/notifications/ /Users/joelaptin/jcl-govcon/src/__tests__/api/digest/
+[2026-04-14T20:31:02] grep -rn "sendWeeklyDigest\|weekly-digest" /Users/joelaptin/jcl-govcon/src/__tests__/ 2>&1
+[2026-04-14T20:31:38] npx vitest run src/__tests__/lib/notifications/weekly-digest.test.ts 2>&1 | tail -30
+[2026-04-14T20:32:10] npx vitest run src/__tests__/lib/notifications/weekly-digest.test.ts 2>&1 | tail -15
+[2026-04-14T20:33:19] npx vitest run src/__tests__/lib/notifications/weekly-digest.test.ts 2>&1 | tail -25
+[2026-04-14T20:33:22] npx tsc --noEmit 2>&1 | tail -5 && npm run test:run 2>&1 | tail -6
+[2026-04-14T20:33:43] git add -A && git commit -m "$(cat <<'EOF'
+perf(digest): single-query window function for digest counts
+
+#7 from Sedgewick cleanup. Replace two unbounded SELECT * queries with
+a single query per classification using count(*) OVER () to carry the
+full total through the LIMIT. Column allowlist narrows payload to 5
+columns × 5 rows = 25 cells per classification. MAX_GOOD_SHOWN and
+MAX_MAYBE_SHOWN are now top-of-file constants.
+
+Honors CLAUDE.md Railway latency rule (minimize round trips): one
+query per classification instead of two, saving ~20-50ms per call.
+Payload size drops ~95% at today's volume.
+
+Adds weekly-digest.test.ts covering the overflow and no-overflow
+render paths. 310 → 312 tests.
+
+Co-Authored-By: Claude Opus 4.6 (1M context) <noreply@anthropic.com>
+EOF
+)"
