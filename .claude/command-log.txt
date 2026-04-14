@@ -372,3 +372,6 @@ EOF
 [2026-04-14T18:56:37] git status
 [2026-04-14T18:56:42] git log --oneline -5 && echo "---" && git show HEAD --stat
 [2026-04-14T18:56:55] git push -u origin fix/batch-import-hang 2>&1 | tail -20
+[2026-04-14T19:06:01] ls src/middleware.ts middleware.ts 2>&1; echo "---"; grep -rn "cookies\(\)\|getCookie\|setCookie\|NextAuth\|iron-session" src/ 2>&1 | head -10
+[2026-04-14T19:06:29] ls src/__tests__/api/contracts/ && echo "---" && sed -n '1,60p' src/__tests__/api/contracts/route.test.ts
+[2026-04-14T19:06:36] sed -n '348,405p' src/lib/ai/batch-classify.ts
