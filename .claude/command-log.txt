@@ -635,3 +635,6 @@ npx tsx /tmp/check-pending.ts 2>&1 | tail -60
 [2026-04-15T06:52:10] railway logs --service Postgres 2>&1 | tail -20
 [2026-04-15T07:02:11] git log --oneline -12 && echo "---" && git status
 [2026-04-15T07:02:15] git stash drop 2>&1 | tail -3
+[2026-04-15T07:09:24] npx tsx scripts/verify-backfill.ts 2>&1 | tail -10
+[2026-04-15T07:09:27] git show --stat 3d37a9a 2>&1 | head -5 && echo "---" && git log --oneline origin/main..HEAD | wc -l | tr -d ' '
+[2026-04-15T07:09:33] rm scripts/verify-backfill.ts && git push origin main 2>&1 | tail -15
