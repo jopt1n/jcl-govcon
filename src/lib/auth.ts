@@ -63,8 +63,18 @@ export function requireSameOrigin(req: NextRequest): boolean {
   }
 
   if (referer) {
+    // Parse the Referer as a URL and compare its origin to the allowlist.
+    // Plain string startsWith is vulnerable to suffix attacks like
+    // https://jclgovcon.com.evil.com/page which literally starts with the
+    // allowlisted origin but lives on an attacker-controlled domain.
+    let refererOrigin: string;
+    try {
+      refererOrigin = new URL(referer).origin;
+    } catch {
+      return false;
+    }
     for (const entry of allowlist) {
-      if (referer.startsWith(entry)) return true;
+      if (refererOrigin === entry) return true;
     }
     return false;
   }

@@ -122,4 +122,26 @@ describe("requireSameOrigin", () => {
     const req = mkReq({ referer: "https://x.com/page" });
     expect(requireSameOrigin(req)).toBe(true);
   });
+
+  it("rejects Referer from suffix-attack domain (jclgovcon.com.evil.com)", () => {
+    process.env.NEXT_PUBLIC_APP_URL = "https://jclgovcon.com";
+    const req = mkReq({
+      referer: "https://jclgovcon.com.evil.com/page",
+    });
+    expect(requireSameOrigin(req)).toBe(false);
+  });
+
+  it("rejects Referer from hyphen-suffix-attack domain", () => {
+    process.env.NEXT_PUBLIC_APP_URL = "https://jclgovcon.com";
+    const req = mkReq({
+      referer: "https://jclgovcon.com-evil.com/page",
+    });
+    expect(requireSameOrigin(req)).toBe(false);
+  });
+
+  it("rejects Referer that is not a valid URL", () => {
+    process.env.NEXT_PUBLIC_APP_URL = "https://jclgovcon.com";
+    const req = mkReq({ referer: "not a url" });
+    expect(requireSameOrigin(req)).toBe(false);
+  });
 });

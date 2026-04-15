@@ -542,3 +542,25 @@ EOF
 [2026-04-14T22:13:08] git log --oneline -8 && echo "---" && npx tsc --noEmit 2>&1 | tail -5 && npm run test:run 2>&1 | tail -5
 [2026-04-15T02:16:14] grep -E "^(TELEGRAM_BOT_TOKEN|TELEGRAM_CHAT_ID|NEXT_PUBLIC_APP_URL|DATABASE_URL)=" /Users/joelaptin/jcl-govcon/.env 2>&1 | sed 's/=.*/=<set>/'
 [2026-04-15T02:16:34] git remote -v && ls /Users/joelaptin/jcl-govcon/.vercel 2>/dev/null && cat /Users/joelaptin/jcl-govcon/railway.toml 2>/dev/null
+[2026-04-15T06:12:04] git fetch origin main --quiet 2>&1; git diff origin/main --stat
+[2026-04-15T06:12:13] git diff 6f40c1e..HEAD --stat
+[2026-04-15T06:14:06] npx tsc --noEmit 2>&1 | tail -5 && npm run test:run 2>&1 | tail -6
+[2026-04-15T06:14:57] git status && echo "---" && git log --oneline 6f40c1e..HEAD
+[2026-04-15T06:15:07] git add -A && git commit -m "$(cat <<'EOF'
+fix(auth): replace Referer prefix match with URL-parsed origin check
+
+/review caught a suffix-attack bypass in requireSameOrigin: plain
+referer.startsWith("https://jclgovcon.com") also matched attacker
+domains like https://jclgovcon.com.evil.com/page and
+https://jclgovcon.com-evil.com/page. Parse the Referer as a URL and
+compare its origin exactly.
+
+For a single-user internal tool this is a low-likelihood exploit
+(requires attacker-controlled subdomain + cooperating user navigation)
+but the bypass is trivial to fix with URL parsing. Adds three
+regression tests covering the two suffix-attack shapes and the
+malformed-URL case. 329 → 332 tests.
+
+Co-Authored-By: Claude Opus 4.6 (1M context) <noreply@anthropic.com>
+EOF
+)"
