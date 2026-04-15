@@ -630,3 +630,6 @@ npx tsx /tmp/check-pending.ts 2>&1 | tail -60
 [2026-04-15T06:46:10] npx tsx scripts/run-backfill.ts 2>&1 | tail -15
 [2026-04-15T06:46:37] railway service Postgres 2>&1 && railway status 2>&1 | head -20
 [2026-04-15T06:46:42] railway logs --service Postgres 2>&1 | tail -40
+[2026-04-15T06:51:56] railway logs --service Postgres 2>&1 | tail -15
+[2026-04-15T06:52:06] npx tsx scripts/check-backfill-state.ts 2>&1 | tail -20
+[2026-04-15T06:52:10] railway logs --service Postgres 2>&1 | tail -20
