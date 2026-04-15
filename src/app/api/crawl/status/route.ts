@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { crawlProgress, batchJobs, contracts, apiUsage } from "@/lib/db/schema";
-import { desc, eq, ne, sql } from "drizzle-orm";
+import { desc, eq, sql } from "drizzle-orm";
 import { authorize } from "@/lib/auth";
 
 /**
@@ -125,7 +125,7 @@ export async function GET(req: NextRequest) {
         error: "Failed to get status",
         message: err instanceof Error ? err.message : String(err),
       },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }

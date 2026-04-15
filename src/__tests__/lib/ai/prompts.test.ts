@@ -1,14 +1,12 @@
 import {
-  buildClassificationPrompt,
-  buildMetadataClassificationPrompt,
+  buildUnifiedClassificationPrompt,
   JCL_CAPABILITY_PROFILE,
-  type ClassificationPromptInput,
-  type MetadataClassificationInput,
+  type UnifiedClassificationInput,
 } from "@/lib/ai/prompts";
 
 function makeInput(
-  overrides: Partial<ClassificationPromptInput> = {}
-): ClassificationPromptInput {
+  overrides: Partial<UnifiedClassificationInput> = {}
+): UnifiedClassificationInput {
   return {
     title: "IT Support Services",
     agency: "Department of Defense",
@@ -16,53 +14,66 @@ function makeInput(
     pscCode: "D301",
     noticeType: "Solicitation",
     setAsideType: "SBA",
+    setAsideCode: "SBP",
     awardCeiling: "500000",
+    responseDeadline: "2026-04-01T00:00:00Z",
+    popState: "VA",
     descriptionText: "Provide IT support services.",
     documentTexts: [],
     ...overrides,
   };
 }
 
-describe("buildClassificationPrompt", () => {
+describe("buildUnifiedClassificationPrompt", () => {
   it("includes JCL_CAPABILITY_PROFILE text", () => {
-    const prompt = buildClassificationPrompt(makeInput());
+    const prompt = buildUnifiedClassificationPrompt(makeInput());
     expect(prompt).toContain(JCL_CAPABILITY_PROFILE);
   });
 
   it("includes the title in metadata", () => {
-    const prompt = buildClassificationPrompt(makeInput());
+    const prompt = buildUnifiedClassificationPrompt(makeInput());
     expect(prompt).toContain("Title: IT Support Services");
   });
 
   it("includes agency when provided", () => {
-    const prompt = buildClassificationPrompt(makeInput());
+    const prompt = buildUnifiedClassificationPrompt(makeInput());
     expect(prompt).toContain("Agency: Department of Defense");
   });
 
   it("omits agency when null", () => {
-    const prompt = buildClassificationPrompt(makeInput({ agency: null }));
+    const prompt = buildUnifiedClassificationPrompt(makeInput({ agency: null }));
     expect(prompt).not.toContain("Agency:");
   });
 
   it("includes NAICS code when provided", () => {
-    const prompt = buildClassificationPrompt(makeInput());
+    const prompt = buildUnifiedClassificationPrompt(makeInput());
     expect(prompt).toContain("NAICS Code: 541511");
   });
 
   it("includes award ceiling with $ prefix", () => {
-    const prompt = buildClassificationPrompt(makeInput());
+    const prompt = buildUnifiedClassificationPrompt(makeInput());
     expect(prompt).toContain("Award Ceiling: $500000");
+  });
+
+  it("includes set-aside type and code", () => {
+    const prompt = buildUnifiedClassificationPrompt(makeInput());
+    expect(prompt).toContain("Set-Aside: SBA");
+    expect(prompt).toContain("Set-Aside Code: SBP");
+  });
+
+  it("includes place of performance state", () => {
+    const prompt = buildUnifiedClassificationPrompt(makeInput());
+    expect(prompt).toContain("Place of Performance: VA");
   });
 
   it("truncates description to 15,000 chars", () => {
     const longDescription = "x".repeat(20000);
-    const prompt = buildClassificationPrompt(
+    const prompt = buildUnifiedClassificationPrompt(
       makeInput({ descriptionText: longDescription })
     );
     const descStart = prompt.indexOf("## Contract Description\n");
     expect(descStart).toBeGreaterThan(-1);
     const descContent = prompt.slice(descStart + "## Contract Description\n".length);
-    // Count only the x's that come before the next section
     const nextSection = descContent.indexOf("\n\n##");
     const xRegion = nextSection > -1 ? descContent.slice(0, nextSection) : descContent;
     const xCount = (xRegion.match(/x/g) ?? []).length;
@@ -70,9 +81,8 @@ describe("buildClassificationPrompt", () => {
   });
 
   it("truncates each document to 10,000 chars", () => {
-    // Use a char unlikely to appear in the prompt template
-    const longDoc = "\u2603".repeat(15000); // snowman
-    const prompt = buildClassificationPrompt(
+    const longDoc = "\u2603".repeat(15000);
+    const prompt = buildUnifiedClassificationPrompt(
       makeInput({ documentTexts: [longDoc] })
     );
     const charCount = (prompt.match(/\u2603/g) ?? []).length;
@@ -80,78 +90,64 @@ describe("buildClassificationPrompt", () => {
   });
 
   it("omits documents section when documentTexts is empty", () => {
-    const prompt = buildClassificationPrompt(
+    const prompt = buildUnifiedClassificationPrompt(
       makeInput({ documentTexts: [] })
     );
     expect(prompt).not.toContain("## Attached Document Content");
   });
 
   it("ends with JSON response format instruction", () => {
-    const prompt = buildClassificationPrompt(makeInput());
+    const prompt = buildUnifiedClassificationPrompt(makeInput());
     expect(prompt).toContain("Respond with valid JSON only");
-    expect(prompt).toContain('"classification": "GOOD" | "MAYBE" | "DISCARD"');
-  });
-});
-
-// ── Metadata Classification Prompt ────────────────────────────────────────
-
-function makeMetadataInput(
-  overrides: Partial<MetadataClassificationInput> = {}
-): MetadataClassificationInput {
-  return {
-    title: "IT Support Services",
-    naicsCode: "541511",
-    pscCode: "D301",
-    agency: "Department of Defense",
-    orgPathName: "DOD > Army",
-    noticeType: "Solicitation",
-    setAsideType: "SBA",
-    setAsideCode: "SBP",
-    popState: "VA",
-    awardCeiling: "500000",
-    ...overrides,
-  };
-}
-
-describe("buildMetadataClassificationPrompt", () => {
-  it("includes the title", () => {
-    const prompt = buildMetadataClassificationPrompt(makeMetadataInput());
-    expect(prompt).toContain("Title: IT Support Services");
   });
 
-  it("includes NAICS code when provided", () => {
-    const prompt = buildMetadataClassificationPrompt(makeMetadataInput());
-    expect(prompt).toContain("NAICS Code: 541511");
+  it("includes hard DISCARD rules", () => {
+    const prompt = buildUnifiedClassificationPrompt(makeInput());
+    expect(prompt).toContain("sole source");
+    expect(prompt).toContain("opportunity has closed");
+    expect(prompt).toContain("FedRAMP");
+    expect(prompt).toContain("CMMC");
+    expect(prompt).toContain("security clearance");
   });
 
-  it("includes set-aside type and code", () => {
-    const prompt = buildMetadataClassificationPrompt(makeMetadataInput());
-    expect(prompt).toContain("Set-Aside: SBA");
-    expect(prompt).toContain("Set-Aside Code: SBP");
+  it("includes the feasibility test", () => {
+    const prompt = buildUnifiedClassificationPrompt(makeInput());
+    expect(prompt).toContain("Could one resourceful person");
+    expect(prompt).toContain("credit card, basic tools, AI software");
   });
 
-  it("includes organization path", () => {
-    const prompt = buildMetadataClassificationPrompt(makeMetadataInput());
-    expect(prompt).toContain("Organization: DOD > Army");
+  it("includes action plan fields for GOOD/MAYBE", () => {
+    const prompt = buildUnifiedClassificationPrompt(makeInput());
+    expect(prompt).toContain("implementationSummary");
+    expect(prompt).toContain("bidRange");
+    expect(prompt).toContain("travelRequirements");
+    expect(prompt).toContain("positiveSignals");
+    expect(prompt).toContain("lowBarrierEntry");
+    expect(prompt).toContain("contractType");
+    expect(prompt).toContain("periodOfPerformance");
+    expect(prompt).toContain("keyDates");
   });
 
-  it("includes place of performance state", () => {
-    const prompt = buildMetadataClassificationPrompt(makeMetadataInput());
-    expect(prompt).toContain("Place of Performance: VA");
+  it("includes responseDeadline in metadata when provided", () => {
+    const prompt = buildUnifiedClassificationPrompt(
+      makeInput({ responseDeadline: "2026-04-01T00:00:00Z" })
+    );
+    expect(prompt).toContain("Response Deadline: 2026-04-01T00:00:00Z");
   });
 
-  it("includes award ceiling with $ prefix", () => {
-    const prompt = buildMetadataClassificationPrompt(makeMetadataInput());
-    expect(prompt).toContain("Award Ceiling: $500000");
+  it("omits responseDeadline when null", () => {
+    const prompt = buildUnifiedClassificationPrompt(
+      makeInput({ responseDeadline: null })
+    );
+    expect(prompt).not.toContain("Response Deadline:");
   });
 
   it("omits null fields gracefully", () => {
-    const prompt = buildMetadataClassificationPrompt(
-      makeMetadataInput({
+    const prompt = buildUnifiedClassificationPrompt(
+      makeInput({
         naicsCode: null,
         pscCode: null,
         agency: null,
-        orgPathName: null,
         setAsideType: null,
         setAsideCode: null,
         popState: null,
@@ -162,49 +158,21 @@ describe("buildMetadataClassificationPrompt", () => {
     expect(prompt).not.toContain("NAICS Code:");
     expect(prompt).not.toContain("PSC Code:");
     expect(prompt).not.toContain("Agency:");
-    expect(prompt).not.toContain("Organization:");
     expect(prompt).not.toContain("Set-Aside:");
+    expect(prompt).not.toContain("Set-Aside Code:");
     expect(prompt).not.toContain("Place of Performance:");
     expect(prompt).not.toContain("Award Ceiling:");
   });
 
-  it("includes NAICS code hints section", () => {
-    const prompt = buildMetadataClassificationPrompt(makeMetadataInput());
-    expect(prompt).toContain("541511");
-    expect(prompt).toContain("Likely relevant");
-    expect(prompt).toContain("Likely irrelevant");
+  it("includes today's date in the deadline check", () => {
+    const prompt = buildUnifiedClassificationPrompt(makeInput());
+    const today = new Date().toISOString().split("T")[0];
+    expect(prompt).toContain(today);
   });
 
-  it("includes set-aside boost section", () => {
-    const prompt = buildMetadataClassificationPrompt(makeMetadataInput());
-    expect(prompt).toContain("Set-Aside Boost");
-    expect(prompt).toContain("SBA, SBP, 8A, 8AN");
-  });
-
-  it("includes METADATA-ONLY TRIAGE mode indicator", () => {
-    const prompt = buildMetadataClassificationPrompt(makeMetadataInput());
-    expect(prompt).toContain("METADATA-ONLY TRIAGE");
-  });
-
-  it("does NOT include JCL_CAPABILITY_PROFILE (uses its own summary)", () => {
-    const prompt = buildMetadataClassificationPrompt(makeMetadataInput());
-    expect(prompt).not.toContain(JCL_CAPABILITY_PROFILE);
-  });
-
-  it("ends with JSON response format instruction", () => {
-    const prompt = buildMetadataClassificationPrompt(makeMetadataInput());
-    expect(prompt).toContain("Respond with valid JSON only");
-    expect(prompt).toContain('"classification": "GOOD" | "MAYBE" | "DISCARD"');
-  });
-
-  it("includes insufficient information guidance", () => {
-    const prompt = buildMetadataClassificationPrompt(makeMetadataInput());
-    expect(prompt).toContain("very little information to judge");
-    expect(prompt).toContain("classify as MAYBE");
-  });
-
-  it("includes conservative classification guidance", () => {
-    const prompt = buildMetadataClassificationPrompt(makeMetadataInput());
-    expect(prompt).toContain("When in doubt, classify as MAYBE");
+  it("includes strong MAYBE bias instruction", () => {
+    const prompt = buildUnifiedClassificationPrompt(makeInput());
+    expect(prompt).toContain("When in doubt, ALWAYS classify as MAYBE");
+    expect(prompt).toContain("Only classify as DISCARD when you are highly confident");
   });
 });

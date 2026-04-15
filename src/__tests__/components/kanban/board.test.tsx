@@ -33,37 +33,6 @@ vi.mock("lucide-react", () => {
   };
 });
 
-vi.mock("@dnd-kit/core", () => ({
-  DndContext: ({ children }: any) => (
-    <div data-testid="dnd-context">{children}</div>
-  ),
-  DragOverlay: ({ children }: any) => (
-    <div data-testid="drag-overlay">{children}</div>
-  ),
-  closestCorners: vi.fn(),
-  PointerSensor: vi.fn(),
-  useSensor: () => ({}),
-  useSensors: () => [],
-  useDroppable: () => ({ setNodeRef: vi.fn(), isOver: false }),
-}));
-
-vi.mock("@dnd-kit/sortable", () => ({
-  useSortable: () => ({
-    attributes: {},
-    listeners: {},
-    setNodeRef: vi.fn(),
-    transform: null,
-    transition: null,
-    isDragging: false,
-  }),
-  SortableContext: ({ children }: any) => <div>{children}</div>,
-  verticalListSortingStrategy: {},
-}));
-
-vi.mock("@dnd-kit/utilities", () => ({
-  CSS: { Transform: { toString: () => null } },
-}));
-
 import { KanbanBoard } from "@/components/kanban/board";
 
 const emptyResponse = {
@@ -74,7 +43,7 @@ const emptyResponse = {
 function makeMockFetch(responses?: Record<string, any>) {
   return vi.fn().mockImplementation((url: string) => {
     const classification = new URL(url, "http://localhost").searchParams.get(
-      "classification"
+      "classification",
     );
     const body = responses?.[classification ?? ""] ?? emptyResponse;
     return Promise.resolve({
@@ -93,9 +62,10 @@ describe("KanbanBoard", () => {
     vi.restoreAllMocks();
   });
 
-  it("renders three columns (GOOD, MAYBE, DISCARD)", async () => {
+  it("renders four columns (UPCOMING DEADLINES, GOOD, MAYBE, DISCARD)", async () => {
     render(<KanbanBoard />);
     await waitFor(() => {
+      expect(screen.getByText("UPCOMING DEADLINES")).toBeDefined();
       expect(screen.getByText("GOOD")).toBeDefined();
       expect(screen.getByText("MAYBE")).toBeDefined();
       expect(screen.getByText("DISCARD")).toBeDefined();
@@ -108,27 +78,25 @@ describe("KanbanBoard", () => {
       expect(global.fetch).toHaveBeenCalledTimes(4);
     });
     const urls = (global.fetch as ReturnType<typeof vi.fn>).mock.calls.map(
-      (c: any[]) => c[0]
-    );
-    expect(urls.some((u: string) => u.includes("classification=PENDING"))).toBe(
-      true
-    );
-    expect(urls.some((u: string) => u.includes("classification=GOOD"))).toBe(
-      true
-    );
-    expect(urls.some((u: string) => u.includes("classification=MAYBE"))).toBe(
-      true
+      (c: any[]) => c[0],
     );
     expect(
-      urls.some((u: string) => u.includes("classification=DISCARD"))
+      urls.some((u: string) => u.includes("classification=DEADLINES")),
     ).toBe(true);
+    expect(urls.some((u: string) => u.includes("classification=GOOD"))).toBe(
+      true,
+    );
+    expect(urls.some((u: string) => u.includes("classification=MAYBE"))).toBe(
+      true,
+    );
+    expect(urls.some((u: string) => u.includes("classification=DISCARD"))).toBe(
+      true,
+    );
   });
 
   it("shows search input", async () => {
     render(<KanbanBoard />);
-    expect(
-      screen.getByPlaceholderText("Search contracts...")
-    ).toBeDefined();
+    expect(screen.getByPlaceholderText("Search contracts...")).toBeDefined();
   });
 
   it("shows filter button", async () => {
@@ -176,7 +144,9 @@ describe("KanbanBoard", () => {
 
     await waitFor(() => {
       // Initial 4 + 4 re-fetches after search
-      expect((global.fetch as ReturnType<typeof vi.fn>).mock.calls.length).toBeGreaterThanOrEqual(8);
+      expect(
+        (global.fetch as ReturnType<typeof vi.fn>).mock.calls.length,
+      ).toBeGreaterThanOrEqual(8);
     });
   });
 
@@ -199,10 +169,5 @@ describe("KanbanBoard", () => {
     await waitFor(() => {
       expect(screen.getByText("Clear")).toBeDefined();
     });
-  });
-
-  it("has DnD context wrapper", async () => {
-    render(<KanbanBoard />);
-    expect(screen.getByTestId("dnd-context")).toBeDefined();
   });
 });

@@ -1,0 +1,559 @@
+You are a government contract classifier for JCL Solutions LLC.
+
+## Company Profile: JCL Solutions LLC
+
+**Model:** Solo operator with AI-augmented development (Claude Code, Cursor, etc.)
+**Set-asides:** Small business
+**Delivery:** Remote-first, software-deliverable work
+**Clearance:** None
+
+### Can Do
+Any work that is deliverable remotely by building software. This includes custom software development, web/mobile apps, APIs, AI/ML, cloud architecture, DevOps, automation, data analytics, cybersecurity tools, IT modernization, CRM/ERP systems, chatbots, dashboards, and IT consulting.
+
+### Cannot Do
+Anything requiring physical presence, physical labor, hardware, or non-software deliverables. This includes construction, facilities maintenance, janitorial, manufacturing, hardware engineering, drone/vehicle/weapons systems, physical R&D, lab work, medical/clinical services, logistics/warehousing, transportation, security guard services, staffing, telecommunications cabling/wiring, and scientific research equipment.
+
+### Classification Rules
+**GOOD** — Strong match. Title or description explicitly mentions software, application, web, API, database, cloud, AI, machine learning, data analytics, cybersecurity, IT modernization, automation, or consulting AND is remote-deliverable. Realistically achievable by a skilled solo developer with AI tools.
+
+**MAYBE** — Partial match. Interesting opportunity that partially aligns but may need teaming, has larger scope, or requires further review. Examples: larger IT modernization programs (could subcontract), mixed physical/digital projects, staff augmentation, training development with tech components.
+
+**DISCARD** — Poor match. Construction, physical infrastructure, manufacturing, hardware-only, requires security clearance, on-site fieldwork, drone/vehicle/weapons systems, physical R&D, lab work, medical/clinical services, logistics/warehousing, janitorial, facilities management, or any work that fundamentally cannot be delivered remotely by a solo software developer. Also DISCARD contracts with restrictive set-asides (8(a), SDVOSB, HUBZone, WOSB, EDWOSB, Veteran-owned, Native American-owned) — these should be filtered before AI classification, but if they reach the classifier, DISCARD them. Still provide clear reasoning for why it doesn't fit.
+
+## Contract to Classify
+
+Title: CSO - U.S. Army Aviation Training
+Agency: DEPT OF DEFENSE.DEPT OF THE ARMY.AMC.ACC.ACC-CTRS.ACC RSA.W6QK ACC-RSA
+NAICS Code: 611512
+PSC Code: U006
+Notice Type: Combined Synopsis/Solicitation
+Set-Aside: NONE
+
+
+## Attached Document Content
+--- Document 1 ---
+UNCLASSIFED
+UNCLASSIFED
+Attachment 004: Phase I – CSO AOI Solutions Brief Format and Instructions
+1. Guidelines:
+• 	Unnecessarily elaborate brochures or proposals are not desired.
+• 	When applicable, use of a diagram(s) or figure(s) to depict the essence of the proposed
+solution is strongly encouraged.
+• 	Offerors may submit multiple solution briefs in response to any single Area of Interest
+(AOI) if each submission represents a separate and distinct concept. Individual solution
+briefs may only address one concept based on the stated AOI.
+• 	Technical data with military application may require approval, authorization, or license
+for lawful exportation.
+• 	Questions regarding the objectives or preparation of the solution brief should be
+addressed to the POC or inbox listed in the respective AOI.
+• 	Submissions must be submitted electronically.
+2. 	Submission Instructions, Phase I:
+(a) The Quad Charts will address the following:
+• 	The responding Quad Charts should address each area within the provided Quad Charts
+(Attachment 003) and shall not exceed four (4) MS PowerPoint Slides.
+(b) Solution briefs must include the following:
+• 	The Solution Brief shall not exceed five (5) single-sided typed pages using 12-point font.
+The title page does not count against page limit.
+• 	Offeror Name, Title, Date, Point of Contact Name, E-Mail Address, Phone, and Address.
+• 	Specifically identify the AOI for which the solution brief is submitted.
+• 	Concept: Describe how your proposed solution or potential new capabilities represent
+an application of innovative commercial products, innovative commercial technologies
+and services or adaptations/modifications of existing commercial product technologies
+and services to the AOI. Describe the unique aspects of your technology and the
+proposed work as it relates to the AOI. Identify whether the effort includes a
+demonstration of existing commercial technology (identified as commercially ready and
+viable technology) or experimental technology. If development or adaptation is
+proposed, identify a suggested path to mature the technology. If applicable, identify
+aspects of your solution, to include date and software, which may be considered
+proprietary.
+• 	Price: Provide a rough order of magnitude price for the proposed solution and include
+desired payment terms.
+
+-- 1 of 1 --
+
+--- Document 2 ---
+UNCLASSIFIED
+UNCLASSIFIED
+Attachment 001: Areas of Interest (AOI)
+The Army aims to provide a flexible and open-ended opportunity for industry partners to submit
+Phase I Quad Charts and Solution Briefs addressing any of the identified Area of Interests. This
+aspect of the Open Solicitation is designed to identify and bridge gaps in mission-critical
+capabilities by inviting innovative solutions from the private sector. The purpose is to encourage
+a wide range of responses that can enhance and support the example areas, fostering
+collaboration and leveraging cutting-edge technologies and methodologies to meet evolving
+operational needs.
+Areas of Interest:
+• 	Fixed-Wing Aircraft Training: The Army seeks comprehensive, modernized Fixed-Wing
+aircraft training solutions to enhance readiness, reduce training timelines, and support
+long-term national defense objectives. Simultaneously, the Army seeks to grow and
+strengthen the warfighter through innovation and emerging technologies.
+Aviation CSO Team POC: usarmy.rucker.avncoe.mbx.fsnteam@army.mil
+• 	Rotary-Wing Aircraft Training: The Army seeks comprehensive, modernized Rotary-Wing
+aircraft training solutions to enhance readiness, reduce training timelines, and support
+long-term national defense objectives. Simultaneously, the Army seeks to grow and
+strengthen the warfighter through innovation and emerging technologies.
+Aviation CSO Team POC: usarmy.rucker.avncoe.mbx.fsnteam@army.mil
+• 	Unmanned Aerial Systems (UAS) Training: The Army seeks comprehensive, modernized
+UAS aircraft training solutions to enhance readiness, reduce training timelines, and
+support long-term national defense objectives. Simultaneously, the Army seeks to grow
+and strengthen the warfighter through innovation and emerging technologies.
+Aviation CSO Team POC: usarmy.rucker.avncoe.mbx.fsnteam@army.mil
+
+-- 1 of 1 --
+
+--- Document 3 ---
+Solution Title
+[Identify Specific Area of Interest (Rotary, Fixed or UAS)]
+Schedule
+Price
+Technical Solution
+Alignment with Area of Interest
+Provide an overview of the technical
+solution offered
+Provide an overview of production and
+delivery capabilities
+Discuss how the proposed solution addresses
+the Area of Interest and possible benefit to the
+warfighter.
+Provide a Rough Order of Magnitude
+Attachment 003: Phase I - CSO AOI Quad Chart Template 	UNCLASSIFIED
+UNCLASSIFIED
+
+-- 1 of 1 --
+
+--- Document 4 ---
+UNCLASSIFIED
+UNCLASSIFIED
+Attachment 006: Phase III – CSO AOI Commercial Solutions Proposal (CSP) Format
+1. Instruction for Request for CSP, Phase III
+Phase III of the CSO process is the Request for CSP. Offerors must ensure that the CSP is valid for
+at least 180 days from the submission date.
+The CSP must be prepared in three separate Volumes as follows: Volume I Technical and Volume
+II Performance Work Statement (PWS) and Volume III Price. Each volume may have its separate
+related attachments. The Army reserves the right to request additional volumes as needed.
+NOTE: 	Failure to submit CSP in the correct three-volume format will result in immediate and
+final removal from further consideration.
+(a) Technical Proposal: The Technical Proposal page limitation shall be limited to 10 pages. The
+page limitation covers all information including indices, photographs, foldouts (counted as 1
+page for each 8.5 by 11-inch portion) tables, charts, appendices, attachments, resumes, etc.
+Environmental documentation provided will not count towards the 10-page limitation. The
+document must be provided in Microsoft Word. Signed pages may be submitted in Adobe. Text
+shall be written in a 12-point, commonly used business font (i.e. Arial, Calibri, Times New
+Roman, Helvetica, etc.). Character spacing must be "normal," not condensed in any manner.
+Pages shall be single-spaced (must use standard single-space function in Microsoft Word), 8.5 by
+11 inches, with at least one-inch margins on both sides, top and bottom. All text, excluding text
+in tables and charts (single-spaced), must adhere to all font size and line spacing requirements
+listed herein. Font and line spacing requirements do not have to be followed for illustrations,
+flowcharts, drawings, and diagrams. These exceptions shall not be used to circumvent
+formatting requirements and page count limitations by including lengthy narratives in such
+items.
+(b) PWS: The same formatting rules for the Technical Proposal apply to the PWS, page limitation
+is also 10 pages
+(c) Price Proposal: The Price Proposal does not have a page limit restriction (MS Excel Format).
+The Price Volume should display all active formulas so that an evaluator can trace the source of
+data and the method the result was derived.
+(d) Markings and Restrictions: Proposed solutions containing data that is not to be disclosed to
+the public for any purpose or used by the Army except for evaluation purposes, shall include the
+following sentences on the cover page:
+“This proposal includes data that shall not be disclosed outside the Army, except to
+non-Army personnel for evaluation purposes, and shall not be duplicated, used, or
+disclosed -- in whole or in part -- for any purpose other than to evaluate this
+proposal. If, however, an agreement is awarded to this Offeror as a result of -- or in
+
+-- 1 of 5 --
+
+UNCLASSIFIED
+UNCLASSIFIED
+connection with -- the submission of this data, the Army shall have the right to
+duplicate, use, or disclose the data to the extent agreed upon by both parties in the
+resulting agreement. This restriction does not limit the Army's right to use
+information contained in this data if it is obtained from another source without
+restriction. The data subject to this restriction are contained in sheets [insert
+numbers or other identification of sheets]”
+Restricted data should be marked as follows:
+“Use or disclosure of data contained on this sheet is subject to the restriction on
+the title page of this proposal.”
+(e) General Information: The proposal should include as much detail as the offeror considers
+necessary to fully explain its proposed approach or method, including all assumptions utilized to
+develop its proposed solution. The proposal should reflect a clear understanding of the nature
+of the work being undertaken. It should discuss details of intellectual property (IP) and data
+rights assertions that may include, but are not limited to: royalty provisions, limited licenses
+(scope, duration, and manner), options, conditions, right-of-first refusal, and exclusive dealing
+terms, amongst others. Identify all Army Support Required for example, identify the type of
+support, if any, the offeror requests of the Army in general, equipment, data, and information or
+materials.
+The Army will verify, upon receipt, that the proposal and PWS conform to the stated
+requirements. Any pages in excess of the stated page limitation will not be considered for
+evaluation purposes.
+2. Technical Proposal Volume:
+The technical volume shall include a detailed work plan indicating how each aspect of the
+solution will be accomplished. The technical volume should include as much detail as the offeror
+considers necessary to fully explain its proposed technical approach or method, including all
+assumptions utilized to develop its proposed solution and associated costs. The technical
+volume should reflect a clear understanding of the nature of the work being undertaken.
+The technical volume must include information on how the solution will be organized, staffed,
+and managed. Information should be provided that demonstrates the offeror’s understanding
+and management of important events or tasks. The technical volume must include a list of
+suggested deliverables and deliverable dates. Include ancillary and operational issues such as
+certifications, algorithms, and any engineering/software development methodologies to be
+used. You may refer to your Solution Brief that prompted this proposal request, but do not
+duplicate it in the Technical Proposal Volume. Provide additional details of intellectual property
+(IP) and data rights assertions that may include, but are not limited to: royalty provisions,
+limited licenses (scope, duration, and manner), options, conditions, right-of-first refusal, and
+exclusive dealing terms, amongst others. Identify all Army Support Required for example,
+
+-- 2 of 5 --
+
+UNCLASSIFIED
+UNCLASSIFIED
+identify the type of support, if any, the offeror requests of the Army in general, equipment,
+data, and information or materials.
+3. PWS Format:
+A PWS must be included with the full proposal as part of the Phase III submission. The PWS is
+limited to 10 pages in length and must be a separate and distinct document suitable for
+incorporation into the resulting award. DO NOT INCLUDE ANY PROPRIETARY INFORMATION IN
+THE PWS. Pages should be numbered, and the initial page should have a date (document date)
+shown under the title.
+The proposed PWS must accurately describe the work to be performed. The proposed PWS
+must also contain a summary description of the technical methodology as well as the task
+description, but not in so much detail as to make the PWS inflexible. The PWS should follow the
+following general guidelines:
+i. Objective and Task descriptions must be definite, realistic, and clearly stated. Use the
+phrase “the contractor shall” whenever the work statement expresses a provision that is
+binding. Use “should” or “may” whenever it is necessary to express a declaration of purpose.
+Use “will” in cases where no offeror requirement is involved (e.g., power will be supplied by
+the Army).
+ii. Do not use acronyms or abbreviations without first defining them. Place abbreviations and
+acronyms in parentheses following the first usage of the spelled-out phrase (e.g., I Statement
+of Work (SOW)).
+iii. If presentations and meetings are identified in the offeror’s schedule, the offeror shall
+include the following statement in the PWS: “Conduct presentations and meetings at times
+and places specified in the contract schedule.”
+iv. The desired project structure consists of solution-specific objectives focused on
+demonstrating the capability of the training, and solution-specific tasks, which cover
+schedules, reporting requirements and deliverables of the Integrated Product Team (IPT)
+effort.
+The PWS should include the following sections:
+a. OBJECTIVE. This section is intended to give a brief overview of the project and should
+describe why the work is being pursued and what the offeror intends to accomplish.
+b. SCOPE. This section includes a statement of what the PWS covers. This should describe the
+capability area (CSO topic and/or Area of Interest) to be performed, goals, and milestones for
+the effort.
+
+-- 3 of 5 --
+
+UNCLASSIFIED
+UNCLASSIFIED
+c. SOLUTION-SPECIFIC TASKS. This section contains a detailed description of tasks that are
+necessary to perform the requirement. These tasks will represent the work to be performed and
+shall be incorporated as an attachment to the award. This section should be developed in an
+orderly progression and presented in sufficient detail to establish the feasibility of
+accomplishing the overall solution objectives. This section should clearly distinguish solution-
+specific tasks and a schedule for completion. The PWS must define every task to be
+accomplished.
+Note: The Army reserves the right to modify and negotiate the language in the PWS prior to any
+potential contract award.
+4. Price Proposal Volume:
+The offeror shall prepare the Price Proposal (with the exception of the pricing narrative
+information described below) using Microsoft Excel format. Include the respective AOI, Offeror
+name and the Project Title on all pages.
+The following information should be contained in a cover sheet attached to the price proposal:
+a. Full offeror name and address
+b. Call number submitting proposal against (if Applicable)
+c. Points of contact, name, title, and phone number
+d. CAGE code
+e. Unique Entity ID number
+The price proposal must include pricing information sufficiently detailed to determine that the
+price is fair and reasonable. The price proposal must include a price build-up that includes direct
+and indirect cost components, materials, and other charges that substantiate the proposed
+price. The price build up should be supported by vendor quotes, supplier agreements or other
+information necessary to substantiate the proposed price. This can include but is not limited to
+commercial price ca
+
+--- Document 5 ---
+UNCLASSIFIED
+UNCLASSIFIED
+Attachment 002: Area of Interest (AOI) Evaluation Methodology
+1. Submission Phases and Evaluation Procedures
+The following procedures shall be used to assess and evaluate all AOI solution submissions,
+described above. Call for Solutions (C4S) are intended to follow the same overall structure as
+the AOI but may differ depending on the nature of the solution. Refer to the evaluation and
+assessment procedures for each C4S for specific procedures and timelines. Debriefing
+instruction for C4S submissions shall be specified in the Call for Solutions.
+Phase I: Solution Brief & Quad Charts
+Offerors shall submit a Quad Chart and Solution Brief consisting of the following:
+i. A Quad Chart that includes the information indicated in CSO Attachment 003.
+ii. A Solution Brief that conforms to and follows the instructions in CSO Attachment 004.
+iii. The Army will assess the merits of the Quad Chart and Solutions Brief using the evaluation
+methodology specified in Section 3, “Evaluation Methodology,” below.
+iv. All offerors providing Phase I submissions will be contacted by the Army via email with one
+of the following messages:
+a. the proposed solution brief/quad chart is not of interest to the Army,
+b. a request to provide a Phase II Presentation, or
+c. a request to submit a Phase III Commercial Solutions Proposal.
+Phase II: Presentation (unless bypassed)
+Offerors’ Solution Briefs and Quad Charts whom are selected for further consideration may be
+invited to provide a live presentation. Instructions in CSO Attachment 005. The Army reserves
+the right to limit the number of Offerors invited to make presentations for efficiency. As such, an
+Offeror’s solution may be selected for further consideration, however not invited to present.
+The Army reserves the right to record live presentations. The Army also reserves the right to
+bypass Phase II in its entirety.
+Phase III: Written Commercial Solution Proposal (CSP)
+Offerors whose Solution Briefs, or Solutions Brief and Presentation, are selected for further
+consideration, may be invited to submit a written CSP (CSO Attachment 006). At a minimum the
+written CSP shall fully describe the technical solution, the program management approach in
+executing the solution, a discussion on how the solution is innovative or fills a capability gap in
+an AOI, a price proposal complete with any supporting documentation, and any other aspects
+necessary for the Army to fully assess the written CSP.
+
+-- 1 of 3 --
+
+UNCLASSIFIED
+UNCLASSIFIED
+Additional Evaluation Phases
+The Army reserves the right to increase or decrease the number of Evaluation Phases. Based
+upon the nature of the AOI, there may be the need for additional evaluation, inspection or
+validation before selection determination.
+Note: The Army will not pay Offerors for costs associated with proposal preparation at any
+Phase, unless otherwise stipulated.
+2. Factors for Evaluation and Selection
+The Army intends to evaluate the submissions to determine which proposed solutions have the
+potential to best meet the Army’s needs utilizing the evaluation criteria below.
+i. Technical Merit/Importance to Agency: The Army will evaluate the Technical Merit of an
+Offeror’s submission. Technical merit is defined as having relevance to the AOI and/or
+provides an innovative approach. The Offeror’s approach shall demonstrate the ability to scale
+and be determined to be feasible. In addition, the Army must find or determine the approach
+and/or underlying technology to be a compelling solution.
+ii. Schedule Merit: The Army will evaluate the feasibility of the Offeror’s proposed
+solution/concept project schedule and maturity path.
+iii. Price/Affordability: The Army will evaluate the submission for affordability.
+3. Evaluation Methodology
+Phases will be evaluated on the criteria listed below:
+i. Phase I submissions will be evaluated solely on a Selectable or Non-Selectable basis.
+Selectable: A solution is determined Selectable if it demonstrates technical merit, has a
+comprehensive understanding of the USG’s requirements, and demonstrates a potential to
+meet the Army’s needs.
+Non-Selectable: A solution is determined Non-Selectable if it does not demonstrate
+technical merit, does not demonstrate a comprehensive understanding of the USG’s
+requirements or does not demonstrate the potential to meet the Army’s needs.
+ii. Phases II/III submissions will be evaluated as follows:
+Recommended for Further Consideration: The submission has been determined to be of
+technical merit, represents a feasible schedule, is considered reasonable and the Offeror is
+considered award eligible.
+
+-- 2 of 3 --
+
+UNCLASSIFIED
+UNCLASSIFIED
+Selectable, but Not Recommended: The submission has been determined to potentially be
+of technical merit, it possibly represents a feasible schedule, is considered reasonable and
+the Offeror is considered award eligible.
+Not Selected for Further Consideration: The submission does not represent the necessary
+degree of technical merit, or it does not present a feasible schedule, the price is not
+considered reasonable, and/or the Offeror’s award eligibility does not warrant further
+consideration.
+Offerors selected for further consideration may be invited to participate in the next Phase,
+subject to the availability of funds. The Army anticipates that AOI’s may routinely receive more
+submissions than resources to award. All compliant submissions will be fairly evaluated,
+however; only select presentations and proposals with the most compelling solutions will be
+invited to Phase II and/or Phase III. The Army reserves the right to limit the number of Offerors
+invited to Phase II and/or Phase III. As such, an Offeror’s solution may be evaluated and selected
+for further consideration, however; not invited to Phase II and/or Phase III.
+Debriefing: Debriefs for AOI submissions may be requested. Debriefs are intended to be
+informative and provide insight into the solution submitted.
+
+-- 3 of 3 --
+
+--- Document 6 ---
+UNCLASSIFIED
+1
+UNCLASSIFIED
+UNITED STATES ARMY
+COMMERCIAL SOLUTIONS OPENING (CSO)
+FOR
+AVIATION TRAINING SOLUTIONS
+W9113M25SC0060
+21 November 2025
+
+-- 1 of 8 --
+
+UNCLASSIFIED
+2
+UNCLASSIFIED
+Table of Contents
+1. 	AUTHORITY ........................................................................................................................................................... 3
+2. 	GENERAL INFORMATION....................................................................................................................................... 4
+3. 	BACKGROUND ...................................................................................................................................................... 4
+4. 	CSO APPROACH AND OVERVIEW .......................................................................................................................... 4
+5. 	POINTS OF CONTACT ............................................................................................................................................. 6
+6. 	SUBMISSION INFORMATION ................................................................................................................................. 6
+7. 	AWARD GUIDELINES & ELIGIBILITY REQUIREMENTS ............................................................................................. 6
+8. 	DEFINITIONS ......................................................................................................................................................... 8
+9. 	ATTACHMENTS ..................................................................................................................................................... 8
+
+-- 2 of 8 --
+
+UNCLASSIFIED
+3
+UNCLASSIFIED
+U.S. Army Contracting Command – Redstone Arsenal
+1. 	Authority
+Contracting Officers may acquire innovative commercial items, technologies, or services using a
+competitive procedure called a Commercial Solutions Opening (CSO) in accordance with (IAW) 10
+U.S.C. 3458. Under a CSO, the Department of Defense (DoD) may competitively select proposals
+received in response to a general solicitation, similar to a broad agency announcement, based on
+a review of proposals by scientific, technological, or other subject-matter expert peers. Use of a
+CSO IAW DFARS Subpart 212.70 is considered to be a competitive procedure for the purposes of
+10 U.S.C. 221 and FAR 6.102. Finally, Contracting Officers shall treat items, technologies, and
+services acquired using a CSO as commercial products and commercial services. Contracts or
+agreements under this authority shall be fixed-price, including fixed-price incentive fee contracts.
+Awards issued under CSOs include but are not limited to the following award instruments: FAR
+contracts under FAR Part 12 Commercial Procedures; any fixed price, or fixed price incentive
+contract type specified under FAR Part 16; and non-FAR agreements such as transaction
+agreements under 10 U.S.C. 4022 and 10 U.S.C. 4023; for the Army and/or its customers that are
+directly relevant to enhancing the effectiveness of training, curriculum development, integration
+of innovation in training methodologies, demonstration of capabilities and evidence of mastery
+of basic aviation operation abilities to support Army modernization priorities and improve
+readiness.
+The Army intends to select solutions that demonstrate the greatest potential to achieve its
+missions. This CSO is maximizing the following existing authorities, either as a single authority or a
+combination of the authorities below:
+10 U.S.C. §4022 – Authority of the Department of Defense to carry out certain prototype projects
+10 U.S.C. §4023 – Procurement for Experimental Purposes
+10 U.S.C. §3458 – Authority to acquire innovative commercial products and commercial services
+using general solicitation competitive procedures / DFARS 212.70 – Defense Commercial
+Solutions Opening
+Offerors are informed that ONLY a warranted Army Contracting/Agreements Officer (not a
+Contracting Officer Representative or other personnel) may contractually bind the Army to any
+award issued as a result of this CSO. The Army shall not be obligated to pay for work performed by
+an Offeror unless a warranted Contracting/Agreements Officer has signed an award, in writing,
+agreeing that the Army shall pay and what the Army shall receive. The Army does not fund
+preparation of solution briefs/proposals, or support work efforts or tasks that are inferred from
+discussions.
+
+-- 3 of 8 --
+
+UNCLASSIFIED
+4
+UNCLASSIFIED
+2. 	General Information
+Issuing Agency: U.S. Army Contracting Command – Redstone Arsenal
+Agencies Capable of Issuing Contracts/Agreements: U.S. Army (Army) Users and all other DoD
+organizations.
+Period of Availability: This CSO will remain open until canceled by the Army. Calls for Solutions
+(C4S) will specify individual response times and requirements.
+Description of Program: This solicitation aims to support the Army Mission by delivering
+commercially innovative solutions to address Areas of Interest (AOI) or specific C4S’s in the means
+and methods of training aviators for the U.S. DoD.
+Federal Agency Name and Contracting Officer Address: Army Contracting Command – Redstone
+Arsenal. Bldg. 5303, Sparkman Complex, Redstone Arsenal, AL 35898
+3. 	Background:
+The Army has identified the following needs: (1) to rapidly train and qualify aviators in all platforms;
+(2) to transform aviation training to improve pilot proficiency by using the latest commercial
+practices and technology; and (3) to grow the aviation industrial base to better support the Army.
+This solicitation aims to provide the Army with access to innovative solutions enabling the Army to
+evolve quickly and maintain a competitive edge over adversaries.
+4. 	CSO Approach and Overview
+Applicable NAICS Code and Associated Description:
+NAICS 	Description
+611512 	FLIGHT TRAINING (Primary)
+488190 	OTHER SUPPORT ACTIVITIES FOR AIR TRANSPORTATION
+541611 	ADMINISTRATIVE MANAGEMENT AND GENERAL
+MANAGEMENT CONSULTING SERVICES
+611430 	PROFESSIONAL AND MANAGEMENT DEVELOPMENT TRAINING
+611519 	OTHER TECHNICAL AND TRADE SCHOOLS
+Classified Information: Access to unclassified sensitive or classified information is not anticipated
+for awards under this CSO. Offerors are encouraged to submit unclassified responses to simplify
+and expedite reviews and responses by the Army.
+Proprietary Information: Solution briefs, presentations, and proposals containing data that is not
+
+-- 4 of 8 --
+
+UNCLASSIFIED
+5
+UNCLASSIFIED
+to be disclosed to the public for any purpose or use by the Army except for evaluation purposes
+shall include the following general disclaimer on the cover page:
+“This [select one: solution brief, Presentation, or Proposal] includes data that shall not be
+disclosed outside the government, except to non-government personnel for evaluation
+purposes, and shall not be duplicated, used, or disclosed - in whole or in part - for any
+purpose other than to evaluate this submission. If, however, an agreement is awarded to
+this Offeror as a result of - or in connection with - the submission of this data, the
+government shall have the right to duplicate, use, or disclose the data to the extent
+agreed upon by both parties in the resulting agreement. This restriction does not limit the
+government's right to use information contained in this data if it is obtained from another
+source without restriction. The data subject to this restriction are contained in sheets
+[insert numbers or other identification of sheets]”
+Responses should clearly mark (header or footer) portions of business plans and/or technical
+information that are to be protected from Freedom of Information Act (FOIA) disclosure. Codified
+at 5 U.S.C. §552(b), FOIA provides that certain types of information (i.e. trade secrets and
+commercial or financial information) are exempt from the general rule that an agency shall make
+available to the public the information described in 5 U.S.C. §552(a).
+NOTE: Foreign-Owned businesses may independently submit a solution or do so as part of a
+teaming arrangement with one or more United States-owned businesses. However, the ability to
+obtain an award based upon a submission may depend upon the ability of the Foreign-Owned
+business to obtain necessary clearances and approvals to obtain prescribed information.
+Commercial Items: All items, technologies, and services acquired using this CSO will be treated as
+commercial items. The Army encourages proposals that span a wide spectrum of innovative
+technical and business solutions.
+SAM.gov: Coordination and communication between offerors and the Army will be conducted
+using SAM.gov or alternate system.
+DoDSafe.gov: The Army reserves the right to use DoDSafe.gov for coordination of receipt of
+Solution Briefs, Full Written Commercial Solutions Proposals, and any other documents related to
+the solicitation as needed.
+Other Systems: The Army reserves the right to adopt the usage of other systems as they become
+available. Coordination and communication specifics shall be identified at the individual C4S
+level.
+Notice of Funding: All funding will be provided at the time of award, not at the CSO level,
+regardless of the pathway pursued.
+
+-- 5 of 8 --
+
+UNCLASSIFIED
+6
+UNCLASSIFIED
+5. 	Points of Contact:
+Questions regarding the content of this CSO must be addressed to the Contracting Officer. Attn:
+Michael A. Metje; email; michael.a.metje.civ@army.mil; work phone: (520) 674-7936.
+6. 	Submission Information:
+Responses to this CSO may be submitted against an Area of Interest (AOI) or a C4S. Submissions
+against the AOI shall be submitted to the POC listed for that AOI. Calls for Solutions will have POC
+information and submission instructions provided within the announcement.
+Area of Interest (AOI)
+Provides a flexible and open-ended opportunity for industry partners to submit solution briefs
+addressing any of the identified Area of Interests. This aspect of the Open Solicitation is designed to
+identify and bridge gaps in mission-critica
+
+--- Document 7 ---
+UNCLASSIFIED
+UNCLASSIFIED
+Attachment 005: Phase II – CSO AOI Presentation Format
+Guidelines:
+Offerors who are requested to provide a Phase II Presentation shall demonstrate and offer
+further details on the technical, innovative aspects, and business viability of their proposed
+solution. Additionally, the Army may request a written submission to supplement or clarify the
+information provided in Phase I - Quad Charts & Solutions Brief. Depending on the specific
+requirement, the Army may request an in-person, virtual or paper presentation, and
+demonstration.
+Required Presentation Content:
+• 	Innovation Description: Describe how the proposed solution represents an innovative
+application of commercial technology to address the Area of Interest (AOI).
+• 	Schedule: A notional schedule detailing the implementation of the proposed solution.
+• 	Pricing Information: A rough order of magnitude (ROM) price
+• 	Question and Answers: The USG reserves the right to ask additional questions pertaining
+to information presented and provided during Phase I and Phase II.
+
+-- 1 of 1 --
+
+## Instructions
+
+Analyze this government contract opportunity and classify it as GOOD, MAYBE, or DISCARD based on JCL Solutions' capabilities described above.
+
+Your reasoning MUST always be populated with a clear, specific explanation (2-4 sentences) of why this contract received its classification. Reference specific aspects of the contract (scope, requirements, delivery model) and how they align or don't align with JCL's capabilities.
+
+Respond with valid JSON only:
+{
+  "classification": "GOOD" | "MAYBE" | "DISCARD",
+  "reasoning": "Your detailed reasoning here...",
+  "summary": "1 plain English sentence describing what this contract is actually asking for"
+}

@@ -1,0 +1,502 @@
+You are a government contract classifier for JCL Solutions LLC.
+
+## Company Profile: JCL Solutions LLC
+
+**Model:** Solo operator with AI-augmented development (Claude Code, Cursor, etc.)
+**Set-asides:** Small business
+**Delivery:** Remote-first, software-deliverable work
+**Clearance:** None
+
+### Can Do
+Any work that is deliverable remotely by building software. This includes custom software development, web/mobile apps, APIs, AI/ML, cloud architecture, DevOps, automation, data analytics, cybersecurity tools, IT modernization, CRM/ERP systems, chatbots, dashboards, and IT consulting.
+
+### Cannot Do
+Anything requiring physical presence, physical labor, hardware, or non-software deliverables. This includes construction, facilities maintenance, janitorial, manufacturing, hardware engineering, drone/vehicle/weapons systems, physical R&D, lab work, medical/clinical services, logistics/warehousing, transportation, security guard services, staffing, telecommunications cabling/wiring, and scientific research equipment.
+
+### Classification Rules
+**GOOD** — Strong match. Title or description explicitly mentions software, application, web, API, database, cloud, AI, machine learning, data analytics, cybersecurity, IT modernization, automation, or consulting AND is remote-deliverable. Realistically achievable by a skilled solo developer with AI tools.
+
+**MAYBE** — Partial match. Interesting opportunity that partially aligns but may need teaming, has larger scope, or requires further review. Examples: larger IT modernization programs (could subcontract), mixed physical/digital projects, staff augmentation, training development with tech components.
+
+**DISCARD** — Poor match. Construction, physical infrastructure, manufacturing, hardware-only, requires security clearance, on-site fieldwork, drone/vehicle/weapons systems, physical R&D, lab work, medical/clinical services, logistics/warehousing, janitorial, facilities management, or any work that fundamentally cannot be delivered remotely by a solo software developer. Also DISCARD contracts with restrictive set-asides (8(a), SDVOSB, HUBZone, WOSB, EDWOSB, Veteran-owned, Native American-owned) — these should be filtered before AI classification, but if they reach the classifier, DISCARD them. Still provide clear reasoning for why it doesn't fit.
+
+## Contract to Classify
+
+Title: R425--Capital Asset Facility Management System
+Agency: VETERANS AFFAIRS, DEPARTMENT OF.VETERANS AFFAIRS, DEPARTMENT OF.262-NETWORK CONTRACT OFFICE 22 (36C262)
+NAICS Code: 541512
+PSC Code: R425
+Notice Type: Solicitation
+
+
+## Attached Document Content
+--- Document 1 ---
+VENDOR INFORMATION
+1. REQUESTOR: 	2. SERVICE: 	3. EXTENSION:
+4. VENDOR NAME:
+Doing Business As/Legal Name:
+5. VENDOR ADDRESS
+Physical Location:
+Mailing Address:
+City:
+State/Zip:
+6. VENDOR TAX IDENTIFICATION NO. or
+SOCIAL SECURITY NUMBER:
+(Mandatory field must enter one or the other)
+TIN:
+SSN:
+7. VENDOR PHONE & FAX NUMBER:
+Phone:
+Fax:
+Email: :
+8. PAYMENT STREET ADDRESS:
+Address:
+City:
+State/Zip:
+9. POINT OF CONTACT:
+10. ACCOUNT NUMBER:
+11. Does Vendor have an existing contract?  YES  NO
+If answer is YES, please enter Contract Number:
+(i.e. GS-, V797 or any other contract with payment terms N/30 and expiration date)
+Beginning Date: 	Expiration Date:
+FOB:  Destination  Origin
+Prompt Payment Discount: _________ (i.e. 2%/10; 1%/20 or N/30)
+12. 1099 Vendor Indicator:  YES (Always YES except if FEDERAL Government)  NO
+13. Business Type (FPDS) (Must check one):  Small 	Large 	 Outside VA Other Entities
+14. Socioeconomic Group: (Please check all that apply)
+ Sm Disadvantage Bus 	 Javits-Wagner-O’Day 	 Hubzone Small Business
+ Veteran-Owned Small Bus  Woman-Owned Small Business  Historically Black College & Univ./Min Institute
+ Veteran-Owned Large Bus  Woman-Owned Large Business  None of the other business
+ Veteran-Service Disabled
+15. Purchase Card Accepted  YES  NO
+16. DUN and BRADSTREET NUMBER: ___________________________
+(Mandatory-if vendor does not have one they need to go to http://www.dnb.com to register.
+17. Is Vendor registered with Central Contractor Registration (CCR)?  YES  NO
+(Mandatory-if vendor is not registered they can accomplish the task at: http://www.ccr.gov to register.
+18. Before we may enter any new vendor information within the VA database the mandatory registration sites shall be
+checked along with the status of the vendor’s ability to do business within the Federal Government. Failure to check
+the mandatory field(s) could result in administrative action. The following two sites are your final check .
+http://epls.arnet.gov/ & http://exclusions.oig.hhs.gov/
+
+-- 1 of 1 --
+
+--- Document 2 ---
+VA-FSC VENDOR FILE REQUEST
+FORM INSTRUCTIONS
+NOTE:
+Only 	completed 	forms 	signed 	by 	an 	“Authorized
+Representative” will be processed. Contact information for
+any questions / inquiries can be found on the form itself.
+Purpose of Form:
+VA Form 10091 is used to gather essential payment data
+from vendors (Commercial, Individuals, Veterans, etc.) to
+establish or update vendor records in order to process
+electronic payments in accordance with Title 31 of the Code
+of Federal Regulation Part 208 (31 CFR Part 208).
+Request Type:
+If this is the first time registering in our financial system for
+VA payments, please select NEW VENDOR otherwise
+choose 	UPDATE 	EXISTING 	VENDOR 	and 	complete
+Sections II, III and IV.
+Section I: VA Facility Information (For Station Use Only):
+1. Station Number:
+3-digit number of VA Station that is submitting this form.
+plus NCA, VHA, VBA.
+2. Station Contact:
+VA employee who completes, signs and submits this form.
+3. Station Phone Number:
+Direct number/extension for employee listed in Box 2.
+4. Station Fax Number:
+Fax number for office in Box 1.
+5. Station Email Address:
+The va.gov email for employee in Box 2.
+6. Payee Vendor Type (Required):
+The appropriate vendor type of the Payee/Vendor in
+Section II.
+• F - Federal Vendor:
+Include 2-digit Facts.
+• O - Foreign Vendor:
+Include W8Ben with foreign identification number
+7. Miscellaneous Actions (If applicable):
+• Assignment of Claims:
+Use ONLY if employee in Box 2 is a Contracting
+Officer. Must include “Notice of Assignment” and
+“Instrument of Assignment” with completed form.
+• LGY Vendor:
+Loan Guaranty include 6-digit account number.
+Section II: Payee/Vendor Information
+* If you are a NEW VENDOR and registered in the System of
+Awards Management (SAM) with a Unique Entity Identifier
+(UEI) you MUST complete boxes 8 	- 11; 14 	- 19 plus
+Sections III and IV. Additionally, all information provided on
+the VA Form 10091 must match the information found in
+SAM or your request will not be processed.
+If you are a NEW VENDOR and are NOT registered in SAM,
+you MUST complete boxes 11; 14 - 19 plus Sections III and IV.
+If you are an EXISTING VENDOR and registered in SAM,
+any banking changes MUST be made in SAM. 	All other
+changes would still require an “Authorized Representative” to
+complete and sign the VA Form 10091.
+8. Commercial Vendor registered in Sam.gov:
+Check box if Payee/Vendor in Section II is registered in
+SAM.
+See * above for mandatory fields to be completed.
+9. Unique Entity Identify (UEI):
+The (12) character, alphanumeric data element assigned
+by SAM.gov.
+10. EFT Indicator:
+The unique 4-character code associated with UEI in Box
+9. Blank or incorrect information in this field may cause a
+delay in processing your request.
+11. SSN/TIN:
+The 9-digit IRS identifier for the Payee/Vendor in Section
+II. Tax ID Numbers (TINs) are generally assigned to
+companies 	with 	employees. 	Employer 	Identification
+Number (EINs) are typically assigned to a business or
+entity (such as a corporation or an LLC. Individual Tax ID
+Numbers (ITINs) assigned to individuals required to file
+taxes but ineligible for a Social Security Number (SSN).
+12. NPI:
+A 	standard 	10-digit 	unique 	identifier 	for 	medical
+providers only. Complete, if applicable.
+13. SMALL BUSINESS:
+Check box, if applicable.
+14. PAYEE VENDOR NAME:
+Legal name exactly as it appears on file with the Internal
+Revenue Service (IRS).
+15. DOING BUSINESS AS (DBA):
+If conducting business under another name, complete.
+16. PAYEE/VENDOR EMAIL:
+Email address for the person listed in Boxes 24 and 25.
+17. PAYEE/VENDOR PHONE NUMBER:
+Direct number and extension for the person listed in
+Boxes 24 and 25.
+18. CURRENT ADDRESS:
+Provide the address linked to the Payee/Vendor listed in
+Box 14 and where all official correspondence will be
+sent.
+19. PREVIOUS ADDRESS (Required for address change
+requests):
+Provide the address previously linked to the Payee/
+Vendor 	listed 	in 	Box 	14 	and 	where 	all 	official
+correspondence has been sent.
+VA FORM 10091, JAN 2024, page 1
+
+-- 1 of 3 --
+
+Section III: EFT/ACH (Required IAW 31 CFR Part 208):
+20. CURRENT BANK NAME:
+Provide the name of the Financial Institution linked to the
+Payee/Vendor listed in Box 14 and where all payments
+for goods/services provided are sent.
+21. CURRENT BANK 9-DIGIT ROUTING NUMBER:
+The 9-digit number that identifies the bank listed in Box
+20 as a member of the American Bankers Association
+(ABA). The routing number is usually found in the lower-
+left corner at the bottom of a check. Do NOT use a
+deposit slip routing number. This will result in a rejected
+payment.
+22. CURRENT BANK ACCOUNT NUMBER:
+The unique set of digits assigned by the Financial
+Institution in Box 20 to the account holder linked to the
+Payee/Vendor in Box 14.
+23. CURRENT ACCOUNT TYPE:
+Self-explanatory.
+Section IV: Authorized Representative
+Title 18, United States Code, Section 1001 (18 U.S.C. 1001)
+makes it a crime to: 1) knowingly and willfully; 2) make any
+materially 	false, 	fictitious 	or 	fraudulent 	statement 	or
+representation; 3) in any matter within the jurisdiction of the
+executive, legislative or judicial branch of the United States.
+24. NAME AND TITLE OF AUTHORIZED REPRESENTATIVE:
+For the purpose of VA Form 10091, an Authorized
+Representative is defined as: the actual Payee/Vendor
+listed in Box 14 OR an individual who is designated and
+authorized, in writing, to represent the Payee/Vendor
+listed in Box 14.
+25. SIGNATURE OF AUTHORIZED REPRESENTATIVE:
+In signing this form, you certify that you have carefully
+read the foregoing instructions to complete this form and
+that you understand that a knowing and willful false
+statement on this form can be punished by fine or
+imprisonment or both (18 U.S.C. 1001).
+VA FORM 10091, JAN 2024 	Page 2
+
+-- 2 of 3 --
+
+OMB Approved No. 2900-0846
+Respondent Burden: 15 Minutes
+Expiration Date: 01-31-2027
+VA-FSC VENDOR FILE REQUEST FORM
+REQUEST TYPE
+NEW VENDOR 	UPDATE EXISTING VENDOR
+DATE (MM-DD-YYYY)
+I. VA FACILITY INFORMATION (For Station Use Only)
+1. STATION NUMBER
+NCA 	VHA 	VBA
+2. STATION CONTACT
+3. STATION PHONE NUMBER 	4. STATION FAX NUMBER
+5. STATION EMAIL ADDRESS
+6. PAYEE/VENDOR TYPE (Select one)
+C - COMMERCIAL
+C - ADMIN LOAN & ACCT
+I - INDIVIDUAL
+I - CAREGIVER
+I - HONORARIUM
+V - VETERAN
+F - FEDERAL AGENCY
+O - FOREIGN
+A - AGENT CASHIER
+U - UTILITY
+C - MEDICAL PROVIDER
+FACTS ID
+7. MISCELLANEOUS ACTIONS (Select one)
+WINRS 	ASSIGNMENT OF CLAIMS
+(All applicable documents)
+BILL OF COLLECTIONS 	SETTLEMENT/TORTS
+LGY ACCOUNT #
+II. PAYEE/VENDOR INFORMATION
+8. COMMERCIAL VENDOR REGISTERED IN SAM.GOV
+(Required IAW FAR 4.1102)
+9. UNIQUE ENTITY IDENTIFIER (UEI)
+10. EFT IDENTIFER
+11. SSN/TIN
+12. NPI
+13. SMALL BUSINESS -MUST BE QUALIFIED AS SMALL BUSINESS IN SAM
+OR FURNISH SBA CONFIRMATION
+14. PAYEE/VENDOR NAME
+15. DOING BUSINESS AS (DBA)
+16. PAYEE/VENDOR EMAIL ADDRESS
+17. PAYEE/VENDOR PHONE NUMBER
+18. CURRENT ADDRESS (Include Street, City, State and Zip Code)
+19. PREVIOUS ADDRESS (Include Street, City, State and Zip Code)
+III. EFT/ACH (Required IAW 31 CFR Part 208)
+20. CURRENT BANK NAME
+21. CURRENT BANK NINE-DIGIT ROUTING NUMBER
+22. CURRENT BANK ACCOUNT NUMBER
+23. CURRENT ACCOUNT TYPE
+CHECKING 	SAVINGS
+IV. AUTHORIZED REPRESENTATIVE
+CERTIFICATION
+In signing this form, you certify that you have carefully read the
+foregoing instructions to complete this form and that you
+understand that a knowing and willful false statement on this form
+can be punished by fine or imprisonment or both (18 U.S.C. 100).
+24. NAME AND TITLE OF AUTHORIZED REPRESENTATIVE
+25. SIGNATURE OF AUTHORIZED REPRESENTATIVE
+NORMAL PROCESSING TIME IS 15 - 30 BUSINESS DAYS. WE DO NOT ACCEPT INVOICES
+FOR QUESTIONS REGARDING THIS FORM:
+VA-FSC CUSTOMER ENGAGEMENT:
+PHONE: 1-877-353-9791
+EMAIL: VAFSCCSHD@VA.GOV
+FOR STATION INQUIRIES:
+STATION CARE CENTER: 1-866-372-1141
+PRIVACY ACT STATEMENT
+The following information is provided to comply with the Privacy
+Act of 1974 (P.L. 93-579). All information collected on this form is
+required under the provisions of 31 U.S.C. 3322 and 31 CFR 210.
+This information will be used by the Treasury Department to
+transmit payment data, by electronic means to vendor's financial
+institution. Failure to provide the requested information may delay
+or prevent the receipt of payments through the Automated
+Clearing House Payment System.
+PAPERWORK REDUCTION ACT STATEMENT:
+This information is collected in accordance with Section 3507 of
+the Paperwork Reduction Act of 1995. We may not
+conduct or sponsor, and you are not required to respond to, a
+collection of information unless it displays a valid OMB
+number. We anticipate that the time expended by all individuals
+who complete this form will average 15 minutes. This
+includes the time it will take to read instructions, gather the
+necessary facts, and fill out the form.
+VA FORM
+JAN 2024 	10091
+
+-- 3 of 3 --
+
+--- Document 3 ---
+Form W-9(Rev. March 2024)
+Request for Taxpayer
+Identification Number and Certification
+Department of the Treasury
+Internal Revenue Service 	Go to www.irs.gov/FormW9 for instructions and the latest information.
+Give form to the
+requester. Do not
+send to the IRS.
+Before you begin. For guidance related to the purpose of Form W-9, see Purpose of Form, below.
+Print or type.
+See
+ Specific Instructions
+ on page 3.
+1 Name of entity/individual. An entry is required. (For a sole proprietor or disregarded entity, enter the owner’s name on line 1, and enter the business/disregarded
+entity’s name on line 2.)
+2 Business name/disregarded entity name, if different from above.
+3a Check the appropriate box for federal tax classification of the entity/individual whose name is entered on line 1. Check
+only one of the following seven boxes.
+Individual/sole proprietor 	C corporation 	S corporation 	Partnership 	Trust/estate
+LLC. Enter the tax classification (C = C corporation, S = S corporation, P = Partnership) 	. 	. 	. 	.
+Note: Check the “LLC” box above and, in the entry space, enter the appropriate code (C, S, or P) for the tax
+classification of the LLC, unless it is a disregarded entity. A disregarded entity should instead check the appropriate
+box for the tax classification of its owner.
+Other (see instructions)
+3b If on line 3a you checked “Partnership” or “Trust/estate,” or checked “LLC” and entered “P” as its tax classification,
+and you are providing this form to a partnership, trust, or estate in which you have an ownership interest, check
+this box if you have any foreign partners, owners, or beneficiaries. See instructions . 	. 	. 	. 	. 	. 	. 	. 	.
+4 Exemptions (codes apply only to
+certain entities, not individuals;
+see instructions on page 3):
+Exempt payee code (if any)
+Exemption from Foreign Account Tax
+Compliance Act (FATCA) reporting
+code (if any)
+(Applies to accounts maintained
+outside the United States.)
+5 Address (number, street, and apt. or suite no.). See instructions.
+6 City, state, and ZIP code
+Requester’s name and address (optional)
+7 List account number(s) here (optional)
+Part I 	Taxpayer Identification Number (TIN)
+Enter your TIN in the appropriate box. The TIN provided must match the name given on line 1 to avoid
+backup withholding. For individuals, this is generally your social security number (SSN). However, for a
+resident alien, sole proprietor, or disregarded entity, see the instructions for Part I, later. For other
+entities, it is your employer identification number (EIN). If you do not have a number, see How to get a
+TIN, later.
+Note: If the account is in more than one name, see the instructions for line 1. See also What Name and
+Number To Give the Requester for guidelines on whose number to enter.
+Social security number
+– 	–
+or
+Employer identification number
+–
+Part II 	Certification
+Under penalties of perjury, I certify that:
+1. The number shown on this form is my correct taxpayer identification number (or I am waiting for a number to be issued to me); and
+2. I am not subject to backup withholding because (a) I am exempt from backup withholding, or (b) I have not been notified by the Internal Revenue
+Service (IRS) that I am subject to backup withholding as a result of a failure to report all interest or dividends, or (c) the IRS has notified me that I am
+no longer subject to backup withholding; and
+3. I am a U.S. citizen or other U.S. person (defined below); and
+4. The FATCA code(s) entered on this form (if any) indicating that I am exempt from FATCA reporting is correct.
+Certification instructions. You must cross out item 2 above if you have been notified by the IRS that you are currently subject to backup withholding
+because you have failed to report all interest and dividends on your tax return. For real estate transactions, item 2 does not apply. For mortgage interest paid,
+acquisition or abandonment of secured property, cancellation of debt, contributions to an individual retirement arrangement (IRA), and, generally, payments
+other than interest and dividends, you are not required to sign the certification, but you must provide your correct TIN. See the instructions for Part II, later.
+Sign
+Here Signature of
+U.S. person 	Date
+General Instructions
+Section references are to the Internal Revenue Code unless otherwise
+noted.
+Future developments. For the latest information about developments
+related to Form W-9 and its instructions, such as legislation enacted
+after they were published, go to www.irs.gov/FormW9.
+What’s New
+Line 3a has been modified to clarify how a disregarded entity completes
+this line. An LLC that is a disregarded entity should check the
+appropriate box for the tax classification of its owner. Otherwise, it
+should check the “LLC” box and enter its appropriate tax classification.
+New line 3b has been added to this form. A flow-through entity is
+required to complete this line to indicate that it has direct or indirect
+foreign partners, owners, or beneficiaries when it provides the Form W-9
+to another flow-through entity in which it has an ownership interest. This
+change is intended to provide a flow-through entity with information
+regarding the status of its indirect foreign partners, owners, or
+beneficiaries, so that it can satisfy any applicable reporting
+requirements. For example, a partnership that has any indirect foreign
+partners may be required to complete Schedules K-2 and K-3. See the
+Partnership Instructions for Schedules K-2 and K-3 (Form 1065).
+Purpose of Form
+An individual or entity (Form W-9 requester) who is required to file an
+information return with the IRS is giving you this form because they
+Cat. No. 10231X 	Form W-9 (Rev. 3-2024)
+
+-- 1 of 6 --
+
+Form W-9 (Rev. 3-2024) 	Page 2
+must obtain your correct taxpayer identification number (TIN), which
+may be your social security number (SSN), individual taxpayer
+identification number (ITIN), adoption taxpayer identification number
+(ATIN), or employer identification number (EIN), to report on an
+information return the amount paid to you, or other amount reportable
+on an information return. Examples of information returns include, but
+are not limited to, the following.
+• Form 1099-INT (interest earned or paid).
+• Form 1099-DIV (dividends, including those from stocks or mutual
+funds).
+• Form 1099-MISC (various types of income, prizes, awards, or gross
+proceeds).
+• Form 1099-NEC (nonemployee compensation).
+• Form 1099-B (stock or mutual fund sales and certain other
+transactions by brokers).
+• Form 1099-S (proceeds from real estate transactions).
+• Form 1099-K (merchant card and third-party network transactions).
+• Form 1098 (home mortgage interest), 1098-E (student loan interest),
+and 1098-T (tuition).
+• Form 1099-C (canceled debt).
+• Form 1099-A (acquisition or abandonment of secured property).
+Use Form W-9 only if you are a U.S. person (including a resident
+alien), to provide your correct TIN.
+Caution: If you don’t return Form W-9 to the requester with a TIN, you
+might be subject to backup withholding. See What is backup
+withholding, later.
+By signing the filled-out form, you:
+1. Certify that the TIN you are giving is correct (or you are waiting for a
+number to be issued);
+2. Certify that you are not subject to backup withholding; or
+3. Claim exemption from backup withholding if you are a U.S. exempt
+payee; and
+4. Certify to your non-foreign status for purposes of withholding under
+chapter 3 or 4 of the Code (if applicable); and
+5. Certify that FATCA code(s) entered on this form (if any) indicating
+that you are exempt from the FATCA reporting is correct. See What Is
+FATCA Reporting, later, for further information.
+Note: If you are a U.S. person and a requester gives you a form other
+than Form W-9 to request your TIN, you must use the requester’s form if
+it is substantially similar to this Form W-9.
+Definition of a U.S. person. For federal tax purposes, you are
+considered a U.S. person if you are:
+• An individual who is a U.S. citizen or U.S. resident alien;
+• A partnership, corporation, company, or association created or
+organized in the United States or under the laws of the United States;
+• An estate (other than a foreign estate); or
+• A domestic trust (as defined in Regulations section 301.7701-7).
+Establishing U.S. status for purposes of chapter 3 and chapter 4
+withholding. Payments made to foreign persons, including certain
+distributions, allocations of income, or transfers of sales proceeds, may
+be subject to withholding under chapter 3 or chapter 4 of the Code
+(sections 1441–1474). Under those rules, if a Form W-9 or other
+certification of non-foreign status has not been received, a withholding
+agent, transferee, or partnership (payor) generally applies presumption
+rules that may require the payor to withhold applicable tax from the
+recipient, owner, transferor, or partner (payee). See Pub. 515,
+Withholding of Tax on Nonresident Aliens and Foreign Entities.
+The following persons must provide Form W-9 to the payor for
+purposes of establishing its non-foreign status.
+• In the case of a disregarded entity with a U.S. owner, the U.S. owner
+of the disregarded entity and not the disregarded entity.
+• In the case of a grantor trust with a U.S. grantor or other U.S. owner,
+generally, the U.S. grantor or other U.S. owner of the grantor trust and
+not the grantor trust.
+• In the case of a U.S. trust (other than a grantor trust), the U.S. trust
+and not the beneficiaries of the trust.
+See Pub. 515 for more information on providing a Form W-9 or a
+certification of non-foreign status to avoid withholding.
+Foreign person. If you are a foreign person or the U.S. branch of a
+foreign bank that has elected to be treated as a U.S. person (under
+Regulations section 1.1441-1(b)(2)(iv) or other applicable section for
+chapter 3 or 4 purposes), do not use Form W-9. Instead, use the
+appropriate Form W-8 or Form 8233 (see Pub. 515). If you are a
+qualified foreign pension fund under Regulations section 1.897(l)-1(d), or
+a partnership that is who
+
+## Instructions
+
+Analyze this government contract opportunity and classify it as GOOD, MAYBE, or DISCARD based on JCL Solutions' capabilities described above.
+
+Your reasoning MUST always be populated with a clear, specific explanation (2-4 sentences) of why this contract received its classification. Reference specific aspects of the contract (scope, requirements, delivery model) and how they align or don't align with JCL's capabilities.
+
+Respond with valid JSON only:
+{
+  "classification": "GOOD" | "MAYBE" | "DISCARD",
+  "reasoning": "Your detailed reasoning here...",
+  "summary": "1 plain English sentence describing what this contract is actually asking for"
+}

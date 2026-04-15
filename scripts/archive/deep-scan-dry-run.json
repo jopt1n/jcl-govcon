@@ -1,0 +1,62 @@
+[
+  {
+    "noticeId": "99b6960857b44e53bcea1387344651b1",
+    "title": "6640--Anatomic Pathology tracking system",
+    "oldClassification": "GOOD",
+    "newClassification": "GOOD",
+    "aiReasoning": "The contract is for an 'Anatomic Pathology tracking system,' which aligns with JCL's capabilities in custom software development, databases, and data analytics for remote delivery. While NAICS 334516 suggests hardware (analytical instruments), the PSC 6640 (lab equipment) and attached documents focus on VA IT security requirements for information systems, source code rights, and software handling, indicating a software-based tracking application rather than physical lab equipment. This is realistically achievable by a solo developer with AI tools, as it involves building a remote-deliverable software solution without physical presence or hardware needs.",
+    "summary": "The contract seeks a software system to track anatomic pathology specimens and data for the VA, with strict IT security and data handling requirements.",
+    "documentsAnalyzed": true,
+    "descriptionLength": 0,
+    "documentCount": 2,
+    "totalDocTextLength": 31203
+  },
+  {
+    "noticeId": "0994c5a8f33449768a41e2a96144778b",
+    "title": "CSO - U.S. Army Aviation Training",
+    "oldClassification": "GOOD",
+    "newClassification": "GOOD",
+    "aiReasoning": "This CSO solicitation explicitly seeks 'comprehensive, modernized' training solutions for fixed-wing, rotary-wing, and UAS aircraft using 'innovation and emerging technologies,' which aligns perfectly with JCL's capabilities in software-deliverable work such as AI/ML, simulations, VR/AR training apps, dashboards, and IT consulting for aviation training. The remote-first delivery model is supported by electronic submissions (quad charts, solution briefs, proposals) and no requirements for physical presence, hardware, or clearance, making it realistically achievable by a solo developer with AI tools. While the scope involves aviation training (NAICS 611512), the emphasis on commercial innovative technologies like software simulations fits JCL's 'Can Do' categories without venturing into prohibited physical R&D or hardware.",
+    "summary": "The U.S. Army is soliciting innovative commercial solutions to modernize pilot training for fixed-wing, rotary-wing, and unmanned aerial systems using emerging technologies to enhance readiness and reduce training timelines.",
+    "documentsAnalyzed": true,
+    "descriptionLength": 0,
+    "documentCount": 7,
+    "totalDocTextLength": 39725
+  },
+  {
+    "noticeId": "599d963d3f6c4b169a4234ebe314a04e",
+    "title": "Section 508 Compliant PDF Files",
+    "oldClassification": "GOOD",
+    "newClassification": "GOOD",
+    "aiReasoning": "The contract involves creating Section 508 compliant PDF files, which requires software-based remediation such as using tools like Adobe Acrobat, CommonLook, or custom scripts to ensure accessibility standards for digital documents. This is fully remote-deliverable through software processes like PDF tagging, OCR, and validation, aligning perfectly with JCL's capabilities in custom software development, automation, and IT consulting without any need for physical presence, hardware, or on-site work. A solo developer augmented with AI tools can realistically handle this by building or applying automated PDF accessibility solutions.",
+    "summary": "The contract seeks vendors to produce or remediate PDF files to meet Section 508 accessibility compliance standards.",
+    "documentsAnalyzed": false,
+    "descriptionLength": 0,
+    "documentCount": 0,
+    "totalDocTextLength": 0
+  },
+  {
+    "noticeId": "42f64d8bf7304f7b9d9770ea3412a2f6",
+    "title": "R425--Capital Asset Facility Management System",
+    "oldClassification": "GOOD",
+    "newClassification": "MAYBE",
+    "aiReasoning": "The title 'Capital Asset Facility Management System' under PSC R425 (Professional, Administrative, and Management Support Services) and NAICS 541512 (Computer Systems Design Services) suggests potential software development for a facility management system, which aligns with JCL's capabilities in custom software, IT modernization, and remote-deliverable apps. However, 'Capital Asset' and 'Facility Management' imply physical infrastructure tracking or on-site integration, which may require elements beyond pure software delivery, such as hardware interfaces or facilities knowledge, necessitating further review of the full solicitation scope. The attached documents are only vendor registration forms (VA Form 10091, W-9), providing no detailed requirements to confirm remote software-only delivery by a solo developer.",
+    "summary": "This is a solicitation for a Capital Asset Facility Management System for the VA, but only vendor payment and tax forms are provided, with no specific scope details.",
+    "documentsAnalyzed": true,
+    "descriptionLength": 0,
+    "documentCount": 3,
+    "totalDocTextLength": 48722
+  },
+  {
+    "noticeId": "b13eeb1c32b14563bee9f39cadf3a7fb",
+    "title": "USAC RFP: Penetration Testing as a Service",
+    "oldClassification": "GOOD",
+    "newClassification": "GOOD",
+    "aiReasoning": "The contract is for 'Penetration Testing as a Service,' which explicitly aligns with JCL's 'cybersecurity tools' capability and is deliverable remotely via software-based assessments, vulnerability scanning, and reporting tools that a solo developer can realistically achieve using AI-augmented tools like automated pentesting frameworks (e.g., Burp Suite extensions, custom scripts). NAICS 541990 (All Other Professional Services) and PSC R499 (Other Professional Services) commonly cover such remote IT security services without requiring physical presence, hardware, or clearance. No restrictive set-asides or on-site requirements are mentioned, making it a strong match for JCL's remote software delivery model.",
+    "summary": "A service contract for remote penetration testing to identify and report on cybersecurity vulnerabilities in systems.",
+    "documentsAnalyzed": false,
+    "descriptionLength": 0,
+    "documentCount": 0,
+    "totalDocTextLength": 0
+  }
+]

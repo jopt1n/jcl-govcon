@@ -8,3 +8,25 @@ healthcheckPath = "/api/health"
 healthcheckTimeout = 300
 restartPolicyType = "on_failure"
 restartPolicyMaxRetries = 3
+
+# ── Weekly pipeline cron ───────────────────────────────────────────────────
+#
+# Sunday 03:00 UTC: crawl the last 7 days from SAM.gov and submit an xAI
+# batch for classification. Returns immediately; the batch itself takes
+# 30 min – 24 hrs to complete.
+#
+# Every 30 min: check in-flight batches, import results when ready, fire
+# the Telegram weekly digest exactly once per succeeded run. Atomic claim
+# prevents concurrent runs from double-firing anything.
+#
+# Both endpoints require Authorization: Bearer $INGEST_SECRET. Railway
+# injects env vars into the cron command, so $INGEST_SECRET and
+# $RAILWAY_PUBLIC_DOMAIN resolve inside the curl call.
+
+[[cron]]
+schedule = "0 3 * * 0"
+command = "curl -sS -X POST -H 'Authorization: Bearer $INGEST_SECRET' https://$RAILWAY_PUBLIC_DOMAIN/api/cron/weekly-crawl"
+
+[[cron]]
+schedule = "*/30 * * * *"
+command = "curl -sS -X POST -H 'Authorization: Bearer $INGEST_SECRET' https://$RAILWAY_PUBLIC_DOMAIN/api/cron/check-batches"

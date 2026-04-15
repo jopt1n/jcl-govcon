@@ -1,0 +1,635 @@
+[2026-04-11T06:50:13] git diff --name-only 2>&1
+[2026-04-11T06:50:52] npx tsc --noEmit 2>&1 | grep -v "scripts/" | head -5 && echo "---" && npm run lint 2>&1 | tail -5
+[2026-04-11T06:51:00] npm run test:run 2>&1 | tail -10
+[2026-04-11T06:51:08] npm run test:run 2>&1 | grep -A 5 "FAIL\|failed" | head -20
+[2026-04-11T06:51:49] npm run test:run 2>&1 | tail -10
+[2026-04-11T06:51:55] git status -s 2>&1
+[2026-04-11T06:51:56] git log --oneline -5 2>&1
+[2026-04-11T06:52:01] git add progress.md scripts/batch-classify.ts src/app/api/contracts/route.ts src/components/kanban/board.tsx src/components/kanban/card.tsx src/components/kanban/column.tsx src/__tests__/components/kanban/board.test.tsx
+[2026-04-11T06:52:11] git commit -m "$(cat <<'EOF'
+feat: batch classify 2,651 contracts + replace PENDING with Upcoming Deadlines column
+
+- Ran xAI Batch API classification on all PENDING contracts (118 GOOD, 206 MAYBE, 2,327 DISCARD)
+- Scoped batch-classify.ts query to PENDING only (was querying all 30K)
+- Replaced PENDING kanban column with Upcoming Deadlines (cross-classification, sorted by priority)
+- Added classification badges on cards in deadlines column
+- Fixed Load More hang: added client-side fetch timeout + page revert on failure
+- Updated board tests for new column structure
+
+Co-Authored-By: Claude Opus 4.6 (1M context) <noreply@anthropic.com>
+EOF
+)"
+[2026-04-11T06:52:53] ls scripts/
+[2026-04-11T06:52:54] cat tasks/todo.md 2>/dev/null || echo "FILE NOT FOUND"
+[2026-04-11T06:53:26] git add -A && git commit -m "$(cat <<'EOF'
+chore: checkpoint — commit all accumulated work before cleanup
+
+Co-Authored-By: Claude Opus 4.6 (1M context) <noreply@anthropic.com>
+EOF
+)"
+[2026-04-11T06:53:52] mkdir -p scripts/archive && mv scripts/audit-docs.ts scripts/check-classified.ts scripts/check-crawl-status.ts scripts/check-doc-bytes.ts scripts/check-good-maybe-psc.ts scripts/check-good-maybe-setasides.ts scripts/check-pending.ts scripts/check-setasides.ts scripts/count-eligible.ts scripts/debug-action-plan.ts scripts/debug-prompts scripts/deep-scan-dry-run.json scripts/dry-run-unified.ts scripts/field-analysis.ts scripts/final-verification.ts scripts/find-borderline.ts scripts/find-borderline2.ts scripts/find-borderline3.ts scripts/find-docs-contract.ts scripts/find-staffaug.ts scripts/find-two-contracts.ts scripts/find-two-v2.ts scripts/find-two-v3.ts scripts/fix-sdvosbc.ts scripts/inspect-contracts.ts scripts/last-action-plan-batch-id.txt scripts/quick-check.ts scripts/reset-all-classifications.ts scripts/reset-for-rerun.ts scripts/scrape-dry-run.json scripts/set-aside-breakdown.ts scripts/show-example-contract.ts scripts/show-example-contract2.ts scripts/show-example-contract3.ts scripts/show-example-final.ts scripts/show-example-simple.ts scripts/show-nih-example.ts scripts/show-nih-example2.ts scripts/show-nih-example3.ts scripts/show-nih-example4.ts scripts/test-batch-one.ts scripts/test-crawl.ts scripts/test-db.ts scripts/test-one-write.ts scripts/test-unified-prompt.ts scripts/archive/
+[2026-04-11T06:54:03] mkdir -p docs/archive && mv tasks/todo.md docs/archive/ && rmdir tasks 2>/dev/null; ls scripts/
+[2026-04-11T06:54:22] git add -A && git status --short
+[2026-04-11T06:54:34] git commit -m "$(cat <<'EOF'
+chore: audit cleanup — fix settings, archive scripts/todo, update gitignore
+
+- Add Stop hook to .claude/settings.json for auto-checkpointing
+- Move 45 debug/one-off scripts to scripts/archive/
+- Archive tasks/todo.md to docs/archive/ (cross-referenced with plan.md)
+- Add .claude/command-log.txt to .gitignore
+- Add 2 missing backlog items to plan.md Phase 10
+- Update progress.md
+
+Co-Authored-By: Claude Opus 4.6 (1M context) <noreply@anthropic.com>
+EOF
+)"
+[2026-04-11T06:54:38] git status
+[2026-04-13T01:06:45] npx tsx -e "
+import { db } from './src/lib/db';
+import { contracts } from './src/lib/db/schema';
+import { ilike } from 'drizzle-orm';
+
+const rows = await db.select().from(contracts).where(ilike(contracts.title, '%MDEO%')).limit(5);
+if (!rows.length) {
+  const rows2 = await db.select().from(contracts).where(ilike(contracts.title, '%Medical Disability%')).limit(5);
+  for (const r of rows2) {
+    console.log(JSON.stringify({
+      id: r.id,
+      noticeId: r.noticeId,
+      title: r.title,
+      classification: r.classification,
+      classificationReason: r.classificationReason,
+      noticeType: r.noticeType,
+      setAsideCode: r.setAsideCode,
+      responseDeadline: r.responseDeadline,
+      actionPlan: r.actionPlan,
+      description: r.description?.substring(0, 500),
+    }, null, 2));
+  }
+} else {
+  for (const r of rows) {
+    console.log(JSON.stringify({
+      id: r.id,
+      noticeId: r.noticeId,
+      title: r.title,
+      classification: r.classification,
+      classificationReason: r.classificationReason,
+      noticeType: r.noticeType,
+      setAsideCode: r.setAsideCode,
+      responseDeadline: r.responseDeadline,
+      actionPlan: r.actionPlan,
+      description: r.description?.substring(0, 500),
+    }, null, 2));
+  }
+}
+process.exit(0);
+" 2>/dev/null
+[2026-04-13T01:06:55] npx tsx -e "
+import { db } from './src/lib/db/index.js';
+import { contracts } from './src/lib/db/schema.js';
+import { ilike } from 'drizzle-orm';
+
+const rows = await db.select().from(contracts).where(ilike(contracts.title, '%Medical Disability%')).limit(5);
+for (const r of rows) {
+  console.log(JSON.stringify({
+    id: r.id,
+    noticeId: r.noticeId,
+    title: r.title,
+    classification: r.classification,
+    classificationReason: r.classificationReason,
+    noticeType: r.noticeType,
+    setAsideCode: r.setAsideCode,
+    responseDeadline: r.responseDeadline,
+    actionPlan: r.actionPlan,
+    description: r.description?.substring(0, 800),
+  }, null, 2));
+}
+process.exit(0);
+" 2>&1 | tail -100
+[2026-04-13T01:07:11] npx tsx scripts/load-env.ts 2>/dev/null; node --loader tsx --input-type=module -e "
+import { db } from './src/lib/db/index.ts';
+import { contracts } from './src/lib/db/schema.ts';
+import { ilike } from 'drizzle-orm';
+
+const rows = await db.select().from(contracts).where(ilike(contracts.title, '%Medical Disability%')).limit(5);
+for (const r of rows) {
+  console.log(JSON.stringify({
+    id: r.id,
+    noticeId: r.noticeId,
+    title: r.title,
+    classification: r.classification,
+    classificationReason: r.classificationReason,
+    noticeType: r.noticeType,
+    setAsideCode: r.setAsideCode,
+    responseDeadline: r.responseDeadline,
+    actionPlan: r.actionPlan,
+    description: r.description?.substring(0, 800),
+  }, null, 2));
+}
+process.exit(0);
+" 2>&1 | grep -v ExperimentalWarning | tail -100
+[2026-04-13T01:07:18] cat > /tmp/query-mdeo.ts << 'SCRIPT'
+import { db } from './src/lib/db';
+import { contracts } from './src/lib/db/schema';
+import { ilike } from 'drizzle-orm';
+
+async function main() {
+  const rows = await db.select().from(contracts).where(ilike(contracts.title, '%Medical Disability%')).limit(5);
+  for (const r of rows) {
+    console.log(JSON.stringify({
+      id: r.id,
+      noticeId: r.noticeId,
+      title: r.title,
+      classification: r.classification,
+      classificationReason: r.classificationReason,
+      noticeType: r.noticeType,
+      setAsideCode: r.setAsideCode,
+      responseDeadline: r.responseDeadline,
+      actionPlan: r.actionPlan,
+      description: r.description?.substring(0, 800),
+    }, null, 2));
+  }
+  process.exit(0);
+}
+main();
+SCRIPT
+npx tsx /tmp/query-mdeo.ts 2>&1 | grep -v ExperimentalWarning
+[2026-04-13T01:07:43] npx tsx -e "
+import { readFileSync } from 'fs';
+import { resolve } from 'path';
+
+const envPath = resolve(process.cwd(), '.env');
+for (const line of readFileSync(envPath, 'utf-8').split('\n')) {
+  const trimmed = line.trim();
+  if (!trimmed || trimmed.startsWith('#')) continue;
+  const eqIdx = trimmed.indexOf('=');
+  if (eqIdx === -1) continue;
+  const key = trimmed.slice(0, eqIdx).trim();
+  const val = trimmed.slice(eqIdx + 1).trim();
+  if (!process.env[key]) process.env[key] = val;
+}
+
+async function main() {
+  const { db } = await import('./src/lib/db');
+  const { contracts } = await import('./src/lib/db/schema');
+  const { ilike } = await import('drizzle-orm');
+  const rows = await db.select().from(contracts).where(ilike(contracts.title, '%Medical Disability%')).limit(5);
+  for (const r of rows) {
+    console.log(JSON.stringify({
+      id: r.id,
+      noticeId: r.noticeId,
+      title: r.title,
+      classification: r.classification,
+      classificationReason: r.classificationReason,
+      noticeType: r.noticeType,
+      setAsideCode: r.setAsideCode,
+      responseDeadline: r.responseDeadline,
+      actionPlan: r.actionPlan,
+      description: r.description?.substring(0, 1200),
+    }, null, 2));
+  }
+  process.exit(0);
+}
+main();
+" 2>&1 | grep -v ExperimentalWarning
+[2026-04-13T01:08:08] npx tsx -e "
+import { readFileSync } from 'fs';
+import { resolve } from 'path';
+
+const envPath = resolve('.', '.env');
+for (const line of readFileSync(envPath, 'utf-8').split('\n')) {
+  const trimmed = line.trim();
+  if (!trimmed || trimmed.startsWith('#')) continue;
+  const eqIdx = trimmed.indexOf('=');
+  if (eqIdx === -1) continue;
+  const key = trimmed.slice(0, eqIdx).trim();
+  const val = trimmed.slice(eqIdx + 1).trim();
+  if (!process.env[key]) process.env[key] = val;
+}
+
+async function main() {
+  const dbMod = await import('./src/lib/db/index.ts');
+  const schemaMod = await import('./src/lib/db/schema.ts');
+  const orm = await import('drizzle-orm');
+  const rows = await dbMod.db.select().from(schemaMod.contracts).where(orm.ilike(schemaMod.contracts.title, '%Medical Disability%')).limit(5);
+  for (const r of rows) {
+    console.log(JSON.stringify({
+      id: r.id,
+      noticeId: r.noticeId,
+      title: r.title,
+      classification: r.classification,
+      classificationReason: r.classificationReason,
+      noticeType: r.noticeType,
+      setAsideCode: r.setAsideCode,
+      responseDeadline: r.responseDeadline,
+      actionPlan: r.actionPlan,
+      description: r.description?.substring(0, 1200),
+    }, null, 2));
+  }
+  process.exit(0);
+}
+main();
+" 2>&1 | grep -v ExperimentalWarning
+[2026-04-13T01:08:25] npx tsx scripts/query-contract.ts "Medical Disability" 2>&1 | grep -v ExperimentalWarning
+[2026-04-13T02:30:25] npx tsx scripts/query-contract.ts "f3ba36029e0446bb974841a379cab618" 2>&1 | grep -v ExperimentalWarning
+[2026-04-13T02:30:48] npx tsx scripts/query-by-noticeid.ts "f3ba36029e0446bb974841a379cab618" 2>&1 | grep -v ExperimentalWarning
+[2026-04-13T04:49:16] npx tsc --noEmit 2>&1 | tail -20
+[2026-04-13T04:49:19] npm run test:run 2>&1 | tail -20
+[2026-04-13T04:49:53] npx tsc --noEmit 2>&1 | tail -10
+[2026-04-13T04:49:56] npm run test:run 2>&1 | tail -10
+[2026-04-13T04:50:04] mv scripts/query-contract.ts scripts/query-by-noticeid.ts scripts/archive/
+[2026-04-13T04:50:11] npx tsc --noEmit 2>&1 | tail -5
+[2026-04-13T05:10:59] find /Users/joelaptin/jcl-govcon -type f -name "*.tsx" -o -name "*.ts" | grep -E "(kanban|contract)" | head -20
+[2026-04-13T05:11:12] wc -l /Users/joelaptin/jcl-govcon/src/components/contract-detail.tsx
+[2026-04-13T05:11:16] find /Users/joelaptin/jcl-govcon -type f \( -name "*.css" -o -name "*.scss" \) | head -20
+[2026-04-13T05:11:20] find /Users/joelaptin/jcl-govcon/src -type f \( -name "*.css" -o -name "*.scss" -o -name "globals.css" \) 2>/dev/null
+[2026-04-13T05:11:23] grep -r "grab\|drag\|cursor" /Users/joelaptin/jcl-govcon/src --include="*.tsx" --include="*.css" | head -15
+[2026-04-13T05:11:26] find /Users/joelaptin/jcl-govcon/src/app -type f -name "page.tsx" -o -name "layout.tsx" | head -20
+[2026-04-13T05:11:32] grep -n "useSortable\|useDraggable\|DndContext\|useDroppable" /Users/joelaptin/jcl-govcon/src/components/kanban/*.tsx
+[2026-04-13T05:11:33] grep -n "handleDragEnd\|handleDragStart\|onDragEnd\|onDragStart" /Users/joelaptin/jcl-govcon/src/components/kanban/*.tsx
+[2026-04-13T05:26:17] npx tsc --noEmit 2>&1 | tail -10
+[2026-04-13T05:26:19] npm run test:run 2>&1 | tail -10
+[2026-04-13T21:58:56] npx tsc --noEmit 2>&1 | tail -5
+[2026-04-13T21:58:58] npm run test:run 2>&1 | tail -10
+[2026-04-13T21:59:01] npm run lint 2>&1 | tail -10
+[2026-04-13T21:59:24] npm run lint 2>&1 | tail -10
+[2026-04-13T21:59:26] npm run test:run 2>&1 | tail -5
+[2026-04-13T21:59:54] npm run lint 2>&1 | tail -5
+[2026-04-13T22:00:23] git add -A && git status --short
+[2026-04-13T22:00:27] git diff --cached --stat
+[2026-04-13T22:00:33] git log --oneline -5
+[2026-04-13T22:00:39] git commit -m "$(cat <<'EOF'
+docs: session handoff
+
+- Update progress.md with full session summary and next steps
+- Fix lint errors: unused imports in crawl/status, digest, contract-detail
+- Fix err:any → err:unknown in documents/proxy route
+
+Co-Authored-By: Claude Opus 4.6 (1M context) <noreply@anthropic.com>
+EOF
+)"
+[2026-04-13T22:06:47] _UPD=$(~/.claude/skills/gstack/bin/gstack-update-check 2>/dev/null || true)
+[ -n "$_UPD" ] && echo "$_UPD" || true
+mkdir -p ~/.gstack/sessions
+touch ~/.gstack/sessions/"$PPID"
+_PROACTIVE=$(~/.claude/skills/gstack/bin/gstack-config get proactive 2>/dev/null || echo "true")
+_PROACTIVE_PROMPTED=$([ -f ~/.gstack/.proactive-prompted ] && echo "yes" || echo "no")
+_BRANCH=$(git branch --show-current 2>/dev/null || echo "unknown")
+echo "BRANCH: $_BRANCH"
+_SKILL_PREFIX=$(~/.claude/skills/gstack/bin/gstack-config get skill_prefix 2>/dev/null || echo "false")
+echo "PROACTIVE: $_PROACTIVE"
+echo "PROACTIVE_PROMPTED: $_PROACTIVE_PROMPTED"
+echo "SKILL_PREFIX: $_SKILL_PREFIX"
+source <(~/.claude/skills/gstack/bin/gstack-repo-mode 2>/dev/null) || true
+echo "REPO_MODE: ${REPO_MODE:-unknown}"
+_LAKE_SEEN=$([ -f ~/.gstack/.completeness-intro-seen ] && echo "yes" || echo "no")
+echo "LAKE_INTRO: $_LAKE_SEEN"
+_TEL=$(~/.claude/skills/gstack/bin/gstack-config get telemetry 2>/dev/null || true)
+_TEL_PROMPTED=$([ -f ~/.gstack/.telemetry-prompted ] && echo "yes" || echo "no")
+echo "TELEMETRY: ${_TEL:-off}"
+echo "TEL_PROMPTED: $_TEL_PROMPTED"
+eval "$(~/.claude/skills/gstack/bin/gstack-slug 2>/dev/null)" 2>/dev/null || true
+echo "SLUG: ${SLUG:-unknown}"
+[2026-04-13T23:07:26] find /Users/joelaptin/jcl-govcon -maxdepth 2 -type f \( -name "railway.*" -o -name "Procfile" -o -name "nixpacks.toml" -o -name "package.json" \) | head -20
+[2026-04-13T23:07:29] ls -la /Users/joelaptin/jcl-govcon/scripts/ 2>/dev/null || echo "No scripts directory"
+[2026-04-13T23:07:30] ls -la /Users/joelaptin/jcl-govcon/src/app/api/ 2>/dev/null | grep -E "crawl|digest|ingest|cron|batch"
+[2026-04-13T23:07:33] find /Users/joelaptin/jcl-govcon/src/app/api -type f -name "route.ts" | head -20
+[2026-04-13T23:07:34] find /Users/joelaptin/jcl-govcon/src/app/api/contracts -type f -name "*.ts" -o -name "*.js" 2>/dev/null | head -20
+[2026-04-13T23:07:41] find /Users/joelaptin/jcl-govcon/src/app/api/contracts -type f \( -name "*.ts" -o -name "*.js" \) 2>/dev/null
+[2026-04-13T23:07:42] find /Users/joelaptin/jcl-govcon/src/lib/email -type f -name "*.ts" 2>/dev/null | head -10
+[2026-04-13T23:07:42] grep -r "sendDigest\|resend\|Resend" /Users/joelaptin/jcl-govcon/src/lib/email --include="*.ts" 2>/dev/null | head -20
+[2026-04-13T23:07:44] grep -r "IDENTIFIED\|PURSUING\|BID_SUBMITTED\|pipeline" /Users/joelaptin/jcl-govcon/src --include="*.ts" --include="*.tsx" | head -20
+[2026-04-13T23:07:45] grep -r "cron\|schedule\|recurring" /Users/joelaptin/jcl-govcon --include="*.ts" --include="*.toml" --include="*.json" 2>/dev/null | grep -v node_modules | grep -v ".next"
+[2026-04-13T23:07:47] grep -r "New\|Inbox\|reviewed\|seen" /Users/joelaptin/jcl-govcon/src --include="*.ts" --include="*.tsx" | grep -i "new\|inbox\|reviewed\|seen" | head -15
+[2026-04-13T23:07:47] grep -r "GoHighLevel\|HubSpot\|CRM\|integration" /Users/joelaptin/jcl-govcon/src --include="*.ts" --include="*.tsx" -i | head -10
+[2026-04-13T23:07:50] grep -r "n8n\|webhook\|trigger\|cron" /Users/joelaptin/jcl-govcon --include="*.md" --include="*.ts" --include="*.env*" 2>/dev/null | grep -v node_modules | head -15
+[2026-04-13T23:07:52] grep -n "createdAt\|firstSeen\|reviewed\|recordedAt" /Users/joelaptin/jcl-govcon/src/lib/db/schema.ts
+[2026-04-13T23:07:57] ls -la /Users/joelaptin/jcl-govcon/src/lib/ai/ 2>/dev/null
+[2026-04-13T23:07:59] head -20 /Users/joelaptin/jcl-govcon/.env.example 2>/dev/null || echo "No .env.example"
+[2026-04-14T02:04:48] grep -E '"@' /Users/joelaptin/jcl-govcon/tsconfig.json 2>/dev/null; echo "---"; head -3 /Users/joelaptin/jcl-govcon/src/lib/ai/classifier.ts 2>/dev/null
+[2026-04-14T02:04:52] grep -n "^import" /Users/joelaptin/jcl-govcon/src/lib/ai/classifier.ts | head -20
+[2026-04-14T02:14:25] grep -E 'dnd-kit|"react"|"next"' /Users/joelaptin/jcl-govcon/package.json
+[2026-04-14T02:16:11] grep -E '"swr"' /Users/joelaptin/jcl-govcon/package.json
+[2026-04-14T02:17:13] grep -n "STATUSES\|status" /Users/joelaptin/jcl-govcon/src/components/contract-detail.tsx | head -30
+[2026-04-14T02:18:01] find /Users/joelaptin/jcl-govcon/src -name "*.test.ts" | head -10 && echo "---" && cat /Users/joelaptin/jcl-govcon/vitest.config.ts 2>/dev/null || cat /Users/joelaptin/jcl-govcon/vitest.config.mts 2>/dev/null
+[2026-04-14T02:19:29] npx tsc --noEmit 2>&1 | head -80
+[2026-04-14T02:19:36] npx tsc --noEmit; echo "EXIT=$?"
+[2026-04-14T02:19:42] npm run test:run 2>&1 | tail -60
+[2026-04-14T02:19:53] npm run test:run 2>&1 | grep -E "FAIL|✗|×" | head -40
+[2026-04-14T02:22:03] grep -n "GOOD classification\|status dropdown" /Users/joelaptin/jcl-govcon/src/__tests__/components/contract-detail.test.tsx | head
+[2026-04-14T02:22:29] npm run test:run 2>&1 | tail -40
+[2026-04-14T02:22:42] npm run lint 2>&1 | tail -30
+[2026-04-14T02:22:52] npm run lint 2>&1 | grep -E "^\./src" | sort -u
+[2026-04-14T02:23:03] git diff --name-only; echo "---"; git status --short 2>/dev/null | head -30
+[2026-04-14T02:23:11] sed -n '60,70p;90,100p;385,395p' /Users/joelaptin/jcl-govcon/src/lib/ai/batch-classify.ts
+[2026-04-14T02:23:47] npm run lint 2>&1 | grep -E "batch-classify\.ts|Error" | grep -v "pre-existing\|@next" | tail -30
+[2026-04-14T02:23:53] npm run lint 2>&1 | grep -B1 "batch-classify.ts$\|batch-classify.ts\b" | head -20
+[2026-04-14T02:24:01] npm run lint 2>&1 | grep -c "Error" && echo "---FILES---" && npm run lint 2>&1 | grep "^\./src" | sort -u
+[2026-04-14T02:24:17] git stash && npm run lint 2>&1 | grep -c "Error"; git stash pop
+[2026-04-14T04:22:24] ls -la /Users/joelaptin/jcl-govcon/progress.md /Users/joelaptin/jcl-govcon/plan.md 2>&1 | head
+[2026-04-14T04:23:18] npx tsc --noEmit; echo "TSC=$?"
+[2026-04-14T04:23:19] npm run test:run 2>&1 | tail -6
+[2026-04-14T04:23:52] npx tsc --noEmit; echo "TSC=$?"
+[2026-04-14T04:23:58] git add -A && git status --short | head -30
+[2026-04-14T04:24:04] git log --oneline -5 && echo "---" && git status 2>&1 | tail
+[2026-04-14T04:24:12] git ls-files src/app/inbox/ src/app/pipeline/ src/app/admin/ src/lib/notifications/ src/lib/ai/batch-classify.ts scripts/backfill-reviewed-at.sql 2>&1 | head -20
+[2026-04-14T04:24:20] git add -A && git commit -m "$(cat <<'EOF'
+docs: session handoff
+
+Weekly SAM.gov pipeline implementation complete.
+
+- Plan: ~/.claude/plans/robust-leaping-sedgewick.md
+- Summary: docs/weekly-pipeline-implementation.md
+- 19 files created, 11 modified
+- tsc clean, 295/295 tests passing, 0 new lint errors
+
+Pending: drizzle-kit push, backfill SQL, Railway env vars, smoke test.
+
+Co-Authored-By: Claude Opus 4.6 (1M context) <noreply@anthropic.com>
+EOF
+)" && git status
+[2026-04-14T04:32:39] git log --oneline -30 && echo "---" && ls tasks/ 2>/dev/null
+[2026-04-14T04:32:42] grep -ri "waffle" /Users/joelaptin/jcl-govcon --include="*.md" -l 2>/dev/null | head -20
+[2026-04-14T04:32:54] ls tasks/ 2>&1; ls plans/ 2>&1; ls docs/ 2>&1 | head; cat progress.md 2>&1 | head -80
+[2026-04-14T04:32:59] ls /Users/joelaptin/.claude/plans/ 2>&1 | grep -i waffle; ls /Users/joelaptin/.claude/plans/ 2>&1 | tail -20
+[2026-04-14T05:17:34] git branch --show-current && git status -s && git log --oneline main..HEAD 2>/dev/null | head -30 && echo "---REMOTE---" && git ls-remote --heads origin fix/batch-import-hang 2>&1
+[2026-04-14T05:17:41] ls src/lib/ai/batch-classify.ts src/lib/notifications/ src/app/api/cron/weekly-crawl/route.ts src/app/api/cron/check-batches/route.ts src/app/inbox/page.tsx src/app/pipeline/page.tsx src/app/admin/crawl-runs/page.tsx src/app/api/contracts/export/route.ts scripts/backfill-reviewed-at.sql railway.toml 2>&1
+[2026-04-14T05:17:46] grep -c "reviewedAt\|statusChangedAt\|crawlRuns\|processingAt" src/lib/db/schema.ts; echo "---"; grep -n "reviewedAt\|crawlRuns\|processingAt\|statusChangedAt" src/lib/db/schema.ts | head -30; echo "---tests---"; ls src/lib/notifications/*.test.ts src/lib/ai/batch-classify.test.ts src/app/api/cron/*/route.test.ts src/app/api/contracts/export/route.test.ts 2>&1; echo "---test count---"; npm run test:run 2>&1 | tail -15
+[2026-04-14T07:00:17] git fetch origin main --quiet 2>&1; git diff origin/main --stat | tail -40
+[2026-04-14T07:00:28] git log --oneline --all -- src/lib/notifications/telegram.ts src/app/api/cron/weekly-crawl/route.ts | head -10
+[2026-04-14T07:00:31] git log --oneline 6838164^..HEAD 2>&1; echo "---"; git diff 6838164^ HEAD --stat | tail -50
+[2026-04-14T07:02:52] sed -n '1,120p' /Users/joelaptin/jcl-govcon/src/components/sidebar.tsx 2>&1 | head -120
+[2026-04-14T07:03:00] sed -n '1,60p' /Users/joelaptin/jcl-govcon/src/app/api/crawl-runs/latest/route.ts
+[2026-04-14T07:03:05] grep -n "importBatchResults\|pollBatch\|submitBatchClassify\|export async function\|ON CONFLICT\|classification.*PENDING" /Users/joelaptin/jcl-govcon/src/lib/ai/batch-classify.ts | head -40
+[2026-04-14T07:03:15] grep -n "escapeLiteral\|function escapeLiteral" /Users/joelaptin/jcl-govcon/src/lib/ai/batch-classify.ts | head -10
+[2026-04-14T07:03:30] npx tsc --noEmit 2>&1 | tail -20
+[2026-04-14T07:03:36] grep -rn "check-batches\|weekly-crawl\|sendWeeklyDigest" src/__tests__/ 2>&1 | head -20
+[2026-04-14T07:29:11] ls TODOS.md tasks/ 2>&1
+[2026-04-14T07:29:17] sed -n '1,20p' src/lib/auth.ts
+[2026-04-14T07:29:24] grep -n "export\|/api/contracts/export" src/app/pipeline/page.tsx | head -20
+[2026-04-14T07:30:56] npx tsc --noEmit 2>&1 | tail -10 && echo "---TESTS---" && npm run test:run 2>&1 | tail -5
+[2026-04-14T18:56:32] git status -s && echo "---" && git diff --stat
+[2026-04-14T18:56:37] git status
+[2026-04-14T18:56:42] git log --oneline -5 && echo "---" && git show HEAD --stat
+[2026-04-14T18:56:55] git push -u origin fix/batch-import-hang 2>&1 | tail -20
+[2026-04-14T19:06:01] ls src/middleware.ts middleware.ts 2>&1; echo "---"; grep -rn "cookies\(\)\|getCookie\|setCookie\|NextAuth\|iron-session" src/ 2>&1 | head -10
+[2026-04-14T19:06:29] ls src/__tests__/api/contracts/ && echo "---" && sed -n '1,60p' src/__tests__/api/contracts/route.test.ts
+[2026-04-14T19:06:36] sed -n '348,405p' src/lib/ai/batch-classify.ts
+[2026-04-14T19:11:03] git log --oneline -10 && echo "---" && git diff origin/main --stat | tail -5 && echo "---" && git stash list 2>&1
+[2026-04-14T19:14:07] grep -n "In \`weekly-crawl/route.ts\`\|Also scope the pre-check\|since: sevenDaysAgo\|submitBatchClassify, when" /Users/joelaptin/.claude/plans/nifty-prancing-stonebraker.md
+[2026-04-14T19:14:30] grep -n "^## " /Users/joelaptin/.claude/plans/nifty-prancing-stonebraker.md | tail -15
+[2026-04-14T19:19:21] grep -n "createdAtIdx\|createdAt.*index\|index.*created_at" /Users/joelaptin/jcl-govcon/src/lib/db/schema.ts
+[2026-04-14T19:19:26] grep -n "db.execute\|db\.execute" /Users/joelaptin/jcl-govcon/src/__tests__/api/contracts/route.test.ts /Users/joelaptin/jcl-govcon/src/__tests__/api/cron-auth.test.ts 2>&1; echo "---"; grep -n "vi.stubEnv\|process.env.NODE_ENV" /Users/joelaptin/jcl-govcon/src/__tests__/ -r 2>&1 | head -10
+[2026-04-14T19:21:36] grep -n "^##\|export-same-origin\|backfill.test.ts\|GSTACK REVIEW REPORT" /Users/joelaptin/.claude/plans/nifty-prancing-stonebraker.md
+[2026-04-14T19:31:22] which codex 2>/dev/null && echo "CODEX_AVAILABLE" || echo "CODEX_NOT_AVAILABLE"
+[2026-04-14T20:24:33] ls /Users/joelaptin/jcl-govcon/TODOS.md 2>&1 || echo "NOT_FOUND"
+[2026-04-14T20:26:38] npx tsc --noEmit 2>&1 | head -60
+[2026-04-14T20:26:53] npx tsc --noEmit 2>&1 | head -60
+[2026-04-14T20:26:59] ls /Users/joelaptin/jcl-govcon/src/__tests__/api/
+[2026-04-14T20:27:13] mkdir -p /Users/joelaptin/jcl-govcon/src/__tests__/api/cron
+[2026-04-14T20:28:03] npx vitest run src/__tests__/api/cron/weekly-crawl.test.ts 2>&1 | tail -80
+[2026-04-14T20:28:47] npx vitest run src/__tests__/api/cron/check-batches.test.ts 2>&1 | tail -40
+[2026-04-14T20:28:51] npx tsc --noEmit 2>&1 | tail -20 && npm run test:run 2>&1 | tail -10
+[2026-04-14T20:29:05] grep -n "NODE_ENV" /Users/joelaptin/jcl-govcon/src/__tests__/api/cron/weekly-crawl.test.ts /Users/joelaptin/jcl-govcon/src/__tests__/api/cron/check-batches.test.ts
+[2026-04-14T20:29:28] npx tsc --noEmit 2>&1 | tail -10 && npm run test:run 2>&1 | tail -6
+[2026-04-14T20:29:40] git add -A && git status && git diff --stat HEAD
+[2026-04-14T20:29:50] git commit -m "$(cat <<'EOF'
+feat(cron): telegram config preflight + weekly-crawl advisory lock
+
+#10 from Sedgewick review cleanup. Cron routes now fail loud at the top
+when Telegram config is missing in prod, leaving a failed crawl_runs row
+for /admin/crawl-runs. weekly-crawl wraps the entire run in a session-
+scoped pg_try_advisory_lock with explicit finally release, eliminating
+the TOCTOU window in the earlier "check for recent rows" concurrent-fire
+guard. Session-scoped (not xact-scoped) avoids pinning a Railway pool
+connection for the multi-minute crawl+submit body.
+
+Also bundles the #10 + #5 test coverage (new weekly-crawl.test.ts,
+check-batches.test.ts) — distributed test rollout per plan execution
+order. 295 → 310 tests, all green.
+
+Co-Authored-By: Claude Opus 4.6 (1M context) <noreply@anthropic.com>
+EOF
+)"
+[2026-04-14T20:30:45] npx tsc --noEmit 2>&1 | tail -20 && npm run test:run 2>&1 | tail -15
+[2026-04-14T20:30:59] ls /Users/joelaptin/jcl-govcon/src/__tests__/lib/notifications/ /Users/joelaptin/jcl-govcon/src/__tests__/api/digest/
+[2026-04-14T20:31:02] grep -rn "sendWeeklyDigest\|weekly-digest" /Users/joelaptin/jcl-govcon/src/__tests__/ 2>&1
+[2026-04-14T20:31:38] npx vitest run src/__tests__/lib/notifications/weekly-digest.test.ts 2>&1 | tail -30
+[2026-04-14T20:32:10] npx vitest run src/__tests__/lib/notifications/weekly-digest.test.ts 2>&1 | tail -15
+[2026-04-14T20:33:19] npx vitest run src/__tests__/lib/notifications/weekly-digest.test.ts 2>&1 | tail -25
+[2026-04-14T20:33:22] npx tsc --noEmit 2>&1 | tail -5 && npm run test:run 2>&1 | tail -6
+[2026-04-14T20:33:43] git add -A && git commit -m "$(cat <<'EOF'
+perf(digest): single-query window function for digest counts
+
+#7 from Sedgewick cleanup. Replace two unbounded SELECT * queries with
+a single query per classification using count(*) OVER () to carry the
+full total through the LIMIT. Column allowlist narrows payload to 5
+columns × 5 rows = 25 cells per classification. MAX_GOOD_SHOWN and
+MAX_MAYBE_SHOWN are now top-of-file constants.
+
+Honors CLAUDE.md Railway latency rule (minimize round trips): one
+query per classification instead of two, saving ~20-50ms per call.
+Payload size drops ~95% at today's volume.
+
+Adds weekly-digest.test.ts covering the overflow and no-overflow
+render paths. 310 → 312 tests.
+
+Co-Authored-By: Claude Opus 4.6 (1M context) <noreply@anthropic.com>
+EOF
+)"
+[2026-04-14T20:35:03] npx tsc --noEmit 2>&1 | tail -10 && npm run test:run 2>&1 | tail -6
+[2026-04-14T20:35:20] git add -A && git commit -m "$(cat <<'EOF'
+refactor(check-batches): split processRow with immutable RowSnapshot
+
+#9 from Sedgewick cleanup. Split processRow into pollAndImport +
+maybeSendDigest, both receiving an explicit RowSnapshot by value. The
+prior implementation mutated row.status and row.digestSentAt to fall
+through from path A into path B within the same call — a future
+refactor would almost certainly reintroduce the same bug.
+
+The transitionedToSucceeded bit on PollResult is the explicit channel
+for "path A just flipped this row to succeeded in-request," replacing
+the parameter mutation.
+
+Also pins a subtle behavior: batch_failed now has an explicit early
+return before the digest phase. The old code skipped digest on
+batch_failed only as a coincidence of row state (status !== 'succeeded').
+New test asserts sendWeeklyDigest is NOT called on batch_failed so a
+future contributor can't accidentally let it fall through.
+
+312 → 313 tests.
+
+Co-Authored-By: Claude Opus 4.6 (1M context) <noreply@anthropic.com>
+EOF
+)"
+[2026-04-14T20:36:01] grep -n "^import\|from \"drizzle-orm\"" /Users/joelaptin/jcl-govcon/src/lib/ai/batch-classify.ts | head -10
+[2026-04-14T22:08:01] grep -n "createdAt\|index(" /Users/joelaptin/jcl-govcon/src/lib/db/schema.ts | head -30
+[2026-04-14T22:08:35] npx tsc --noEmit 2>&1 | tail -10 && npm run test:run 2>&1 | tail -10
+[2026-04-14T22:08:47] npx vitest run src/__tests__/api/cron/weekly-crawl.test.ts 2>&1 | grep -A3 "FAIL\|×" | head -40
+[2026-04-14T22:09:04] npm run test:run 2>&1 | tail -8
+[2026-04-14T22:09:24] git add -A && git commit -m "$(cat <<'EOF'
+feat(batch-classify): scope weekly cron to this window via since filter
+
+#3 from Sedgewick cleanup. Add since?: Date to SubmitOptions. weekly-crawl
+passes the same captured sevenDaysAgo Date to both the pre-check SELECT
+and submitBatchClassify, eliminating timestamp drift and preventing the
+~332 pre-existing stuck PENDING rows from being re-submitted on every
+weekly cron fire. CLI script (scripts/batch-classify.ts) left unchanged
+as the manual backfill path.
+
+WHERE clauses are structurally identical between the pre-check and the
+submit query (userOverride=false, classification='PENDING', createdAt >=
+sevenDaysAgo) so the skip/throw paths stay deterministic.
+
+Adds standalone contracts_created_at_idx — the composite (reviewedAt,
+createdAt) index does not reliably serve WHERE createdAt >= X queries
+when reviewedAt isn't in the filter. Also adds a one-line block comment
+above escapeLiteral documenting the standard_conforming_strings
+assumption (replaces dropped #6 from the plan).
+
+313 → 314 tests.
+
+Co-Authored-By: Claude Opus 4.6 (1M context) <noreply@anthropic.com>
+EOF
+)"
+[2026-04-14T22:10:40] ls /Users/joelaptin/jcl-govcon/src/__tests__/lib/auth.test.ts 2>&1 || echo "NEW"
+[2026-04-14T22:11:12] npx vitest run src/__tests__/lib/auth.test.ts 2>&1 | tail -25
+[2026-04-14T22:11:41] npx vitest run src/__tests__/api/contracts/export-same-origin.test.ts 2>&1 | tail -30
+[2026-04-14T22:11:52] npx vitest run src/__tests__/api/contracts/export-same-origin.test.ts 2>&1 | tail -10
+[2026-04-14T22:11:56] npx tsc --noEmit 2>&1 | tail -10 && npm run test:run 2>&1 | tail -6
+[2026-04-14T22:12:08] npm run lint 2>&1 | tail -15
+[2026-04-14T22:12:14] npm run lint 2>&1 | grep -E "^\./(src/__tests__/(api/cron/|api/contracts/export-|lib/auth|lib/notifications/weekly-digest)|src/(lib/auth|lib/notifications/weekly-digest|app/api/cron))" | head -20
+[2026-04-14T22:12:32] git add -A && git commit -m "$(cat <<'EOF'
+feat(export): same-origin guard for CSV export route
+
+#4 from Sedgewick cleanup. Add requireSameOrigin() helper to auth.ts
+and gate /api/contracts/export GET behind it. Blocks curl, crawlers,
+bots, and cross-origin requests by checking Origin/Referer against an
+allowlist built from NEXT_PUBLIC_APP_URL and the request's own Host
+header. Self-host fallback accommodates Railway's dual *.railway.app +
+custom domain model.
+
+Not user authentication — minimum-viable fix for a single-user internal
+tool. Full session auth tracked separately. NODE_ENV is read per-call
+(not captured at module load) so tests mutating it via vi.stubEnv work.
+
+Also bundles the two comment-only plan cleanups:
+- Load-bearing comment on scripts/backfill-reviewed-at.sql documenting
+  the `>` vs `<` regression story (replaces dropped grep test).
+- Block comment above escapeLiteral in batch-classify.ts documenting
+  standard_conforming_strings assumption and future refactor path.
+
+Adds 9 direct unit tests in auth.test.ts and 6 integration tests in
+export-same-origin.test.ts. 314 → 329 tests (matches plan target).
+
+Co-Authored-By: Claude Opus 4.6 (1M context) <noreply@anthropic.com>
+EOF
+)"
+[2026-04-14T22:13:04] chmod +x /Users/joelaptin/jcl-govcon/scripts/smoke-weekly-pipeline.sh && git add -A && git commit -m "$(cat <<'EOF'
+chore(smoke): end-to-end shell smoke test for weekly pipeline
+
+Commit 6 of the Sedgewick cleanup. Start dev server with SAM_DRY_RUN=true,
+curl both cron routes, assert terminal states, and curl the export
+route. Not run in CI — required manual gate before merge.
+
+Catches integration bugs the Proxy-mocked unit tests cannot see
+(connection pool behavior, Drizzle query shapes, NextRequest header
+parsing, advisory lock round-trips).
+
+Co-Authored-By: Claude Opus 4.6 (1M context) <noreply@anthropic.com>
+EOF
+)"
+[2026-04-14T22:13:08] git log --oneline -8 && echo "---" && npx tsc --noEmit 2>&1 | tail -5 && npm run test:run 2>&1 | tail -5
+[2026-04-15T02:16:14] grep -E "^(TELEGRAM_BOT_TOKEN|TELEGRAM_CHAT_ID|NEXT_PUBLIC_APP_URL|DATABASE_URL)=" /Users/joelaptin/jcl-govcon/.env 2>&1 | sed 's/=.*/=<set>/'
+[2026-04-15T02:16:34] git remote -v && ls /Users/joelaptin/jcl-govcon/.vercel 2>/dev/null && cat /Users/joelaptin/jcl-govcon/railway.toml 2>/dev/null
+[2026-04-15T06:12:04] git fetch origin main --quiet 2>&1; git diff origin/main --stat
+[2026-04-15T06:12:13] git diff 6f40c1e..HEAD --stat
+[2026-04-15T06:14:06] npx tsc --noEmit 2>&1 | tail -5 && npm run test:run 2>&1 | tail -6
+[2026-04-15T06:14:57] git status && echo "---" && git log --oneline 6f40c1e..HEAD
+[2026-04-15T06:15:07] git add -A && git commit -m "$(cat <<'EOF'
+fix(auth): replace Referer prefix match with URL-parsed origin check
+
+/review caught a suffix-attack bypass in requireSameOrigin: plain
+referer.startsWith("https://jclgovcon.com") also matched attacker
+domains like https://jclgovcon.com.evil.com/page and
+https://jclgovcon.com-evil.com/page. Parse the Referer as a URL and
+compare its origin exactly.
+
+For a single-user internal tool this is a low-likelihood exploit
+(requires attacker-controlled subdomain + cooperating user navigation)
+but the bypass is trivial to fix with URL parsing. Adds three
+regression tests covering the two suffix-attack shapes and the
+malformed-URL case. 329 → 332 tests.
+
+Co-Authored-By: Claude Opus 4.6 (1M context) <noreply@anthropic.com>
+EOF
+)"
+[2026-04-15T06:40:21] psql "$(grep ^DATABASE_URL .env | cut -d= -f2- | tr -d '"')" -c "SELECT classification, COUNT(*) FROM contracts GROUP BY classification ORDER BY COUNT(*) DESC;"
+[2026-04-15T06:40:25] which psql; ls /opt/homebrew/opt/libpq/bin/psql /usr/local/opt/libpq/bin/psql 2>/dev/null; ls node_modules/.bin/ | grep -i pg 2>/dev/null
+[2026-04-15T06:40:35] cat > /tmp/check-pending.ts <<'EOF'
+import 'dotenv/config';
+import { db } from './src/lib/db';
+import { contracts } from './src/lib/db/schema';
+import { eq, sql, desc } from 'drizzle-orm';
+
+async function main() {
+  // Count by classification
+  const counts = await db.execute(sql`
+    SELECT classification, COUNT(*) AS n
+    FROM contracts
+    WHERE user_override = false
+    GROUP BY classification
+    ORDER BY n DESC
+  `);
+  console.log('\nCounts by classification (user_override=false):');
+  console.table((counts as { rows: unknown[] }).rows);
+
+  // PENDING breakdown — by classification_round and createdAt window
+  const pendingDetail = await db.execute(sql`
+    SELECT
+      classification_round,
+      COUNT(*) AS n,
+      MIN(created_at) AS oldest,
+      MAX(created_at) AS newest
+    FROM contracts
+    WHERE classification = 'PENDING' AND user_override = false
+    GROUP BY classification_round
+    ORDER BY n DESC
+  `);
+  console.log('\nPENDING breakdown:');
+  console.table((pendingDetail as { rows: unknown[] }).rows);
+
+  // Sample 5 PENDING IDs
+  const sample = await db.execute(sql`
+    SELECT id, notice_id, title, classification, classification_round, ai_reasoning IS NOT NULL AS has_reasoning, created_at
+    FROM contracts
+    WHERE classification = 'PENDING' AND user_override = false
+    ORDER BY created_at DESC
+    LIMIT 5
+  `);
+  console.log('\nSample of 5 PENDING rows:');
+  console.table((sample as { rows: unknown[] }).rows);
+
+  process.exit(0);
+}
+main().catch((e) => { console.error(e); process.exit(1); });
+EOF
+npx tsx /tmp/check-pending.ts 2>&1 | tail -60
+[2026-04-15T06:40:40] mv /tmp/check-pending.ts ./scripts/check-pending-state.ts && sed -i '' "s|import 'dotenv/config';|import { config } from 'dotenv'; config();|" ./scripts/check-pending-state.ts && npx tsx ./scripts/check-pending-state.ts 2>&1 | tail -80
+[2026-04-15T06:40:44] ls scripts/load-env.ts && head -20 scripts/load-env.ts
+[2026-04-15T06:41:08] npx tsx ./scripts/check-pending-state.ts 2>&1 | tail -80
+[2026-04-15T06:41:15] head -30 src/lib/db/index.ts
+[2026-04-15T06:41:45] npx tsx ./scripts/check-pending-state.ts 2>&1 | tail -40
+[2026-04-15T06:41:55] rm scripts/check-pending-state.ts
+[2026-04-15T06:41:59] ls /Users/joelaptin/.claude/projects/-Users-joelaptin-jcl-govcon/memory/ 2>&1
+[2026-04-15T06:42:20] npx drizzle-kit push 2>&1 | tail -40
+[2026-04-15T06:42:52] npx tsx scripts/check-backfill-state.ts 2>&1 | tail -30
+[2026-04-15T06:43:08] npx tsx scripts/run-backfill.ts 2>&1 | tail -20
+[2026-04-15T06:43:37] npx tsx scripts/run-backfill.ts 2>&1 | tail -20
+[2026-04-15T06:43:53] npx tsx scripts/run-backfill.ts 2>&1 | tail -10
+[2026-04-15T06:46:10] npx tsx scripts/run-backfill.ts 2>&1 | tail -15
+[2026-04-15T06:46:37] railway service Postgres 2>&1 && railway status 2>&1 | head -20
+[2026-04-15T06:46:42] railway logs --service Postgres 2>&1 | tail -40
+[2026-04-15T06:51:56] railway logs --service Postgres 2>&1 | tail -15
+[2026-04-15T06:52:06] npx tsx scripts/check-backfill-state.ts 2>&1 | tail -20
+[2026-04-15T06:52:10] railway logs --service Postgres 2>&1 | tail -20

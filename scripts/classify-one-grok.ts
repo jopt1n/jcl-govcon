@@ -23,7 +23,7 @@ async function main() {
   const { contracts } = await import("../src/lib/db/schema");
   const { like, eq } = await import("drizzle-orm");
   const { getGrokClient, GROK_MODEL } = await import("../src/lib/ai/grok-client");
-  const { buildMetadataClassificationPrompt } = await import("../src/lib/ai/prompts");
+  const { buildUnifiedClassificationPrompt } = await import("../src/lib/ai/prompts");
   const { parseClassificationResponse } = await import("../src/lib/ai/classifier");
 
   // Find the SUAS drone contract
@@ -58,17 +58,19 @@ async function main() {
   console.log(`Current classification: ${contract.classification}`);
   console.log(`Current reasoning: ${contract.aiReasoning}\n`);
 
-  const prompt = buildMetadataClassificationPrompt({
+  const prompt = buildUnifiedClassificationPrompt({
     title: contract.title,
     naicsCode: contract.naicsCode,
     pscCode: contract.pscCode,
     agency: contract.agency,
-    orgPathName: contract.orgPathName,
     noticeType: contract.noticeType,
     setAsideType: contract.setAsideType,
     setAsideCode: contract.setAsideCode,
     popState: contract.popState,
     awardCeiling: contract.awardCeiling,
+    responseDeadline: null,
+    descriptionText: null,
+    documentTexts: [],
   });
 
   const ai = getGrokClient();
@@ -78,6 +80,7 @@ async function main() {
 
   const response = await ai.chat.completions.create({
     model: GROK_MODEL,
+    temperature: 0,
     messages: [{ role: "user", content: prompt }],
     response_format: { type: "json_object" },
   });

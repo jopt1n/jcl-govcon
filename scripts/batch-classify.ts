@@ -1,13 +1,36 @@
 /**
- * Batch classification via xAI Batch API (50% cheaper, no rate limits).
+ * CLI wrapper around src/lib/ai/batch-classify.ts.
+ *
+ * The heavy lifting (submit, poll, import) lives in the library so the
+ * weekly cron route can share the same code path. This script adds CLI
+ * arg parsing, manual .env loading, and a blocking poll loop.
  *
  * Usage:
  *   npx tsx scripts/batch-classify.ts
- *   npx tsx scripts/batch-classify.ts --batch-id <id> --skip 8600
+ *     Submit a new batch, poll until complete, import results.
+ *
+ *   npx tsx scripts/batch-classify.ts --limit 5
+ *     Same but only pick the 5 oldest PENDING contracts.
+ *
+ *   npx tsx scripts/batch-classify.ts --dry-run
+ *     Query + pre-filter only. Print the first 3 prompts. No API calls,
+ *     no DB changes.
+ *
  *   npx tsx scripts/batch-classify.ts --poll-only <batchId>
+ *     Poll an existing batch until it completes, then import.
+ *
+ *   npx tsx scripts/batch-classify.ts --import-batch-id <batchId>
+ *     Skip the poll, just import results from a batch that is known to
+ *     be complete. Idempotent — safe to re-run.
+ *
+ *   npx tsx scripts/batch-classify.ts --batch-id <id> --skip N
+ *     DEPRECATED. Resuming a partially-uploaded batch is no longer
+ *     supported; re-submit instead (already-classified contracts are
+ *     skipped by the default pendingOnly filter, so the cost is tiny).
+ *     Use --import-batch-id to recover results from a completed batch.
  */
 
-import { readFileSync } from "fs";
+import { readFileSync, writeFileSync } from "fs";
 import { resolve } from "path";
 
 // Load env before any imports that need it
@@ -22,17 +45,7 @@ for (const line of readFileSync(envPath, "utf-8").split("\n")) {
   if (!process.env[key]) process.env[key] = val;
 }
 
-const XAI_API_KEY = process.env.XAI_API_KEY;
-if (!XAI_API_KEY) throw new Error("XAI_API_KEY not set");
-
-const BASE_URL = "https://api.x.ai/v1";
-const MODEL = "grok-4-1-fast-non-reasoning";
-const CHUNK_SIZE = 100;
 const POLL_INTERVAL_MS = 30_000;
-const MAX_RETRIES = 3;
-const BACKOFF_BASE_MS = 5_000;
-const CHUNK_DELAY_MS = 500;
-const FETCH_TIMEOUT_MS = 60_000;
 
 // ── CLI args ──────────────────────────────────────────────────────────────
 
@@ -41,6 +54,9 @@ function parseArgs() {
   let batchId: string | null = null;
   let skip = 0;
   let pollOnly: string | null = null;
+  let importBatchId: string | null = null;
+  let limit: number | null = null;
+  let dryRun = false;
 
   for (let i = 0; i < args.length; i++) {
     if (args[i] === "--batch-id" && args[i + 1]) {
@@ -49,322 +65,238 @@ function parseArgs() {
       skip = parseInt(args[++i], 10);
     } else if (args[i] === "--poll-only" && args[i + 1]) {
       pollOnly = args[++i];
+    } else if (args[i] === "--import-batch-id" && args[i + 1]) {
+      importBatchId = args[++i];
+    } else if (args[i] === "--limit" && args[i + 1]) {
+      limit = parseInt(args[++i], 10);
+    } else if (args[i] === "--dry-run") {
+      dryRun = true;
     }
   }
 
-  return { batchId, skip, pollOnly };
+  return { batchId, skip, pollOnly, importBatchId, limit, dryRun };
 }
 
-// ── Helpers ────────────────────────────────────────────────────────────────
-
-function sleep(ms: number) {
+function sleep(ms: number): Promise<void> {
   return new Promise((r) => setTimeout(r, ms));
-}
-
-async function xai(method: string, path: string, body?: unknown): Promise<any> {
-  for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
-    try {
-      const res = await fetch(`${BASE_URL}${path}`, {
-        method,
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${XAI_API_KEY}`,
-        },
-        ...(body ? { body: JSON.stringify(body) } : {}),
-        signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
-      });
-
-      if (res.ok) return res.json();
-
-      const text = await res.text();
-      const retryable = res.status === 429 || res.status >= 500;
-      if (retryable && attempt < MAX_RETRIES) {
-        const delay = BACKOFF_BASE_MS * Math.pow(3, attempt - 1);
-        console.warn(
-          `[batch] xAI ${res.status} on ${method} ${path}, attempt ${attempt}/${MAX_RETRIES}, retrying in ${delay / 1000}s...`
-        );
-        await sleep(delay);
-        continue;
-      }
-      throw new Error(`xAI ${method} ${path} failed (${res.status}): ${text.slice(0, 300)}`);
-    } catch (err: any) {
-      if (err.name === "TimeoutError" || err.name === "AbortError") {
-        if (attempt < MAX_RETRIES) {
-          const delay = BACKOFF_BASE_MS * Math.pow(3, attempt - 1);
-          console.warn(
-            `[batch] Timeout on ${method} ${path}, attempt ${attempt}/${MAX_RETRIES}, retrying in ${delay / 1000}s...`
-          );
-          await sleep(delay);
-          continue;
-        }
-        throw new Error(`xAI ${method} ${path} timed out after ${MAX_RETRIES} attempts`);
-      }
-      throw err;
-    }
-  }
 }
 
 // ── Main ───────────────────────────────────────────────────────────────────
 
 async function main() {
-  const { batchId: resumeBatchId, skip, pollOnly } = parseArgs();
+  const {
+    batchId: resumeBatchId,
+    skip,
+    pollOnly,
+    importBatchId,
+    limit,
+    dryRun,
+  } = parseArgs();
 
-  const { db } = await import("../src/lib/db");
-  const { contracts } = await import("../src/lib/db/schema");
-  const { eq, and } = await import("drizzle-orm");
-  const { buildMetadataClassificationPrompt } = await import(
-    "../src/lib/ai/prompts"
-  );
-  const { parseClassificationResponse } = await import(
-    "../src/lib/ai/classifier"
-  );
+  // Dynamic import so env loading above takes effect before the library
+  // touches the DB pool or xAI client
+  const { submitBatchClassify, pollBatch, importBatchResults } =
+    await import("../src/lib/ai/batch-classify");
+
+  // ── Import-only mode (retry import from completed batch) ────────────
+  if (importBatchId) {
+    console.log(
+      `[batch] Import-only mode for completed batch: ${importBatchId}`,
+    );
+    const result = await importBatchResults(importBatchId);
+    console.log("\n[batch] ═══ Import Complete ═══");
+    console.log(`  Classified: ${result.classified}`);
+    console.log(
+      `  GOOD: ${result.good}   MAYBE: ${result.maybe}   DISCARD: ${result.discard}`,
+    );
+    console.log(`  Errors: ${result.errors}   Skipped: ${result.skippedRows}`);
+    console.log(`  Cost:   $${result.costUsd.toFixed(4)}`);
+    process.exit(0);
+  }
 
   // ── Poll-only mode ────────────────────────────────────────────────────
   if (pollOnly) {
     console.log(`[batch] Poll-only mode for batch: ${pollOnly}`);
-    await pollAndImport(pollOnly, db, contracts, eq, parseClassificationResponse);
+    await pollLoopAndImport(pollOnly, pollBatch, importBatchResults);
     process.exit(0);
   }
 
-  // 1. Query all PENDING contracts not yet metadata-classified
-  console.log("[batch] Querying PENDING contracts...");
-  const pending = await db
-    .select({
-      id: contracts.id,
-      noticeId: contracts.noticeId,
-      title: contracts.title,
-      naicsCode: contracts.naicsCode,
-      pscCode: contracts.pscCode,
-      agency: contracts.agency,
-      orgPathName: contracts.orgPathName,
-      noticeType: contracts.noticeType,
-      setAsideType: contracts.setAsideType,
-      setAsideCode: contracts.setAsideCode,
-      popState: contracts.popState,
-      awardCeiling: contracts.awardCeiling,
-    })
-    .from(contracts)
-    .where(
-      and(
-        eq(contracts.classification, "PENDING"),
-        eq(contracts.classifiedFromMetadata, false)
+  // ── Resume-via-batch-id is deprecated ─────────────────────────────────
+  if (resumeBatchId || skip > 0) {
+    console.error(
+      "[batch] --batch-id / --skip resume is deprecated. Re-submit instead.",
+    );
+    console.error(
+      "[batch] Already-classified contracts are skipped by the default pendingOnly",
+    );
+    console.error(
+      "[batch] filter, so re-running costs only what's strictly needed.",
+    );
+    console.error(
+      "[batch] To recover results from a completed batch: --import-batch-id <id>",
+    );
+    process.exit(1);
+  }
+
+  // ── Dry-run mode ──────────────────────────────────────────────────────
+  if (dryRun) {
+    // Dry-run bypasses the library and uses the same underlying helpers
+    // directly so we can print prompts without creating a batch or writing
+    // to the DB.
+    const { db } = await import("../src/lib/db");
+    const { contracts } = await import("../src/lib/db/schema");
+    const { eq, and } = await import("drizzle-orm");
+    const { buildUnifiedClassificationPrompt } =
+      await import("../src/lib/ai/prompts");
+    const { downloadDocuments } = await import("../src/lib/sam-gov/documents");
+    const { extractAllDocumentTexts } =
+      await import("../src/lib/document-text");
+    const { isRestrictedSetAside } =
+      await import("../src/lib/sam-gov/set-aside-filter");
+
+    const queryBuilder = db
+      .select({
+        id: contracts.id,
+        noticeId: contracts.noticeId,
+        title: contracts.title,
+        naicsCode: contracts.naicsCode,
+        pscCode: contracts.pscCode,
+        agency: contracts.agency,
+        noticeType: contracts.noticeType,
+        setAsideType: contracts.setAsideType,
+        setAsideCode: contracts.setAsideCode,
+        awardCeiling: contracts.awardCeiling,
+        responseDeadline: contracts.responseDeadline,
+        popState: contracts.popState,
+        descriptionText: contracts.descriptionText,
+        resourceLinks: contracts.resourceLinks,
+      })
+      .from(contracts)
+      .where(
+        and(
+          eq(contracts.userOverride, false),
+          eq(contracts.classification, "PENDING"),
+        ),
       )
-    )
-    .orderBy(contracts.postedDate);
+      .orderBy(contracts.postedDate);
 
-  if (pending.length === 0) {
-    console.log("[batch] No pending contracts to classify.");
-    process.exit(0);
-  }
-  console.log(`[batch] Found ${pending.length} contracts to classify`);
+    const allContracts = limit
+      ? await queryBuilder.limit(limit)
+      : await queryBuilder;
 
-  // Build a lookup map: noticeId → contract
-  const contractMap = new Map(pending.map((c) => [c.noticeId, c]));
-
-  // 2. Create or resume batch
-  let batchId: string;
-  if (resumeBatchId) {
-    batchId = resumeBatchId;
-    console.log(`[batch] Resuming batch: ${batchId} (skipping first ${skip} contracts)`);
-  } else {
-    const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
-    const batch = await xai("POST", "/batches", {
-      name: `metadata-classification-${timestamp}`,
+    const today = new Date();
+    const pending = allContracts.filter((c) => {
+      if (c.responseDeadline && new Date(c.responseDeadline) < today)
+        return false;
+      if (isRestrictedSetAside(c.setAsideCode)) return false;
+      return true;
     });
-    batchId = batch.id ?? batch.batch_id;
-    console.log(`[batch] Created batch: ${batchId}`);
-  }
 
-  // 3-4. Add requests in chunks of 100
-  const startIdx = skip > 0 ? skip : 0;
-  for (let i = startIdx; i < pending.length; i += CHUNK_SIZE) {
-    const chunk = pending.slice(i, i + CHUNK_SIZE);
-    const batchRequests = chunk.map((contract) => {
-      const prompt = buildMetadataClassificationPrompt({
+    console.log("\n[batch] ═══ DRY RUN — Showing generated prompts ═══\n");
+    for (let i = 0; i < Math.min(pending.length, 3); i++) {
+      const contract = pending[i];
+      let docTexts: string[] = [];
+      try {
+        const docs = await downloadDocuments(contract.resourceLinks);
+        docTexts = await extractAllDocumentTexts(docs);
+      } catch (err) {
+        console.warn(
+          `[batch] Doc extraction failed for ${contract.noticeId}: ${err instanceof Error ? err.message : err}`,
+        );
+      }
+      const prompt = buildUnifiedClassificationPrompt({
         title: contract.title,
+        agency: contract.agency,
         naicsCode: contract.naicsCode,
         pscCode: contract.pscCode,
-        agency: contract.agency,
-        orgPathName: contract.orgPathName,
         noticeType: contract.noticeType,
         setAsideType: contract.setAsideType,
         setAsideCode: contract.setAsideCode,
-        popState: contract.popState,
         awardCeiling: contract.awardCeiling,
+        responseDeadline: contract.responseDeadline
+          ? new Date(contract.responseDeadline).toISOString()
+          : null,
+        popState: contract.popState,
+        descriptionText: contract.descriptionText,
+        documentTexts: docTexts,
       });
-
-      return {
-        batch_request_id: contract.noticeId,
-        batch_request: {
-          chat_get_completion: {
-            messages: [{ role: "user", content: prompt }],
-            model: MODEL,
-          },
-        },
-      };
-    });
-
-    await xai("POST", `/batches/${batchId}/requests`, {
-      batch_requests: batchRequests,
-    });
-    console.log(
-      `[batch] Added requests ${i + 1}–${Math.min(i + CHUNK_SIZE, pending.length)} of ${pending.length}`
-    );
-
-    // Throttle between chunk uploads
-    if (i + CHUNK_SIZE < pending.length) {
-      await sleep(CHUNK_DELAY_MS);
+      console.log(`──── Contract ${i + 1}: ${contract.noticeId} ────`);
+      console.log(`Title: ${contract.title}`);
+      console.log(
+        `Has description: ${!!contract.descriptionText} (${contract.descriptionText?.length ?? 0} chars)`,
+      );
+      console.log(`Documents extracted: ${docTexts.length}`);
+      console.log(`Prompt length: ${prompt.length} chars`);
+      console.log();
     }
+    console.log(
+      `[batch] Dry run complete. ${pending.length} contracts would be sent to xAI. No API calls made, no DB changes.`,
+    );
+    process.exit(0);
   }
 
-  // 5-7. Poll and import results
-  await pollAndImport(batchId, db, contracts, eq, parseClassificationResponse, contractMap);
+  // ── Default: submit new batch, poll, import ──────────────────────────
+  const submitResult = await submitBatchClassify({
+    pendingOnly: true,
+    limit: limit ?? undefined,
+  });
+  console.log(
+    `[batch] Submitted ${submitResult.submitted} contracts to batch ${submitResult.batchId}`,
+  );
+  console.log(`[batch] Pre-filtered: ${submitResult.preFilteredDiscard}`);
+
+  // Persist batch ID for manual recovery
+  const batchIdFile = resolve(__dirname, "last-batch-id.txt");
+  writeFileSync(batchIdFile, submitResult.batchId, "utf-8");
+  console.log(`[batch] Batch ID saved to ${batchIdFile}`);
+
+  await pollLoopAndImport(submitResult.batchId, pollBatch, importBatchResults);
   process.exit(0);
 }
 
-// ── Poll + Import ──────────────────────────────────────────────────────────
-
-async function pollAndImport(
+async function pollLoopAndImport(
   batchId: string,
-  db: any,
-  contracts: any,
-  eq: any,
-  parseClassificationResponse: any,
-  contractMap?: Map<string, any>
+  pollBatch: (id: string) => Promise<{
+    status: "running" | "completed" | "failed";
+    numSuccess: number;
+    numError: number;
+    numPending: number;
+    total: number;
+  }>,
+  importBatchResults: (id: string) => Promise<{
+    classified: number;
+    good: number;
+    maybe: number;
+    discard: number;
+    errors: number;
+    skippedRows: number;
+    costUsd: number;
+  }>,
 ) {
-  // 5. Poll until done
   console.log("[batch] Polling for completion...");
-  let done = false;
-  while (!done) {
+  while (true) {
     await sleep(POLL_INTERVAL_MS);
-    const status = await xai("GET", `/batches/${batchId}`);
-    const state = status.state ?? {};
-    const numPending = state.num_pending ?? 0;
-    const numSuccess = state.num_success ?? 0;
-    const numError = state.num_error ?? 0;
-    const total = state.num_requests ?? 0;
-
+    const state = await pollBatch(batchId);
     console.log(
-      `[batch] Progress: ${numSuccess} success, ${numError} error, ${numPending} pending (${total} total)`
+      `[batch] Progress: ${state.numSuccess} success, ${state.numError} error, ${state.numPending} pending (${state.total} total)`,
     );
-
-    if (numPending === 0 && total > 0) {
-      done = true;
+    if (state.status === "completed" || state.status === "failed") {
+      if (state.status === "failed") {
+        console.error(`[batch] Batch ${batchId} failed. Aborting import.`);
+        process.exit(1);
+      }
+      break;
     }
   }
 
-  // 6. Paginate through results and update DB
-  console.log("[batch] Fetching results...");
-  let good = 0;
-  let maybe = 0;
-  let discard = 0;
-  let errors = 0;
-  let processed = 0;
-  let paginationToken: string | null = null;
-
-  do {
-    const params = new URLSearchParams({ page_size: "100" });
-    if (paginationToken) params.set("pagination_token", paginationToken);
-
-    const page = await xai(
-      "GET",
-      `/batches/${batchId}/results?${params.toString()}`
-    );
-
-    // Process succeeded results
-    const succeeded: unknown[] = page.succeeded ?? page.results ?? [];
-    for (const item of succeeded as Record<string, unknown>[]) {
-      const noticeId = item.batch_request_id as string;
-
-      // If we have a contractMap, use it for id-based lookup; otherwise query by noticeId
-      const contract = contractMap?.get(noticeId);
-
-      try {
-        // Handle both possible response shapes
-        const response = item.response as Record<string, unknown> | undefined;
-        const batchResult = (item as any).batch_result?.response?.chat_get_completion;
-        let content: string | undefined;
-
-        if (batchResult?.choices?.[0]?.message?.content) {
-          content = batchResult.choices[0].message.content;
-        } else if (response) {
-          if (typeof response.content === "string") {
-            content = response.content;
-          }
-          const choices = response.choices as
-            | { message?: { content?: string } }[]
-            | undefined;
-          if (!content && choices?.[0]?.message?.content) {
-            content = choices[0].message.content;
-          }
-        }
-
-        const result = parseClassificationResponse(content);
-
-        if (contract) {
-          await db
-            .update(contracts)
-            .set({
-              classification: result.classification,
-              aiReasoning: result.reasoning,
-              summary: result.summary,
-              classifiedFromMetadata: true,
-              updatedAt: new Date(),
-            })
-            .where(eq(contracts.id, contract.id));
-        } else {
-          // Poll-only mode: update by noticeId
-          await db
-            .update(contracts)
-            .set({
-              classification: result.classification,
-              aiReasoning: result.reasoning,
-              summary: result.summary,
-              classifiedFromMetadata: true,
-              updatedAt: new Date(),
-            })
-            .where(eq(contracts.noticeId, noticeId));
-        }
-
-        processed++;
-        if (result.classification === "GOOD") good++;
-        else if (result.classification === "MAYBE") maybe++;
-        else discard++;
-      } catch (err) {
-        errors++;
-        console.error(
-          `[batch] Error parsing result for ${noticeId}:`,
-          err instanceof Error ? err.message : err
-        );
-      }
-    }
-
-    // Count failed results
-    const failed: unknown[] = page.failed ?? [];
-    for (const item of failed as Record<string, unknown>[]) {
-      errors++;
-      const noticeId = item.batch_request_id as string;
-      const errMsg = item.error_message ?? "unknown error";
-      console.error(`[batch] Failed request ${noticeId}: ${errMsg}`);
-    }
-
-    paginationToken = page.pagination_token ?? null;
-  } while (paginationToken);
-
-  // 7. Final stats
-  const finalStatus = await xai("GET", `/batches/${batchId}`);
-  const costTicks =
-    finalStatus.cost_breakdown?.total_cost_usd_ticks ?? 0;
-  const costUsd = costTicks / 1e10;
-
-  console.log("\n[batch] ═══ Classification Complete ═══");
-  console.log(`  Total classified: ${processed}`);
-  console.log(`  GOOD:    ${good}`);
-  console.log(`  MAYBE:   ${maybe}`);
-  console.log(`  DISCARD: ${discard}`);
-  console.log(`  Errors:  ${errors}`);
-  console.log(`  Cost:    $${costUsd.toFixed(4)}`);
-  console.log(`  Batch:   ${batchId}`);
+  const result = await importBatchResults(batchId);
+  console.log("\n[batch] ═══ Import Complete ═══");
+  console.log(`  Classified: ${result.classified}`);
+  console.log(
+    `  GOOD: ${result.good}   MAYBE: ${result.maybe}   DISCARD: ${result.discard}`,
+  );
+  console.log(`  Errors: ${result.errors}   Skipped: ${result.skippedRows}`);
+  console.log(`  Cost:   $${result.costUsd.toFixed(4)}`);
 }
 
 main().catch((err) => {

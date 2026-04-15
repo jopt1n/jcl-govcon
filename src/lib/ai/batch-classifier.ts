@@ -105,6 +105,7 @@ export async function runBatchClassification(
           noticeType: contracts.noticeType,
           setAsideType: contracts.setAsideType,
           awardCeiling: contracts.awardCeiling,
+          responseDeadline: contracts.responseDeadline,
           descriptionText: contracts.descriptionText,
           resourceLinks: contracts.resourceLinks,
         })

@@ -7,17 +7,31 @@ vi.mock("drizzle-orm", () => ({
   and: vi.fn((...args: unknown[]) => args),
   sql: vi.fn().mockReturnValue(""),
   desc: vi.fn(),
+  asc: vi.fn(),
   inArray: vi.fn(),
   gte: vi.fn(),
+  gt: vi.fn(),
+  ne: vi.fn(),
+  isNull: vi.fn(),
+  isNotNull: vi.fn(),
   type: { SQL: {} },
 }));
 
 vi.mock("@/lib/db/schema", () => ({
   contracts: {
-    id: "id", title: "title", agency: "agency", classification: "classification",
-    noticeId: "notice_id", solicitationNumber: "sol_num", awardCeiling: "award_ceiling",
-    responseDeadline: "response_deadline", noticeType: "notice_type", aiReasoning: "ai_reasoning",
-    status: "status", postedDate: "posted_date", userOverride: "user_override",
+    id: "id",
+    title: "title",
+    agency: "agency",
+    classification: "classification",
+    noticeId: "notice_id",
+    solicitationNumber: "sol_num",
+    awardCeiling: "award_ceiling",
+    responseDeadline: "response_deadline",
+    noticeType: "notice_type",
+    aiReasoning: "ai_reasoning",
+    status: "status",
+    postedDate: "posted_date",
+    userOverride: "user_override",
   },
 }));
 
@@ -34,7 +48,7 @@ vi.mock("@/lib/db", () => {
         if (prop === "then") {
           return (
             resolve: (v: unknown) => void,
-            _reject?: (e: unknown) => void
+            _reject?: (e: unknown) => void,
           ) => {
             Promise.resolve(resolveValue).then(resolve);
           };
@@ -83,13 +97,17 @@ describe("GET /api/contracts", () => {
   });
 
   it("filters by classification", async () => {
-    const req = new NextRequest("http://localhost/api/contracts?classification=GOOD");
+    const req = new NextRequest(
+      "http://localhost/api/contracts?classification=GOOD",
+    );
     const res = await GET(req);
     expect(res.status).toBe(200);
   });
 
   it("filters by search term", async () => {
-    const req = new NextRequest("http://localhost/api/contracts?search=cybersecurity");
+    const req = new NextRequest(
+      "http://localhost/api/contracts?search=cybersecurity",
+    );
     const res = await GET(req);
     expect(res.status).toBe(200);
   });
@@ -101,7 +119,9 @@ describe("GET /api/contracts", () => {
   });
 
   it("filters by notice type", async () => {
-    const req = new NextRequest("http://localhost/api/contracts?noticeType=Solicitation");
+    const req = new NextRequest(
+      "http://localhost/api/contracts?noticeType=Solicitation",
+    );
     const res = await GET(req);
     expect(res.status).toBe(200);
   });
@@ -124,7 +144,9 @@ describe("GET /api/contracts", () => {
     mockRows = [{ id: "1", title: "Test" }];
     mockTotal = 75;
 
-    const req = new NextRequest("http://localhost/api/contracts?page=2&limit=25");
+    const req = new NextRequest(
+      "http://localhost/api/contracts?page=2&limit=25",
+    );
     const res = await GET(req);
     const data = await res.json();
 
@@ -139,7 +161,7 @@ describe("GET /api/contracts", () => {
 
   it("handles combined filters", async () => {
     const req = new NextRequest(
-      "http://localhost/api/contracts?classification=GOOD&search=test&agency=DoD&noticeType=Solicitation"
+      "http://localhost/api/contracts?classification=GOOD&search=test&agency=DoD&noticeType=Solicitation",
     );
     const res = await GET(req);
     expect(res.status).toBe(200);

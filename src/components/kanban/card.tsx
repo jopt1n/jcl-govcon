@@ -1,7 +1,5 @@
 "use client";
 
-import { useSortable } from "@dnd-kit/sortable";
-import { CSS } from "@dnd-kit/utilities";
 import { format, differenceInDays, parseISO } from "date-fns";
 import { Building2, DollarSign, Clock, Brain } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -26,12 +24,28 @@ const classificationBorder: Record<string, string> = {
   PENDING: "border-l-[var(--pending)]",
 };
 
-function getDeadlineInfo(deadline: string | null): { className: string; urgent: boolean; warning: boolean } {
-  if (!deadline) return { className: "text-[var(--text-muted)]", urgent: false, warning: false };
+function getDeadlineInfo(deadline: string | null): {
+  className: string;
+  urgent: boolean;
+  warning: boolean;
+} {
+  if (!deadline)
+    return {
+      className: "text-[var(--text-muted)]",
+      urgent: false,
+      warning: false,
+    };
   const days = differenceInDays(parseISO(deadline), new Date());
-  if (days < 0) return { className: "text-[var(--text-muted)] line-through", urgent: false, warning: false };
-  if (days < 3) return { className: "text-[var(--urgent)]", urgent: true, warning: false };
-  if (days < 7) return { className: "text-[var(--maybe)]", urgent: false, warning: true };
+  if (days < 0)
+    return {
+      className: "text-[var(--text-muted)] line-through",
+      urgent: false,
+      warning: false,
+    };
+  if (days < 3)
+    return { className: "text-[var(--urgent)]", urgent: true, warning: false };
+  if (days < 7)
+    return { className: "text-[var(--maybe)]", urgent: false, warning: true };
   return { className: "text-[var(--good)]", urgent: false, warning: false };
 }
 
@@ -44,46 +58,36 @@ function formatCeiling(value: string | null): string {
   return `$${num.toFixed(0)}`;
 }
 
-export function KanbanCard({ contract }: { contract: ContractCard }) {
-  const {
-    attributes,
-    listeners,
-    setNodeRef,
-    transform,
-    transition,
-    isDragging,
-  } = useSortable({
-    id: contract.id,
-    data: { contract },
-  });
+const classificationBadge: Record<string, string> = {
+  GOOD: "bg-emerald-500/10 text-emerald-400 border-emerald-500/20",
+  MAYBE: "bg-amber-500/10 text-amber-400 border-amber-500/20",
+  DISCARD: "bg-slate-500/10 text-slate-400 border-slate-500/20",
+};
 
-  const style = {
-    transform: CSS.Transform.toString(transform),
-    transition,
-  };
-
-  const deadlineInfo = contract.responseDeadline ? getDeadlineInfo(contract.responseDeadline) : null;
+export function KanbanCard({
+  contract,
+  showClassification,
+}: {
+  contract: ContractCard;
+  showClassification?: boolean;
+}) {
+  const deadlineInfo = contract.responseDeadline
+    ? getDeadlineInfo(contract.responseDeadline)
+    : null;
 
   return (
-    <div
-      ref={setNodeRef}
-      style={style}
-      {...attributes}
-      {...listeners}
+    <Link
+      href={`/contracts/${contract.id}`}
       className={cn(
-        "bg-[var(--surface)] rounded-lg border border-[var(--border)] border-l-[3px] p-3 cursor-grab active:cursor-grabbing hover:shadow-md transition-shadow",
-        classificationBorder[contract.classification] ?? "border-l-[var(--border)]",
-        isDragging && "opacity-50 shadow-lg ring-2 ring-[var(--accent)]"
+        "block bg-[var(--surface)] rounded-lg border border-[var(--border)] border-l-[3px] p-3 cursor-pointer hover:shadow-md transition-shadow",
+        classificationBorder[contract.classification] ??
+          "border-l-[var(--border)]",
       )}
     >
       <div className="flex items-start justify-between gap-2">
-        <Link
-          href={`/contracts/${contract.id}`}
-          onClick={(e) => e.stopPropagation()}
-          className="text-sm font-medium text-[var(--text-primary)] hover:text-[var(--accent)] line-clamp-2 leading-tight"
-        >
+        <span className="text-sm font-medium text-[var(--text-primary)] hover:text-[var(--accent)] line-clamp-2 leading-tight">
           {contract.title}
-        </Link>
+        </span>
         {deadlineInfo?.urgent && (
           <span className="shrink-0 text-[10px] font-bold px-1.5 py-0.5 rounded bg-red-500/10 text-[var(--urgent)]">
             URGENT
@@ -92,6 +96,16 @@ export function KanbanCard({ contract }: { contract: ContractCard }) {
         {deadlineInfo?.warning && (
           <span className="shrink-0 text-[10px] font-bold px-1.5 py-0.5 rounded bg-amber-500/10 text-[var(--maybe)]">
             SOON
+          </span>
+        )}
+        {showClassification && classificationBadge[contract.classification] && (
+          <span
+            className={cn(
+              "shrink-0 text-[10px] font-semibold px-1.5 py-0.5 rounded border",
+              classificationBadge[contract.classification],
+            )}
+          >
+            {contract.classification}
           </span>
         )}
       </div>
@@ -114,7 +128,7 @@ export function KanbanCard({ contract }: { contract: ContractCard }) {
             <div
               className={cn(
                 "flex items-center gap-1 text-xs font-medium",
-                getDeadlineInfo(contract.responseDeadline).className
+                getDeadlineInfo(contract.responseDeadline).className,
               )}
             >
               <Clock className="w-3 h-3 shrink-0" />
@@ -140,6 +154,6 @@ export function KanbanCard({ contract }: { contract: ContractCard }) {
           </span>
         </div>
       )}
-    </div>
+    </Link>
   );
 }

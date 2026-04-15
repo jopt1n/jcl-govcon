@@ -7,14 +7,31 @@ vi.mock("drizzle-orm", () => ({
 
 vi.mock("@/lib/db/schema", () => ({
   contracts: {
-    id: "id", title: "title", agency: "agency", classification: "classification",
-    noticeId: "notice_id", solicitationNumber: "sol_num", awardCeiling: "award_ceiling",
-    responseDeadline: "response_deadline", noticeType: "notice_type", aiReasoning: "ai_reasoning",
-    status: "status", postedDate: "posted_date", userOverride: "user_override",
-    pscCode: "psc_code", naicsCode: "naics_code", setAsideType: "set_aside_type",
-    descriptionText: "description_text", resourceLinks: "resource_links", samUrl: "sam_url",
-    notes: "notes", active: "active", rawJson: "raw_json", documentsAnalyzed: "documents_analyzed",
-    createdAt: "created_at", updatedAt: "updated_at",
+    id: "id",
+    title: "title",
+    agency: "agency",
+    classification: "classification",
+    noticeId: "notice_id",
+    solicitationNumber: "sol_num",
+    awardCeiling: "award_ceiling",
+    responseDeadline: "response_deadline",
+    noticeType: "notice_type",
+    aiReasoning: "ai_reasoning",
+    status: "status",
+    postedDate: "posted_date",
+    userOverride: "user_override",
+    pscCode: "psc_code",
+    naicsCode: "naics_code",
+    setAsideType: "set_aside_type",
+    descriptionText: "description_text",
+    resourceLinks: "resource_links",
+    samUrl: "sam_url",
+    notes: "notes",
+    active: "active",
+    rawJson: "raw_json",
+    documentsAnalyzed: "documents_analyzed",
+    createdAt: "created_at",
+    updatedAt: "updated_at",
   },
 }));
 
@@ -133,12 +150,19 @@ describe("PATCH /api/contracts/[id]", () => {
   });
 
   it("updates contract and sets updatedAt", async () => {
-    const updated = { id: "test-uuid", classification: "GOOD", updatedAt: new Date().toISOString() };
+    const updated = {
+      id: "test-uuid",
+      classification: "GOOD",
+      updatedAt: new Date().toISOString(),
+    };
     mockUpdateResult = [updated];
 
     const req = new NextRequest("http://localhost/api/contracts/test-uuid", {
       method: "PATCH",
-      body: JSON.stringify({ classification: "GOOD", notes: "Looks promising" }),
+      body: JSON.stringify({
+        classification: "GOOD",
+        notes: "Looks promising",
+      }),
       headers: { "Content-Type": "application/json" },
     });
     const res = await PATCH(req, { params: { id: "test-uuid" } });
@@ -149,6 +173,10 @@ describe("PATCH /api/contracts/[id]", () => {
   });
 
   it("accepts valid status values", async () => {
+    // PATCH now pre-selects the existing row when status is in the body so
+    // it can diff against the old status and decide whether to bump
+    // statusChangedAt. The select must return a row for the update to run.
+    mockSelectResult = [{ id: "test-uuid", status: "IDENTIFIED" }];
     mockUpdateResult = [{ id: "test-uuid", status: "PURSUING" }];
 
     const req = new NextRequest("http://localhost/api/contracts/test-uuid", {

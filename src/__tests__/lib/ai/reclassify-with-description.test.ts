@@ -67,7 +67,7 @@ vi.mock("@/lib/ai/grok-client", () => ({
 }));
 
 vi.mock("@/lib/ai/prompts", () => ({
-  buildClassificationPrompt: vi.fn().mockReturnValue("test full prompt"),
+  buildUnifiedClassificationPrompt: vi.fn().mockReturnValue("test full prompt"),
 }));
 
 vi.mock("@/lib/ai/classifier", () => ({
@@ -92,7 +92,7 @@ vi.mock("@/lib/utils", () => ({
 }));
 
 import { reclassifyWithDescription } from "@/lib/ai/reclassify-with-description";
-import { buildClassificationPrompt } from "@/lib/ai/prompts";
+import { buildUnifiedClassificationPrompt } from "@/lib/ai/prompts";
 import { db } from "@/lib/db";
 
 const makeContract = (overrides: Record<string, any> = {}) => ({
@@ -135,7 +135,7 @@ describe("reclassifyWithDescription", () => {
     const result = await reclassifyWithDescription();
 
     expect(result.reclassified).toBe(1);
-    expect(buildClassificationPrompt).toHaveBeenCalledWith(
+    expect(buildUnifiedClassificationPrompt).toHaveBeenCalledWith(
       expect.objectContaining({
         title: "IT Support Services",
         descriptionText: "Full description of IT services needed...",
@@ -226,6 +226,7 @@ describe("reclassifyWithDescription", () => {
 
     expect(mockCreate).toHaveBeenCalledWith({
       model: "grok-4-1-fast-non-reasoning",
+      temperature: 0,
       messages: [{ role: "user", content: "test full prompt" }],
       response_format: { type: "json_object" },
     });

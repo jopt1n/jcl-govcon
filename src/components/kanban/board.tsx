@@ -1,22 +1,12 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import {
-  DndContext,
-  DragOverlay,
-  closestCorners,
-  PointerSensor,
-  useSensor,
-  useSensors,
-  type DragStartEvent,
-  type DragEndEvent,
-} from "@dnd-kit/core";
 import { KanbanColumn } from "./column";
-import { KanbanCard, type ContractCard } from "./card";
+import { type ContractCard } from "./card";
 import { Search, Filter, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-type Classification = "GOOD" | "MAYBE" | "DISCARD" | "PENDING";
+type ColumnId = "DEADLINES" | "GOOD" | "MAYBE" | "DISCARD";
 
 interface ColumnState {
   contracts: ContractCard[];
@@ -25,8 +15,8 @@ interface ColumnState {
   loading: boolean;
 }
 
-const COLUMNS: { id: Classification; title: string; color: string }[] = [
-  { id: "PENDING", title: "PENDING", color: "blue" },
+const COLUMNS: { id: ColumnId; title: string; color: string }[] = [
+  { id: "DEADLINES", title: "UPCOMING DEADLINES", color: "red" },
   { id: "GOOD", title: "GOOD", color: "green" },
   { id: "MAYBE", title: "MAYBE", color: "amber" },
   { id: "DISCARD", title: "DISCARD", color: "gray" },
@@ -35,8 +25,8 @@ const COLUMNS: { id: Classification; title: string; color: string }[] = [
 const LIMIT = 50;
 
 export function KanbanBoard() {
-  const [columns, setColumns] = useState<Record<Classification, ColumnState>>({
-    PENDING: { contracts: [], page: 1, total: 0, loading: true },
+  const [columns, setColumns] = useState<Record<ColumnId, ColumnState>>({
+    DEADLINES: { contracts: [], page: 1, total: 0, loading: true },
     GOOD: { contracts: [], page: 1, total: 0, loading: true },
     MAYBE: { contracts: [], page: 1, total: 0, loading: true },
     DISCARD: { contracts: [], page: 1, total: 0, loading: true },
@@ -47,21 +37,16 @@ export function KanbanBoard() {
   const [agencyFilter, setAgencyFilter] = useState("");
   const [noticeTypeFilter, setNoticeTypeFilter] = useState("");
   const [showFilters, setShowFilters] = useState(false);
-  const [activeCard, setActiveCard] = useState<ContractCard | null>(null);
-
-  const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 5 } })
-  );
 
   const fetchColumn = useCallback(
-    async (classification: Classification, page: number, append: boolean) => {
+    async (columnId: ColumnId, page: number, append: boolean) => {
       setColumns((prev) => ({
         ...prev,
-        [classification]: { ...prev[classification], loading: true },
+        [columnId]: { ...prev[columnId], loading: true },
       }));
 
       const params = new URLSearchParams({
-        classification,
+        classification: columnId,
         page: String(page),
         limit: String(LIMIT),
       });
@@ -70,7 +55,9 @@ export function KanbanBoard() {
       if (noticeTypeFilter) params.set("noticeType", noticeTypeFilter);
 
       try {
-        const res = await fetch(`/api/contracts?${params}`);
+        const res = await fetch(`/api/contracts?${params}`, {
+          signal: AbortSignal.timeout(15_000),
+        });
         const json = await res.json();
 
         if (!res.ok || !json.data) {
@@ -79,9 +66,9 @@ export function KanbanBoard() {
 
         setColumns((prev) => ({
           ...prev,
-          [classification]: {
+          [columnId]: {
             contracts: append
-              ? [...prev[classification].contracts, ...json.data]
+              ? [...prev[columnId].contracts, ...json.data]
               : json.data,
             page,
             total: json.pagination?.total ?? 0,
@@ -89,13 +76,18 @@ export function KanbanBoard() {
           },
         }));
       } catch {
+        // On failure, revert to previous page so "Load more" reappears
         setColumns((prev) => ({
           ...prev,
-          [classification]: { ...prev[classification], loading: false },
+          [columnId]: {
+            ...prev[columnId],
+            page: append ? prev[columnId].page : 1,
+            loading: false,
+          },
         }));
       }
     },
-    [search, agencyFilter, noticeTypeFilter]
+    [search, agencyFilter, noticeTypeFilter],
   );
 
   useEffect(() => {
@@ -112,65 +104,6 @@ export function KanbanBoard() {
     setSearch("");
     setAgencyFilter("");
     setNoticeTypeFilter("");
-  }
-
-  function handleDragStart(event: DragStartEvent) {
-    const contract = event.active.data.current?.contract as ContractCard | undefined;
-    if (contract) setActiveCard(contract);
-  }
-
-  async function handleDragEnd(event: DragEndEvent) {
-    setActiveCard(null);
-    const { active, over } = event;
-    if (!over) return;
-
-    const contract = active.data.current?.contract as ContractCard | undefined;
-    if (!contract) return;
-
-    const targetColumn = over.id as string;
-    if (!["GOOD", "MAYBE", "DISCARD", "PENDING"].includes(targetColumn)) return;
-    if (contract.classification === targetColumn) return;
-
-    const sourceClassification = contract.classification as Classification;
-    const targetClassification = targetColumn as Classification;
-
-    // Optimistic update
-    setColumns((prev) => {
-      const updatedContract = {
-        ...contract,
-        classification: targetClassification,
-      };
-      return {
-        ...prev,
-        [sourceClassification]: {
-          ...prev[sourceClassification],
-          contracts: prev[sourceClassification].contracts.filter(
-            (c) => c.id !== contract.id
-          ),
-          total: prev[sourceClassification].total - 1,
-        },
-        [targetClassification]: {
-          ...prev[targetClassification],
-          contracts: [updatedContract, ...prev[targetClassification].contracts],
-          total: prev[targetClassification].total + 1,
-        },
-      };
-    });
-
-    // Persist
-    try {
-      await fetch(`/api/contracts/${contract.id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          classification: targetClassification,
-          userOverride: true,
-        }),
-      });
-    } catch {
-      // Revert on failure
-      COLUMNS.forEach((col) => fetchColumn(col.id, 1, false));
-    }
   }
 
   const hasFilters = search || agencyFilter || noticeTypeFilter;
@@ -195,7 +128,7 @@ export function KanbanBoard() {
             "flex items-center gap-1.5 px-3 py-2 text-sm border rounded-lg transition-colors",
             showFilters || hasFilters
               ? "bg-[var(--accent)]/10 border-[var(--accent)]/30 text-[var(--accent)]"
-              : "border-[var(--border)] text-[var(--text-secondary)] hover:bg-[var(--surface)]"
+              : "border-[var(--border)] text-[var(--text-secondary)] hover:bg-[var(--surface)]",
           )}
         >
           <Filter className="w-4 h-4" />
@@ -241,7 +174,9 @@ export function KanbanBoard() {
             }}
           />
           <button
-            onClick={() => COLUMNS.forEach((col) => fetchColumn(col.id, 1, false))}
+            onClick={() =>
+              COLUMNS.forEach((col) => fetchColumn(col.id, 1, false))
+            }
             className="px-3 py-1.5 text-sm bg-[var(--accent)] text-white rounded hover:bg-[var(--accent-hover)]"
           >
             Apply
@@ -250,37 +185,24 @@ export function KanbanBoard() {
       )}
 
       {/* Kanban Columns */}
-      <DndContext
-        sensors={sensors}
-        collisionDetection={closestCorners}
-        onDragStart={handleDragStart}
-        onDragEnd={handleDragEnd}
-      >
-        <div className="flex gap-4 overflow-x-auto pb-4">
-          {COLUMNS.map((col) => {
-            const state = columns[col.id];
-            return (
-              <KanbanColumn
-                key={col.id}
-                id={col.id}
-                title={col.title}
-                count={state.total}
-                contracts={state.contracts}
-                color={col.color}
-                loading={state.loading}
-                hasMore={state.contracts.length < state.total}
-                onLoadMore={() =>
-                  fetchColumn(col.id, state.page + 1, true)
-                }
-              />
-            );
-          })}
-        </div>
-
-        <DragOverlay>
-          {activeCard ? <KanbanCard contract={activeCard} /> : null}
-        </DragOverlay>
-      </DndContext>
+      <div className="flex gap-4 overflow-x-auto pb-4">
+        {COLUMNS.map((col) => {
+          const state = columns[col.id];
+          return (
+            <KanbanColumn
+              key={col.id}
+              id={col.id}
+              title={col.title}
+              count={state.total}
+              contracts={state.contracts}
+              color={col.color}
+              loading={state.loading}
+              hasMore={state.contracts.length < state.total}
+              onLoadMore={() => fetchColumn(col.id, state.page + 1, true)}
+            />
+          );
+        })}
+      </div>
     </div>
   );
 }

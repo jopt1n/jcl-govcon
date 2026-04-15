@@ -58,7 +58,7 @@ vi.mock("@/lib/sam-gov/documents", () => ({
 }));
 
 vi.mock("@/lib/ai/prompts", () => ({
-  buildClassificationPrompt: vi.fn().mockReturnValue("test prompt text"),
+  buildUnifiedClassificationPrompt: vi.fn().mockReturnValue("test prompt text"),
 }));
 
 vi.mock("@/lib/utils", () => ({
@@ -79,6 +79,7 @@ const makeContract = (overrides: Partial<Parameters<typeof classifyContract>[0]>
   noticeType: "Solicitation",
   setAsideType: "SBA",
   awardCeiling: "100000",
+  responseDeadline: "2026-04-01T00:00:00Z",
   descriptionText: "Test description",
   resourceLinks: null,
   ...overrides,
@@ -116,10 +117,9 @@ describe("classifyContract", () => {
     expect(result.documentsAnalyzed).toBe(true);
   });
 
-  it("sets documentsAnalyzed false when no PDFs downloaded", async () => {
-    vi.mocked(downloadDocuments).mockResolvedValueOnce([]);
+  it("sets documentsAnalyzed true for unified classification runs", async () => {
     const result = await classifyContract(makeContract());
-    expect(result.documentsAnalyzed).toBe(false);
+    expect(result.documentsAnalyzed).toBe(true);
   });
 
   it("returns MAYBE with error message when API throws", async () => {
@@ -207,10 +207,13 @@ describe("classifyContracts", () => {
 
   it("returns all results even with partial failures", async () => {
     mockCreate
+      // Contract 1: unified → GOOD (single call)
       .mockResolvedValueOnce({
         choices: [{ message: { content: JSON.stringify({ classification: "GOOD", reasoning: "Great" }) } }],
       })
+      // Contract 2: unified → error
       .mockRejectedValueOnce(new Error("API error"))
+      // Contract 3: unified → DISCARD
       .mockResolvedValueOnce({
         choices: [{ message: { content: JSON.stringify({ classification: "DISCARD", reasoning: "Not fit" }) } }],
       });
@@ -244,9 +247,11 @@ describe("classifyContract sends correct request", () => {
 
     await classifyContract(makeContract());
 
+    // Unified prompt: single call returns classification + action plan
     expect(mockCreate).toHaveBeenCalledTimes(1);
     expect(mockCreate).toHaveBeenCalledWith({
       model: "grok-4-1-fast-non-reasoning",
+      temperature: 0,
       messages: [{ role: "user", content: "test prompt text" }],
       response_format: { type: "json_object" },
     });

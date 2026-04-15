@@ -76,7 +76,7 @@ vi.mock("@/lib/ai/grok-client", () => ({
 }));
 
 vi.mock("@/lib/ai/prompts", () => ({
-  buildMetadataClassificationPrompt: vi.fn().mockReturnValue("test metadata prompt"),
+  buildUnifiedClassificationPrompt: vi.fn().mockReturnValue("test metadata prompt"),
 }));
 
 vi.mock("@/lib/ai/classifier", () => ({
@@ -103,7 +103,7 @@ vi.mock("@/lib/utils", () => ({
 }));
 
 import { classifyFromMetadata } from "@/lib/ai/metadata-classifier";
-import { buildMetadataClassificationPrompt } from "@/lib/ai/prompts";
+import { buildUnifiedClassificationPrompt } from "@/lib/ai/prompts";
 import { db } from "@/lib/db";
 
 const makeContractRow = (overrides: Record<string, any> = {}) => ({
@@ -162,23 +162,25 @@ describe("classifyFromMetadata", () => {
     expect(result.errors).toBe(0);
   });
 
-  it("calls buildMetadataClassificationPrompt with contract metadata", async () => {
+  it("calls buildUnifiedClassificationPrompt with contract metadata", async () => {
     const contract = makeContractRow();
     selectData = [contract];
 
     await classifyFromMetadata();
 
-    expect(buildMetadataClassificationPrompt).toHaveBeenCalledWith({
+    expect(buildUnifiedClassificationPrompt).toHaveBeenCalledWith({
       title: contract.title,
       naicsCode: contract.naicsCode,
       pscCode: contract.pscCode,
       agency: contract.agency,
-      orgPathName: contract.orgPathName,
       noticeType: contract.noticeType,
       setAsideType: contract.setAsideType,
       setAsideCode: contract.setAsideCode,
       popState: contract.popState,
       awardCeiling: contract.awardCeiling,
+      responseDeadline: null,
+      descriptionText: null,
+      documentTexts: [],
     });
   });
 
@@ -254,6 +256,7 @@ describe("classifyFromMetadata", () => {
 
     expect(mockCreate).toHaveBeenCalledWith({
       model: "grok-4-1-fast-non-reasoning",
+      temperature: 0,
       messages: [{ role: "user", content: "test metadata prompt" }],
       response_format: { type: "json_object" },
     });

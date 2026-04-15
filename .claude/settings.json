@@ -1,12 +1,12 @@
 {
   "hooks": {
-    "stop": [
+    "Stop": [
       {
         "matcher": "",
         "hooks": [
           {
             "type": "command",
-            "command": "echo 'Session paused. Remember to update progress.md before ending.'"
+            "command": "cd \"$CLAUDE_PROJECT_DIR\" && git add -A && git diff-index --quiet HEAD 2>/dev/null || git commit -m \"wip: auto-checkpoint\" 2>/dev/null || true"
           }
         ]
       }

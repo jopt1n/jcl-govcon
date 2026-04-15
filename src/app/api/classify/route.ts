@@ -54,6 +54,7 @@ export async function POST(req: NextRequest) {
         noticeType: contracts.noticeType,
         setAsideType: contracts.setAsideType,
         awardCeiling: contracts.awardCeiling,
+        responseDeadline: contracts.responseDeadline,
         descriptionText: contracts.descriptionText,
         resourceLinks: contracts.resourceLinks,
       })
