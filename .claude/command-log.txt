@@ -540,3 +540,5 @@ Co-Authored-By: Claude Opus 4.6 (1M context) <noreply@anthropic.com>
 EOF
 )"
 [2026-04-14T22:13:08] git log --oneline -8 && echo "---" && npx tsc --noEmit 2>&1 | tail -5 && npm run test:run 2>&1 | tail -5
+[2026-04-15T02:16:14] grep -E "^(TELEGRAM_BOT_TOKEN|TELEGRAM_CHAT_ID|NEXT_PUBLIC_APP_URL|DATABASE_URL)=" /Users/joelaptin/jcl-govcon/.env 2>&1 | sed 's/=.*/=<set>/'
+[2026-04-15T02:16:34] git remote -v && ls /Users/joelaptin/jcl-govcon/.vercel 2>/dev/null && cat /Users/joelaptin/jcl-govcon/railway.toml 2>/dev/null
