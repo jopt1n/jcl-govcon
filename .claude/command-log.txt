@@ -564,3 +564,66 @@ malformed-URL case. 329 → 332 tests.
 Co-Authored-By: Claude Opus 4.6 (1M context) <noreply@anthropic.com>
 EOF
 )"
+[2026-04-15T06:40:21] psql "$(grep ^DATABASE_URL .env | cut -d= -f2- | tr -d '"')" -c "SELECT classification, COUNT(*) FROM contracts GROUP BY classification ORDER BY COUNT(*) DESC;"
+[2026-04-15T06:40:25] which psql; ls /opt/homebrew/opt/libpq/bin/psql /usr/local/opt/libpq/bin/psql 2>/dev/null; ls node_modules/.bin/ | grep -i pg 2>/dev/null
+[2026-04-15T06:40:35] cat > /tmp/check-pending.ts <<'EOF'
+import 'dotenv/config';
+import { db } from './src/lib/db';
+import { contracts } from './src/lib/db/schema';
+import { eq, sql, desc } from 'drizzle-orm';
+
+async function main() {
+  // Count by classification
+  const counts = await db.execute(sql`
+    SELECT classification, COUNT(*) AS n
+    FROM contracts
+    WHERE user_override = false
+    GROUP BY classification
+    ORDER BY n DESC
+  `);
+  console.log('\nCounts by classification (user_override=false):');
+  console.table((counts as { rows: unknown[] }).rows);
+
+  // PENDING breakdown — by classification_round and createdAt window
+  const pendingDetail = await db.execute(sql`
+    SELECT
+      classification_round,
+      COUNT(*) AS n,
+      MIN(created_at) AS oldest,
+      MAX(created_at) AS newest
+    FROM contracts
+    WHERE classification = 'PENDING' AND user_override = false
+    GROUP BY classification_round
+    ORDER BY n DESC
+  `);
+  console.log('\nPENDING breakdown:');
+  console.table((pendingDetail as { rows: unknown[] }).rows);
+
+  // Sample 5 PENDING IDs
+  const sample = await db.execute(sql`
+    SELECT id, notice_id, title, classification, classification_round, ai_reasoning IS NOT NULL AS has_reasoning, created_at
+    FROM contracts
+    WHERE classification = 'PENDING' AND user_override = false
+    ORDER BY created_at DESC
+    LIMIT 5
+  `);
+  console.log('\nSample of 5 PENDING rows:');
+  console.table((sample as { rows: unknown[] }).rows);
+
+  process.exit(0);
+}
+main().catch((e) => { console.error(e); process.exit(1); });
+EOF
+npx tsx /tmp/check-pending.ts 2>&1 | tail -60
+[2026-04-15T06:40:40] mv /tmp/check-pending.ts ./scripts/check-pending-state.ts && sed -i '' "s|import 'dotenv/config';|import { config } from 'dotenv'; config();|" ./scripts/check-pending-state.ts && npx tsx ./scripts/check-pending-state.ts 2>&1 | tail -80
+[2026-04-15T06:40:44] ls scripts/load-env.ts && head -20 scripts/load-env.ts
+[2026-04-15T06:41:08] npx tsx ./scripts/check-pending-state.ts 2>&1 | tail -80
+[2026-04-15T06:41:15] head -30 src/lib/db/index.ts
+[2026-04-15T06:41:45] npx tsx ./scripts/check-pending-state.ts 2>&1 | tail -40
+[2026-04-15T06:41:55] rm scripts/check-pending-state.ts
+[2026-04-15T06:41:59] ls /Users/joelaptin/.claude/projects/-Users-joelaptin-jcl-govcon/memory/ 2>&1
+[2026-04-15T06:42:20] npx drizzle-kit push 2>&1 | tail -40
+[2026-04-15T06:42:52] npx tsx scripts/check-backfill-state.ts 2>&1 | tail -30
+[2026-04-15T06:43:08] npx tsx scripts/run-backfill.ts 2>&1 | tail -20
+[2026-04-15T06:43:37] npx tsx scripts/run-backfill.ts 2>&1 | tail -20
+[2026-04-15T06:43:53] npx tsx scripts/run-backfill.ts 2>&1 | tail -10
