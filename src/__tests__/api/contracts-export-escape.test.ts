@@ -5,17 +5,8 @@
  * this file proves the escape logic handles all RFC 4180 edge cases.
  */
 
-import { describe, it, expect, vi } from "vitest";
-
-// Mock DB + drizzle so importing the route file doesn't try to connect
-vi.mock("@/lib/db", () => ({ db: {} }));
-vi.mock("@/lib/db/schema", () => ({ contracts: {} }));
-vi.mock("drizzle-orm", () => ({
-  inArray: vi.fn(),
-  desc: vi.fn(),
-}));
-
-import { escapeCsvField } from "@/app/api/contracts/export/route";
+import { describe, it, expect } from "vitest";
+import { escapeCsvField } from "@/lib/csv";
 
 describe("escapeCsvField", () => {
   it("passes through simple strings unchanged", () => {

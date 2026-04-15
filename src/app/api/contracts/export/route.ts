@@ -18,6 +18,7 @@ import { db } from "@/lib/db";
 import { contracts } from "@/lib/db/schema";
 import { inArray, desc } from "drizzle-orm";
 import { requireSameOrigin } from "@/lib/auth";
+import { escapeCsvField } from "@/lib/csv";
 
 type ContractStatus =
   | "IDENTIFIED"
@@ -35,24 +36,6 @@ const VALID_STATUSES: ContractStatus[] = [
 ];
 
 const DEFAULT_STATUSES: ContractStatus[] = ["PURSUING", "BID_SUBMITTED", "WON"];
-
-/**
- * RFC 4180 CSV field escaping. Wraps fields in quotes if they contain
- * commas, quotes, or newlines; doubles internal quotes.
- */
-export function escapeCsvField(value: unknown): string {
-  if (value === null || value === undefined) return "";
-  const str = String(value);
-  if (
-    str.includes(",") ||
-    str.includes('"') ||
-    str.includes("\n") ||
-    str.includes("\r")
-  ) {
-    return `"${str.replace(/"/g, '""')}"`;
-  }
-  return str;
-}
 
 function formatRow(values: unknown[]): string {
   return values.map(escapeCsvField).join(",");

@@ -639,3 +639,9 @@ npx tsx /tmp/check-pending.ts 2>&1 | tail -60
 [2026-04-15T07:09:27] git show --stat 3d37a9a 2>&1 | head -5 && echo "---" && git log --oneline origin/main..HEAD | wc -l | tr -d ' '
 [2026-04-15T07:09:33] rm scripts/verify-backfill.ts && git push origin main 2>&1 | tail -15
 [2026-04-15T07:16:23] npx tsx scripts/check-weekly-activity.ts 2>&1 | tail -60
+[2026-04-15T20:06:29] ls progress.md plan.md 2>&1 && echo "---" && wc -l progress.md plan.md 2>/dev/null
+[2026-04-15T20:08:30] npx tsc --noEmit 2>&1 | tail -5 && npm run test:run 2>&1 | tail -5 && npm run lint 2>&1 | tail -5
+[2026-04-15T20:08:53] grep -A2 exclude tsconfig.json
+[2026-04-15T20:09:00] grep -rn "escapeCsvField" src/ --include="*.ts" --include="*.tsx" | head -20
+[2026-04-15T20:10:05] npx tsc --noEmit 2>&1 | tail -10 && echo "---TESTS---" && npm run test:run 2>&1 | tail -5
+[2026-04-15T20:10:18] git add -A && git status | head -15
