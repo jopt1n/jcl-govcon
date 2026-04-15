@@ -645,3 +645,25 @@ npx tsx /tmp/check-pending.ts 2>&1 | tail -60
 [2026-04-15T20:09:00] grep -rn "escapeCsvField" src/ --include="*.ts" --include="*.tsx" | head -20
 [2026-04-15T20:10:05] npx tsc --noEmit 2>&1 | tail -10 && echo "---TESTS---" && npm run test:run 2>&1 | tail -5
 [2026-04-15T20:10:18] git add -A && git status | head -15
+[2026-04-15T20:10:36] git commit -m "$(cat <<'EOF'
+docs: session handoff
+
+Handoff for the Sedgewick weekly-pipeline cleanup session:
+- 6 planned commits + 1 review fix merged fix/batch-import-hang → main
+- Railway Postgres incident resolved (500MB → 5GB volume bump after
+  drizzle-kit push tripped WAL over the edge)
+- Backfill SQL applied, smoke script passed, 30,037 contracts healthy
+- Next session: (1) Railway Cron Job for automatic weekly runs,
+  (2) Kanban filter chips, (3) presolicitation → solicitation merge
+
+Incidental cleanup caught during handoff verification:
+- Extract escapeCsvField from route.ts to src/lib/csv.ts. Next.js
+  14 route files don't allow arbitrary exports — the smoke script
+  regenerating .next/types surfaced the latent tsc error.
+
+332 tests green, zero type errors.
+
+Co-Authored-By: Claude Opus 4.6 (1M context) <noreply@anthropic.com>
+EOF
+)" 2>&1 | tail -5
+[2026-04-15T20:10:40] git push origin main 2>&1 | tail -5
