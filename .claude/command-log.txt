@@ -823,3 +823,57 @@ sql\`SELECT title, agency, notice_type, set_aside_code, award_ceiling, ai_reason
 [2026-04-16T19:22:32] npm run test:run 2>&1 | tail -5
 [2026-04-16T19:22:43] npm run test:run -- src/__tests__/lib/notifications/weekly-digest.test.ts 2>&1 | tail -40
 [2026-04-16T19:23:27] npm run test:run 2>&1 | tail -5
+[2026-04-16T19:44:15] node -e "
+const postgres = require('postgres');
+const sql = postgres('$(grep DATABASE_URL /Users/joelaptin/jcl-govcon/.env | cut -d= -f2-)');
+sql\`SELECT title, agency, notice_type, set_aside_code, award_ceiling, response_deadline, 
+       description_text, ai_reasoning, ai_classification_reasoning, naics_code, psc_code,
+       sam_url, solicitation_number, classification, status
+     FROM contracts 
+     WHERE id = 'b784a3cb-dbb2-4913-82c0-c95902ef6b7b'\`
+.then(rows => {
+  const c = rows[0];
+  console.log('Title:', c.title);
+  console.log('Agency:', c.agency);
+  console.log('Type:', c.notice_type);
+  console.log('Set-aside:', c.set_aside_code);
+  console.log('NAICS:', c.naics_code, '| PSC:', c.psc_code);
+  console.log('Ceiling:', c.award_ceiling);
+  console.log('Deadline:', c.response_deadline);
+  console.log('Classification:', c.classification, '| Status:', c.status);
+  console.log('SAM URL:', c.sam_url);
+  console.log('Solicitation #:', c.solicitation_number);
+  console.log('\\n--- AI Reasoning ---');
+  console.log(c.ai_reasoning || c.ai_classification_reasoning || 'N/A');
+  console.log('\\n--- Description (first 3000 chars) ---');
+  console.log((c.description_text || 'No description').slice(0, 3000));
+  return sql.end();
+});
+" 2>&1
+[2026-04-16T19:44:23] node -e "
+const postgres = require('postgres');
+const sql = postgres('$(grep DATABASE_URL /Users/joelaptin/jcl-govcon/.env | cut -d= -f2-)');
+sql\`SELECT title, agency, notice_type, set_aside_code, award_ceiling, response_deadline, 
+       description_text, ai_reasoning, naics_code, psc_code,
+       sam_url, solicitation_number, classification, status
+     FROM contracts 
+     WHERE id = 'b784a3cb-dbb2-4913-82c0-c95902ef6b7b'\`
+.then(rows => {
+  const c = rows[0];
+  console.log('Title:', c.title);
+  console.log('Agency:', c.agency);
+  console.log('Type:', c.notice_type);
+  console.log('Set-aside:', c.set_aside_code);
+  console.log('NAICS:', c.naics_code, '| PSC:', c.psc_code);
+  console.log('Ceiling:', c.award_ceiling);
+  console.log('Deadline:', c.response_deadline);
+  console.log('Classification:', c.classification, '| Status:', c.status);
+  console.log('SAM URL:', c.sam_url);
+  console.log('Solicitation #:', c.solicitation_number);
+  console.log('\\n--- AI Reasoning ---');
+  console.log(c.ai_reasoning || 'N/A');
+  console.log('\\n--- Description (first 3000 chars) ---');
+  console.log((c.description_text || 'No description').slice(0, 3000));
+  return sql.end();
+});
+" 2>&1
