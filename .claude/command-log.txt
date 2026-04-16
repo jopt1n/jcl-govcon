@@ -756,3 +756,7 @@ sql\`SELECT pg_try_advisory_lock(7242023) AS locked\`
 [2026-04-16T08:06:53] sleep 120 && curl -sS https://jcl-govcon-web-production.up.railway.app/api/health 2>&1
 [2026-04-16T08:09:06] curl -sS -X POST -H "Authorization: Bearer 466272a86a1b028095044d84a76b2aac71b6dc08d4937c2d3832f3110626b87a" https://jcl-govcon-web-production.up.railway.app/api/cron/weekly-crawl 2>&1
 [2026-04-16T08:14:18] sleep 60 && cat /private/tmp/claude-501/-Users-joelaptin-jcl-govcon/86a4525d-ca8d-4cd5-8fdc-7a9f9921fc41/tasks/bj7k5xz9s.output 2>&1
+[2026-04-16T08:15:27] cat /private/tmp/claude-501/-Users-joelaptin-jcl-govcon/86a4525d-ca8d-4cd5-8fdc-7a9f9921fc41/tasks/bj7k5xz9s.output 2>&1
+[2026-04-16T08:16:00] cat /private/tmp/claude-501/-Users-joelaptin-jcl-govcon/86a4525d-ca8d-4cd5-8fdc-7a9f9921fc41/tasks/bj7k5xz9s.output 2>&1
+[2026-04-16T08:16:04] ls -la /private/tmp/claude-501/-Users-joelaptin-jcl-govcon/86a4525d-ca8d-4cd5-8fdc-7a9f9921fc41/tasks/bj7k5xz9s.output 2>&1
+[2026-04-16T08:16:18] curl -sS --max-time 30 -X POST -H "Authorization: Bearer 466272a86a1b028095044d84a76b2aac71b6dc08d4937c2d3832f3110626b87a" https://jcl-govcon-web-production.up.railway.app/api/cron/check-batches 2>&1
