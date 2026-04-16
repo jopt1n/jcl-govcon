@@ -786,3 +786,16 @@ sql\`UPDATE crawl_runs
 });
 " 2>&1
 [2026-04-16T08:20:35] curl -sS --max-time 60 -X POST -H "Authorization: Bearer 466272a86a1b028095044d84a76b2aac71b6dc08d4937c2d3832f3110626b87a" https://jcl-govcon-web-production.up.railway.app/api/cron/check-batches 2>&1
+[2026-04-16T18:53:38] curl -sS --max-time 60 -X POST -H "Authorization: Bearer 466272a86a1b028095044d84a76b2aac71b6dc08d4937c2d3832f3110626b87a" https://jcl-govcon-web-production.up.railway.app/api/cron/check-batches 2>&1
+[2026-04-16T18:55:27] node -e "
+const postgres = require('postgres');
+const sql = postgres('$(grep DATABASE_URL /Users/joelaptin/jcl-govcon/.env | cut -d= -f2-)');
+sql\`SELECT id, status, batch_status, contracts_classified, digest_sent_at, error_step, error FROM crawl_runs WHERE id = '6250e36e-c48f-47d8-b5dd-139561c8e74a'\`
+.then(rows => {
+  console.log(JSON.stringify(rows, null, 2));
+  return sql.end();
+});
+" 2>&1
+[2026-04-16T18:55:37] curl -sS "https://api.telegram.org/bot8678337423:AAG8DBJo1srwHNDEnaTWawfZN6IrQnLYsZE/getMe" 2>&1
+[2026-04-16T18:55:44] curl -sS "https://api.telegram.org/bot8678337423:AAG8DBJo1srwHNDEnaTWawfZN6IrQnLYsZE/getUpdates?limit=5" 2>&1 | node -e "const d=require('fs').readFileSync('/dev/stdin','utf8');const j=JSON.parse(d);console.log('ok:',j.ok,'results:',j.result?.length);j.result?.forEach(r=>console.log('chat_id:',r.message?.chat?.id,'from:',r.message?.from?.first_name,'text:',r.message?.text?.slice(0,50)))"
+[2026-04-16T18:55:52] curl -sS -X POST "https://api.telegram.org/bot8678337423:AAG8DBJo1srwHNDEnaTWawfZN6IrQnLYsZE/sendMessage" -H "Content-Type: application/json" -d '{"chat_id": "8644309039", "text": "Test from JCL GovCon pipeline — if you see this, Telegram delivery is working."}' 2>&1
