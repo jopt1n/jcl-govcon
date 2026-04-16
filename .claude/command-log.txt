@@ -753,3 +753,4 @@ sql\`SELECT pg_try_advisory_lock(7242023) AS locked\`
 [2026-04-16T08:04:28] npm run test:run 2>&1 | tail -5
 [2026-04-16T08:04:34] npx tsc --noEmit 2>&1 | tail -5
 [2026-04-16T08:05:00] sleep 90 && curl -sS https://jcl-govcon-web-production.up.railway.app/api/health 2>&1
+[2026-04-16T08:06:53] sleep 120 && curl -sS https://jcl-govcon-web-production.up.railway.app/api/health 2>&1
