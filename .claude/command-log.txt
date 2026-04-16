@@ -668,3 +668,21 @@ EOF
 )" 2>&1 | tail -5
 [2026-04-15T20:10:40] git push origin main 2>&1 | tail -5
 [2026-04-16T00:15:44] git status && git log --oneline -5
+[2026-04-16T06:55:07] find /Users/joelaptin/jcl-govcon/src/app/api -type f -name "*.ts" | head -20
+[2026-04-16T06:55:16] find /Users/joelaptin/jcl-govcon/src -type f -name "*digest*" | head -10
+[2026-04-16T06:55:20] grep -r "tsx" /Users/joelaptin/jcl-govcon/package.json
+[2026-04-16T06:55:21] ls -la /Users/joelaptin/jcl-govcon/scripts/ 2>/dev/null | head -20
+[2026-04-16T06:55:21] find /Users/joelaptin/jcl-govcon -name ".env*" -o -name "railway*" 2>/dev/null | head -20
+[2026-04-16T06:55:21] find /Users/joelaptin/jcl-govcon/src -type f -name "*.ts" | xargs grep -l "sendTelegram" | head -5
+[2026-04-16T06:55:21] find /Users/joelaptin/jcl-govcon/src -type f -name "*telegram*"
+[2026-04-16T06:55:23] head -20 /Users/joelaptin/jcl-govcon/scripts/batch-classify.ts
+[2026-04-16T06:55:24] find /Users/joelaptin/jcl-govcon -type f \( -name "*.sh" -o -name "tsconfig*.json" \) | head -20
+[2026-04-16T06:55:28] grep -E "TELEGRAM|XAI|DATABASE" /Users/joelaptin/jcl-govcon/.env.example
+[2026-04-16T06:55:30] grep -r "pg_try_advisory_lock\|advisory_lock" /Users/joelaptin/jcl-govcon/src --include="*.ts" | head -10
+[2026-04-16T06:55:32] find /Users/joelaptin/jcl-govcon -maxdepth 2 -type f \( -name "*.json" -o -name "*.toml" -o -name "*.config.*" \) ! -path "*/node_modules/*" | sort
+[2026-04-16T06:55:33] cat /Users/joelaptin/jcl-govcon/.env | wc -l && echo "---" && cat /Users/joelaptin/jcl-govcon/.env
+[2026-04-16T07:06:39] railway help 2>&1 | head -40
+[2026-04-16T07:06:44] railway service --help 2>&1
+[2026-04-16T07:06:48] railway add --help 2>&1
+[2026-04-16T07:06:52] railway add --service "jcl-govcon-web" --json 2>&1
+[2026-04-16T07:07:07] grep -E '^(DATABASE_URL|SAM_GOV_API_KEY|XAI_API_KEY|GOOGLE_GEMINI_API_KEY|INGEST_SECRET|TELEGRAM_BOT_TOKEN|TELEGRAM_CHAT_ID|SAM_DAILY_LIMIT|NEXT_PUBLIC_APP_URL|RESEND_API_KEY)=' /Users/joelaptin/jcl-govcon/.env 2>&1 | sed 's/=.*/=***/' 
