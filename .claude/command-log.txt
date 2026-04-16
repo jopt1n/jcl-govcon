@@ -799,3 +799,22 @@ sql\`SELECT id, status, batch_status, contracts_classified, digest_sent_at, erro
 [2026-04-16T18:55:37] curl -sS "https://api.telegram.org/bot8678337423:AAG8DBJo1srwHNDEnaTWawfZN6IrQnLYsZE/getMe" 2>&1
 [2026-04-16T18:55:44] curl -sS "https://api.telegram.org/bot8678337423:AAG8DBJo1srwHNDEnaTWawfZN6IrQnLYsZE/getUpdates?limit=5" 2>&1 | node -e "const d=require('fs').readFileSync('/dev/stdin','utf8');const j=JSON.parse(d);console.log('ok:',j.ok,'results:',j.result?.length);j.result?.forEach(r=>console.log('chat_id:',r.message?.chat?.id,'from:',r.message?.from?.first_name,'text:',r.message?.text?.slice(0,50)))"
 [2026-04-16T18:55:52] curl -sS -X POST "https://api.telegram.org/bot8678337423:AAG8DBJo1srwHNDEnaTWawfZN6IrQnLYsZE/sendMessage" -H "Content-Type: application/json" -d '{"chat_id": "8644309039", "text": "Test from JCL GovCon pipeline — if you see this, Telegram delivery is working."}' 2>&1
+[2026-04-16T19:19:01] node -e "
+const postgres = require('postgres');
+const sql = postgres('$(grep DATABASE_URL /Users/joelaptin/jcl-govcon/.env | cut -d= -f2-)');
+sql\`SELECT title, agency, notice_type, set_aside_code, award_ceiling, ai_reasoning 
+     FROM contracts 
+     WHERE classification = 'GOOD' AND created_at >= '2026-04-09'
+     ORDER BY created_at DESC
+     LIMIT 15\`
+.then(rows => {
+  rows.forEach((r, i) => {
+    console.log(\`\n--- #\${i+1} ---\`);
+    console.log('Title:', r.title?.slice(0, 100));
+    console.log('Agency:', r.agency?.slice(0, 80));
+    console.log('Type:', r.notice_type, '| Set-aside:', r.set_aside_code, '| Ceiling:', r.award_ceiling);
+    console.log('Reasoning:', r.ai_reasoning?.slice(0, 200));
+  });
+  return sql.end();
+});
+" 2>&1
