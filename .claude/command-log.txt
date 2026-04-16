@@ -760,3 +760,29 @@ sql\`SELECT pg_try_advisory_lock(7242023) AS locked\`
 [2026-04-16T08:16:00] cat /private/tmp/claude-501/-Users-joelaptin-jcl-govcon/86a4525d-ca8d-4cd5-8fdc-7a9f9921fc41/tasks/bj7k5xz9s.output 2>&1
 [2026-04-16T08:16:04] ls -la /private/tmp/claude-501/-Users-joelaptin-jcl-govcon/86a4525d-ca8d-4cd5-8fdc-7a9f9921fc41/tasks/bj7k5xz9s.output 2>&1
 [2026-04-16T08:16:18] curl -sS --max-time 30 -X POST -H "Authorization: Bearer 466272a86a1b028095044d84a76b2aac71b6dc08d4937c2d3832f3110626b87a" https://jcl-govcon-web-production.up.railway.app/api/cron/check-batches 2>&1
+[2026-04-16T08:20:04] curl -sS --max-time 30 -X POST -H "Authorization: Bearer 466272a86a1b028095044d84a76b2aac71b6dc08d4937c2d3832f3110626b87a" https://jcl-govcon-web-production.up.railway.app/api/cron/check-batches 2>&1
+[2026-04-16T08:20:17] node -e "
+const postgres = require('postgres');
+const sql = postgres('$(grep DATABASE_URL /Users/joelaptin/jcl-govcon/.env | cut -d= -f2-)');
+sql\`SELECT id, status, error_step, error, batch_id, contracts_found, contracts_classified, created_at FROM crawl_runs ORDER BY created_at DESC LIMIT 3\`
+.then(rows => {
+  console.log(JSON.stringify(rows, null, 2));
+  return sql.end();
+});
+" 2>&1
+[2026-04-16T08:20:27] node -e "
+const postgres = require('postgres');
+const sql = postgres('$(grep DATABASE_URL /Users/joelaptin/jcl-govcon/.env | cut -d= -f2-)');
+sql\`UPDATE crawl_runs 
+  SET batch_id = 'batch_45ed3274-d2b9-4ed3-bd17-d03c9e1d02e7',
+      batch_status = 'submitted',
+      batch_started_at = NOW(),
+      status = 'classifying'
+  WHERE id = '6250e36e-c48f-47d8-b5dd-139561c8e74a'
+  RETURNING id, status, batch_id\`
+.then(rows => {
+  console.log('Updated:', JSON.stringify(rows));
+  return sql.end();
+});
+" 2>&1
+[2026-04-16T08:20:35] curl -sS --max-time 60 -X POST -H "Authorization: Bearer 466272a86a1b028095044d84a76b2aac71b6dc08d4937c2d3832f3110626b87a" https://jcl-govcon-web-production.up.railway.app/api/cron/check-batches 2>&1
