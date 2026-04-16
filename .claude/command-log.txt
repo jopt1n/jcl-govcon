@@ -877,3 +877,14 @@ sql\`SELECT title, agency, notice_type, set_aside_code, award_ceiling, response_
   return sql.end();
 });
 " 2>&1
+[2026-04-16T21:17:01] git status
+[2026-04-16T21:17:02] npx tsc --noEmit 2>&1 | tail -3
+[2026-04-16T21:17:03] npm run test:run 2>&1 | tail -5
+[2026-04-16T21:17:17] git log --oneline origin/main..HEAD
+[2026-04-16T21:19:05] git status
+[2026-04-16T21:19:09] git add progress.md && git commit -m "$(cat <<'EOF'
+docs: session handoff
+
+Co-Authored-By: Claude Opus 4.6 (1M context) <noreply@anthropic.com>
+EOF
+)"
