@@ -130,9 +130,11 @@ export async function POST(req: NextRequest) {
   const acquireResult = await db.execute(
     sql`SELECT pg_try_advisory_lock(${WEEKLY_CRAWL_LOCK_KEY}) AS locked`,
   );
-  const locked =
-    (acquireResult as { rows?: Array<{ locked: boolean }> }).rows?.[0]
-      ?.locked ?? false;
+  // postgres-js returns a bare array, not { rows: [...] }
+  const resultRows = Array.isArray(acquireResult)
+    ? acquireResult
+    : ((acquireResult as { rows?: unknown[] }).rows ?? []);
+  const locked = (resultRows[0] as { locked?: boolean })?.locked ?? false;
 
   if (!locked) {
     log({

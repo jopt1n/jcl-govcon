@@ -80,12 +80,11 @@ async function tryClaim(runId: string): Promise<boolean> {
       )
     RETURNING id
   `);
-  // Drizzle's execute() returns a result with `rows` (pg) or
-  // `{ rowCount }` depending on driver. Be defensive.
-  const rows = (result as { rows?: unknown[] }).rows;
-  if (rows) return rows.length > 0;
-  const rowCount = (result as { rowCount?: number }).rowCount;
-  return (rowCount ?? 0) > 0;
+  // postgres-js returns a bare array; other drivers return { rows: [...] }
+  const rows = Array.isArray(result)
+    ? result
+    : ((result as { rows?: unknown[] }).rows ?? []);
+  return rows.length > 0;
 }
 
 async function releaseClaim(runId: string): Promise<void> {

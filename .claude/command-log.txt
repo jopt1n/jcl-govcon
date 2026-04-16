@@ -692,3 +692,64 @@ EOF
 [2026-04-16T07:43:11] npm run build 2>&1 | tail -15
 [2026-04-16T07:43:51] npm run build 2>&1 | tail -20
 [2026-04-16T07:44:09] npm run test:run 2>&1 | tail -10
+[2026-04-16T08:01:27] curl -sS https://jcl-govcon-web-production.up.railway.app/api/health 2>&1
+[2026-04-16T08:01:34] curl -sS -X POST -H "Authorization: Bearer 466272a86a1b028095044d84a76b2aac71b6dc08d4937c2d3832f3110626b87a" https://jcl-govcon-web-production.up.railway.app/api/cron/weekly-crawl 2>&1
+[2026-04-16T08:01:55] curl -sS -X POST -H "Authorization: Bearer 466272a86a1b028095044d84a76b2aac71b6dc08d4937c2d3832f3110626b87a" https://jcl-govcon-web-production.up.railway.app/api/cron/check-batches 2>&1
+[2026-04-16T08:02:30] curl -sS -X POST -H "Authorization: Bearer 466272a86a1b028095044d84a76b2aac71b6dc08d4937c2d3832f3110626b87a" https://jcl-govcon-web-production.up.railway.app/api/cron/weekly-crawl 2>&1
+[2026-04-16T08:02:45] npx tsx -e "
+import 'dotenv/config';
+import postgres from 'postgres';
+const sql = postgres(process.env.DATABASE_URL!);
+const result = await sql\`SELECT pg_advisory_unlock_all()\`;
+console.log('Unlocked all advisory locks');
+const locks = await sql\`SELECT * FROM pg_locks WHERE locktype = 'advisory'\`;
+console.log('Remaining advisory locks:', locks.length);
+await sql.end();
+" 2>&1
+[2026-04-16T08:02:52] npx tsx -e "
+import 'dotenv/config';
+import postgres from 'postgres';
+const sql = postgres(process.env.DATABASE_URL);
+sql\`SELECT pg_advisory_unlock_all()\`.then(() => {
+  console.log('Unlocked all advisory locks on this connection');
+  return sql\`SELECT * FROM pg_locks WHERE locktype = 'advisory'\`;
+}).then((locks) => {
+  console.log('Advisory locks visible from this session:', locks.length);
+  return sql.end();
+});
+" 2>&1
+[2026-04-16T08:02:59] node -e "
+const postgres = require('postgres');
+const sql = postgres('$(grep DATABASE_URL .env | cut -d= -f2-)');
+sql\`SELECT pg_advisory_unlock_all()\`.then(() => {
+  console.log('Unlocked');
+  return sql.end();
+});
+" 2>&1
+[2026-04-16T08:03:17] node -e "
+const postgres = require('postgres');
+const sql = postgres('$(grep DATABASE_URL .env | cut -d= -f2-)');
+sql\`SELECT l.pid, l.objid, l.granted, a.application_name, a.client_addr, a.state, a.query_start
+     FROM pg_locks l
+     JOIN pg_stat_activity a ON l.pid = a.pid
+     WHERE l.locktype = 'advisory'\`
+.then(rows => {
+  console.log('Advisory locks:', JSON.stringify(rows, null, 2));
+  return sql.end();
+});
+" 2>&1
+[2026-04-16T08:03:33] node -e "
+const postgres = require('postgres');
+const sql = postgres('$(grep DATABASE_URL .env | cut -d= -f2-)');
+sql\`SELECT pg_try_advisory_lock(7242023) AS locked\`
+.then(rows => {
+  console.log('Raw result:', JSON.stringify(rows));
+  console.log('Type:', typeof rows[0]?.locked);
+  console.log('Value:', rows[0]?.locked);
+  return sql\`SELECT pg_advisory_unlock(7242023)\`;
+})
+.then(() => sql.end());
+" 2>&1
+[2026-04-16T08:04:28] npm run test:run 2>&1 | tail -5
+[2026-04-16T08:04:34] npx tsc --noEmit 2>&1 | tail -5
+[2026-04-16T08:05:00] sleep 90 && curl -sS https://jcl-govcon-web-production.up.railway.app/api/health 2>&1
