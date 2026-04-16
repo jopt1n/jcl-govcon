@@ -888,3 +888,4 @@ docs: session handoff
 Co-Authored-By: Claude Opus 4.6 (1M context) <noreply@anthropic.com>
 EOF
 )"
+[2026-04-16T21:53:11] ls /Users/joelaptin/jcl-govcon/progress.md /Users/joelaptin/jcl-govcon/plan.md /Users/joelaptin/jcl-govcon/tasks/todo.md 2>&1 | head -20
