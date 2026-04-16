@@ -3,7 +3,9 @@ import { db } from "@/lib/db";
 import { contracts, settings } from "@/lib/db/schema";
 import { eq, and, gte } from "drizzle-orm";
 
-const resend = new Resend(process.env.RESEND_API_KEY);
+function getResend() {
+  return new Resend(process.env.RESEND_API_KEY);
+}
 
 type Contract = typeof contracts.$inferSelect;
 
@@ -184,7 +186,7 @@ export async function sendDigest(): Promise<DigestResult> {
   const html = buildHtml(goodContracts, topMaybes);
   const subject = `[GovCon] ${goodContracts.length} New Opportunity${goodContracts.length !== 1 ? "ies" : "y"} — ${formatDate(new Date())}`;
 
-  await resend.emails.send({
+  await getResend().emails.send({
     from: "JCL GovCon <notifications@resend.dev>",
     to: recipients,
     subject,

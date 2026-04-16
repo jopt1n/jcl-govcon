@@ -4,7 +4,15 @@ import { useState, useEffect } from "react";
 import SpreadsheetViewer from "./SpreadsheetViewer";
 
 // ─── Types ───────────────────────────────────────────────────────
-type DocType = "pdf" | "word" | "image" | "text" | "html" | "spreadsheet" | "presentation" | "unknown";
+type DocType =
+  | "pdf"
+  | "word"
+  | "image"
+  | "text"
+  | "html"
+  | "spreadsheet"
+  | "presentation"
+  | "unknown";
 
 interface DocumentViewerProps {
   url: string;
@@ -18,12 +26,19 @@ interface DocumentViewerProps {
 function classifyContentType(contentType: string): DocType {
   const ct = contentType.toLowerCase();
   if (ct.includes("pdf")) return "pdf";
-  if (ct.includes("spreadsheet") || ct.includes("ms-excel") || ct.includes("csv")) return "spreadsheet";
+  if (
+    ct.includes("spreadsheet") ||
+    ct.includes("ms-excel") ||
+    ct.includes("csv")
+  )
+    return "spreadsheet";
   if (ct.includes("wordprocessing") || ct.includes("msword")) return "word";
-  if (ct.includes("presentation") || ct.includes("ms-powerpoint")) return "presentation";
+  if (ct.includes("presentation") || ct.includes("ms-powerpoint"))
+    return "presentation";
   if (ct.startsWith("image/")) return "image";
   if (ct.includes("html")) return "html";
-  if (ct.startsWith("text/") || ct.includes("json") || ct.includes("xml")) return "text";
+  if (ct.startsWith("text/") || ct.includes("json") || ct.includes("xml"))
+    return "text";
   return "unknown";
 }
 
@@ -78,23 +93,46 @@ function WordViewer({ proxyUrl }: { proxyUrl: string }) {
         if (!resp.ok) throw new Error(`Fetch failed: ${resp.status}`);
         const arrayBuffer = await resp.arrayBuffer();
         const result = await mammoth.convertToHtml({ arrayBuffer });
-        if (!cancelled) { setHtml(result.value); setLoading(false); }
+        if (!cancelled) {
+          setHtml(result.value);
+          setLoading(false);
+        }
       } catch (err: unknown) {
-        if (!cancelled) { setError(err instanceof Error ? err.message : "Unknown error"); setLoading(false); }
+        if (!cancelled) {
+          setError(err instanceof Error ? err.message : "Unknown error");
+          setLoading(false);
+        }
       }
     }
     convert();
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, [proxyUrl]);
 
   if (loading) return <LoadingState message="Converting Word document…" />;
-  if (error) return <div className="doc-viewer-error">Word conversion failed: {error}</div>;
-  return <div className="doc-viewer-word-content" dangerouslySetInnerHTML={{ __html: html || "" }} />;
+  if (error)
+    return (
+      <div className="doc-viewer-error">Word conversion failed: {error}</div>
+    );
+  return (
+    <div
+      className="doc-viewer-word-content"
+      dangerouslySetInnerHTML={{ __html: html || "" }}
+    />
+  );
 }
 
-function ImageViewer({ proxyUrl, title }: { proxyUrl: string; title?: string }) {
+function ImageViewer({
+  proxyUrl,
+  title,
+}: {
+  proxyUrl: string;
+  title?: string;
+}) {
   return (
     <div style={{ textAlign: "center", padding: "1rem" }}>
+      {/* eslint-disable-next-line @next/next/no-img-element */}
       <img
         src={proxyUrl}
         alt={title || "Document image"}
@@ -117,15 +155,29 @@ function TextViewer({ proxyUrl }: { proxyUrl: string }) {
   useEffect(() => {
     fetch(proxyUrl)
       .then((r) => r.text())
-      .then((t) => { setText(t); setLoading(false); })
-      .catch(() => { setText("Failed to load text."); setLoading(false); });
+      .then((t) => {
+        setText(t);
+        setLoading(false);
+      })
+      .catch(() => {
+        setText("Failed to load text.");
+        setLoading(false);
+      });
   }, [proxyUrl]);
 
   if (loading) return <LoadingState message="Loading text…" />;
   return <pre className="doc-viewer-text-content">{text}</pre>;
 }
 
-function DownloadFallback({ proxyUrl, filename, docType }: { proxyUrl: string; filename: string; docType: DocType }) {
+function DownloadFallback({
+  proxyUrl,
+  filename,
+  docType,
+}: {
+  proxyUrl: string;
+  filename: string;
+  docType: DocType;
+}) {
   const labels: Record<string, string> = {
     presentation: "PowerPoint Presentation",
     unknown: "Document",
@@ -135,7 +187,13 @@ function DownloadFallback({ proxyUrl, filename, docType }: { proxyUrl: string; f
       <div className="doc-viewer-fallback-icon">📄</div>
       <h3>{filename}</h3>
       <p>This {labels[docType] || "file"} cannot be previewed inline.</p>
-      <a href={proxyUrl} download={filename} className="doc-viewer-download-btn">Download File</a>
+      <a
+        href={proxyUrl}
+        download={filename}
+        className="doc-viewer-download-btn"
+      >
+        Download File
+      </a>
     </div>
   );
 }
@@ -150,7 +208,13 @@ function LoadingState({ message }: { message: string }) {
 }
 
 // ─── Main Component ──────────────────────────────────────────────
-export default function DocumentViewer({ url, title, height = "85vh", onLoad, onError }: DocumentViewerProps) {
+export default function DocumentViewer({
+  url,
+  title,
+  height = "85vh",
+  onLoad,
+  onError,
+}: DocumentViewerProps) {
   const [docType, setDocType] = useState<DocType | null>(null);
   const [detectedFilename, setDetectedFilename] = useState<string>("");
   const [loading, setLoading] = useState(true);
@@ -165,19 +229,27 @@ export default function DocumentViewer({ url, title, height = "85vh", onLoad, on
       // Try URL extension first
       const fromUrl = classifyFromUrl(url);
       if (fromUrl !== "unknown") {
-        if (!cancelled) { setDocType(fromUrl); setDetectedFilename(rawFilename); setLoading(false); }
+        if (!cancelled) {
+          setDocType(fromUrl);
+          setDetectedFilename(rawFilename);
+          setLoading(false);
+        }
         return;
       }
 
       // UUID filename — need to ask the proxy for content-type via magic bytes
       try {
         const resp = await fetch(proxyUrl);
-        const ct = resp.headers.get("x-detected-type") || resp.headers.get("content-type") || "";
+        const ct =
+          resp.headers.get("x-detected-type") ||
+          resp.headers.get("content-type") ||
+          "";
         const cd = resp.headers.get("content-disposition") || "";
 
         let fname = rawFilename;
         const fnameMatch = cd.match(/filename[*]?=(?:UTF-8''|"?)([^";]+)/i);
-        if (fnameMatch) fname = decodeURIComponent(fnameMatch[1].replace(/"/g, ""));
+        if (fnameMatch)
+          fname = decodeURIComponent(fnameMatch[1].replace(/"/g, ""));
 
         if (!cancelled) {
           setDocType(classifyContentType(ct));
@@ -185,11 +257,16 @@ export default function DocumentViewer({ url, title, height = "85vh", onLoad, on
           setLoading(false);
         }
       } catch (e: unknown) {
-        if (!cancelled) { setError(e instanceof Error ? e.message : "Unknown error"); setLoading(false); }
+        if (!cancelled) {
+          setError(e instanceof Error ? e.message : "Unknown error");
+          setLoading(false);
+        }
       }
     }
     detect();
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, [url, proxyUrl, rawFilename]);
 
   useEffect(() => {
@@ -206,24 +283,62 @@ export default function DocumentViewer({ url, title, height = "85vh", onLoad, on
         <div className="doc-viewer-toolbar-left">
           {title && <span className="doc-viewer-title">{title}</span>}
           <span className="doc-viewer-filename">{filename}</span>
-          {docType && <span className="doc-viewer-badge">{docType.toUpperCase()}</span>}
+          {docType && (
+            <span className="doc-viewer-badge">{docType.toUpperCase()}</span>
+          )}
         </div>
         <div className="doc-viewer-toolbar-right">
-          <a href={proxyUrl} download={filename} className="doc-viewer-toolbar-btn" title="Download">⬇ Download</a>
-          <a href={url} target="_blank" rel="noopener noreferrer" className="doc-viewer-toolbar-btn" title="Open original">↗ Original</a>
+          <a
+            href={proxyUrl}
+            download={filename}
+            className="doc-viewer-toolbar-btn"
+            title="Download"
+          >
+            ⬇ Download
+          </a>
+          <a
+            href={url}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="doc-viewer-toolbar-btn"
+            title="Open original"
+          >
+            ↗ Original
+          </a>
         </div>
       </div>
 
       {/* Content */}
-      <div className="doc-viewer-content" style={{ minHeight: loading ? "300px" : undefined }}>
+      <div
+        className="doc-viewer-content"
+        style={{ minHeight: loading ? "300px" : undefined }}
+      >
         {loading && <LoadingState message="Detecting document type…" />}
         {error && <div className="doc-viewer-error">Error: {error}</div>}
-        {!loading && !error && docType === "pdf" && <PdfViewer proxyUrl={proxyUrl} height={height} />}
-        {!loading && !error && docType === "spreadsheet" && <SpreadsheetViewer proxyUrl={proxyUrl} />}
-        {!loading && !error && docType === "word" && <WordViewer proxyUrl={proxyUrl} />}
-        {!loading && !error && docType === "image" && <ImageViewer proxyUrl={proxyUrl} title={title} />}
-        {!loading && !error && (docType === "text" || docType === "html") && <TextViewer proxyUrl={proxyUrl} />}
-        {!loading && !error && (docType === "presentation" || docType === "unknown") && <DownloadFallback proxyUrl={proxyUrl} filename={filename} docType={docType} />}
+        {!loading && !error && docType === "pdf" && (
+          <PdfViewer proxyUrl={proxyUrl} height={height} />
+        )}
+        {!loading && !error && docType === "spreadsheet" && (
+          <SpreadsheetViewer proxyUrl={proxyUrl} />
+        )}
+        {!loading && !error && docType === "word" && (
+          <WordViewer proxyUrl={proxyUrl} />
+        )}
+        {!loading && !error && docType === "image" && (
+          <ImageViewer proxyUrl={proxyUrl} title={title} />
+        )}
+        {!loading && !error && (docType === "text" || docType === "html") && (
+          <TextViewer proxyUrl={proxyUrl} />
+        )}
+        {!loading &&
+          !error &&
+          (docType === "presentation" || docType === "unknown") && (
+            <DownloadFallback
+              proxyUrl={proxyUrl}
+              filename={filename}
+              docType={docType}
+            />
+          )}
       </div>
     </div>
   );

@@ -67,6 +67,7 @@ async function xai(
   path: string,
   body?: unknown,
   timeoutMs = FETCH_TIMEOUT_MS,
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
 ): Promise<any> {
   const apiKey = getApiKey();
   for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
