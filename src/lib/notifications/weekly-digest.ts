@@ -24,9 +24,7 @@ import { contracts, crawlRuns } from "@/lib/db/schema";
 import { eq, and, gte, isNull, sql } from "drizzle-orm";
 import { sendTelegram } from "./telegram";
 
-const MAX_GOOD_SHOWN = 5;
-const MAX_MAYBE_SHOWN = 5;
-const TELEGRAM_MAX_LENGTH = 4000; // Telegram's limit is 4096, leave headroom
+const TELEGRAM_MAX_LENGTH = 4000;
 
 export class DigestAlreadySentError extends Error {
   constructor(runId: string) {
@@ -48,27 +46,12 @@ export type DigestResult = {
   messageLength: number;
 };
 
-function formatCurrency(value: string | null): string {
-  if (!value) return "N/A";
-  const num = parseFloat(value);
-  if (isNaN(num)) return "N/A";
-  return new Intl.NumberFormat("en-US", {
-    style: "currency",
-    currency: "USD",
-    maximumFractionDigits: 0,
-  }).format(num);
-}
-
 function formatDate(date: Date | null): string {
   if (!date) return "N/A";
   return new Intl.DateTimeFormat("en-US", {
     month: "short",
     day: "numeric",
   }).format(new Date(date));
-}
-
-function truncate(s: string, n: number): string {
-  return s.length > n ? s.slice(0, n - 1) + "…" : s;
 }
 
 /**
@@ -94,49 +77,38 @@ export async function sendWeeklyDigest(runId: string): Promise<DigestResult> {
 
   const since = run.windowStart;
 
-  // ── New GOOD and MAYBE this window ─────────────────────────────────
-  // Single-query: column allowlist (narrows payload vs. SELECT *) + LIMIT
-  // (caps rows at render budget) + count(*) OVER () window function
-  // (returns the full total on every row, so we get the subset AND the
-  // total in one round trip). Per CLAUDE.md Railway latency rule:
-  // minimize round trips above all else.
-  const goodRows = await db
-    .select({
-      id: contracts.id,
-      title: contracts.title,
-      agency: contracts.agency,
-      awardCeiling: contracts.awardCeiling,
-      responseDeadline: contracts.responseDeadline,
-      totalCount: sql<number>`count(*) OVER ()`,
-    })
+  const [goodCount] = await db
+    .select({ count: sql<number>`count(*)` })
     .from(contracts)
     .where(
       and(
         eq(contracts.classification, "GOOD"),
         gte(contracts.createdAt, since),
       ),
-    )
-    .limit(MAX_GOOD_SHOWN);
-  const goodTotal = Number(goodRows[0]?.totalCount ?? 0);
+    );
+  const goodTotal = Number(goodCount?.count ?? 0);
 
-  const maybeRows = await db
-    .select({
-      id: contracts.id,
-      title: contracts.title,
-      agency: contracts.agency,
-      awardCeiling: contracts.awardCeiling,
-      responseDeadline: contracts.responseDeadline,
-      totalCount: sql<number>`count(*) OVER ()`,
-    })
+  const [maybeCount] = await db
+    .select({ count: sql<number>`count(*)` })
     .from(contracts)
     .where(
       and(
         eq(contracts.classification, "MAYBE"),
         gte(contracts.createdAt, since),
       ),
-    )
-    .limit(MAX_MAYBE_SHOWN);
-  const maybeTotal = Number(maybeRows[0]?.totalCount ?? 0);
+    );
+  const maybeTotal = Number(maybeCount?.count ?? 0);
+
+  const [discardCount] = await db
+    .select({ count: sql<number>`count(*)` })
+    .from(contracts)
+    .where(
+      and(
+        eq(contracts.classification, "DISCARD"),
+        gte(contracts.createdAt, since),
+      ),
+    );
+  const discardTotal = Number(discardCount?.count ?? 0);
 
   // ── Retro: contracts triaged this week ─────────────────────────────
   // reviewedAt was null before, gte(reviewedAt, since) means "set during
@@ -171,41 +143,12 @@ export async function sendWeeklyDigest(runId: string): Promise<DigestResult> {
   );
   lines.push("");
 
-  if (goodTotal === 0 && maybeTotal === 0) {
-    lines.push("No new GOOD or MAYBE contracts this week.");
-    lines.push(`(${run.contractsFound} contracts crawled from SAM.gov)`);
-  } else {
-    lines.push(`✅ ${goodTotal} new GOOD · ⚠️ ${maybeTotal} new MAYBE`);
-    lines.push("");
-
-    if (goodRows.length > 0) {
-      lines.push(`GOOD (top ${goodRows.length}):`);
-      for (const c of goodRows) {
-        lines.push(
-          `• ${truncate(c.title, 80)} — ${c.agency ?? "?"} · ${formatCurrency(c.awardCeiling)} · due ${formatDate(c.responseDeadline)}`,
-        );
-      }
-      const goodOverflow = goodTotal - goodRows.length;
-      if (goodOverflow > 0) {
-        lines.push(`  …and ${goodOverflow} more.`);
-      }
-      lines.push("");
-    }
-
-    if (maybeRows.length > 0) {
-      lines.push(`MAYBE (top ${maybeRows.length}):`);
-      for (const c of maybeRows) {
-        lines.push(
-          `• ${truncate(c.title, 80)} — ${c.agency ?? "?"} · due ${formatDate(c.responseDeadline)}`,
-        );
-      }
-      const maybeOverflow = maybeTotal - maybeRows.length;
-      if (maybeOverflow > 0) {
-        lines.push(`  …and ${maybeOverflow} more.`);
-      }
-      lines.push("");
-    }
-  }
+  lines.push(
+    `✅ ${goodTotal} GOOD · ⚠️ ${maybeTotal} MAYBE · ❌ ${discardTotal} DISCARD`,
+  );
+  lines.push(
+    `📦 ${run.contractsFound ?? goodTotal + maybeTotal + discardTotal} crawled from SAM.gov`,
+  );
 
   // Retro section
   lines.push("📊 This week:");

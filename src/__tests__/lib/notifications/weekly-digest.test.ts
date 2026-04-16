@@ -1,19 +1,16 @@
 /**
- * Test for Commit 2 (#7): weekly-digest single-query window function.
+ * Test for weekly-digest: count-only Telegram message.
  *
- * Seeds >MAX_GOOD_SHOWN rows where the window function count(*) OVER ()
- * reports the true total, and asserts the rendered message shows the
- * "...and N more" overflow derived from (totalCount - renderedRowsLength).
+ * Verifies the digest renders GOOD/MAYBE/DISCARD totals and
+ * triage activity without listing individual contracts.
  */
 
 import { describe, it, expect, beforeEach, vi } from "vitest";
 
 const state = vi.hoisted(() => ({
   fromCallCount: 0,
-  goodRowsResult: [] as Array<Record<string, unknown>>,
-  maybeRowsResult: [] as Array<Record<string, unknown>>,
-  runRowsResult: [] as Array<Record<string, unknown>>,
   sentMessage: null as string | null,
+  queryResults: [] as Array<unknown>,
 }));
 
 function makeChain(resolveValue: unknown) {
@@ -58,11 +55,9 @@ vi.mock("@/lib/db", () => {
   return {
     db: {
       select: vi.fn().mockImplementation(() => {
+        const result = state.queryResults[state.fromCallCount] ?? [];
         state.fromCallCount++;
-        if (state.fromCallCount === 1) return makeChain(state.runRowsResult);
-        if (state.fromCallCount === 2) return makeChain(state.goodRowsResult);
-        if (state.fromCallCount === 3) return makeChain(state.maybeRowsResult);
-        return makeChain([]);
+        return makeChain(result);
       }),
       update: vi.fn().mockImplementation(() => ({
         set: vi.fn().mockReturnValue({
@@ -80,70 +75,83 @@ vi.mock("@/lib/notifications/telegram", () => ({
   }),
 }));
 
-describe("sendWeeklyDigest window-function overflow", () => {
+describe("sendWeeklyDigest", () => {
   beforeEach(() => {
     state.fromCallCount = 0;
-    state.goodRowsResult = [];
-    state.maybeRowsResult = [];
-    state.runRowsResult = [];
+    state.queryResults = [];
     state.sentMessage = null;
     vi.resetModules();
   });
 
-  it("renders '...and N more' based on count(*) OVER () total", async () => {
-    state.runRowsResult = [
-      {
-        id: "run-1",
-        windowStart: new Date("2026-04-07"),
-        windowEnd: new Date("2026-04-14"),
-        contractsFound: 50,
-        digestSentAt: null,
-      },
+  it("renders count-only summary with GOOD/MAYBE/DISCARD totals", async () => {
+    state.queryResults = [
+      // 1: crawl_runs row
+      [
+        {
+          id: "run-1",
+          windowStart: new Date("2026-04-07"),
+          windowEnd: new Date("2026-04-14"),
+          contractsFound: 500,
+          digestSentAt: null,
+        },
+      ],
+      // 2: GOOD count
+      [{ count: 12 }],
+      // 3: MAYBE count
+      [{ count: 5 }],
+      // 4: DISCARD count
+      [{ count: 483 }],
+      // 5: triaged rows
+      [],
+      // 6: transition rows
+      [],
     ];
-    state.goodRowsResult = Array.from({ length: 5 }, (_, i) => ({
-      id: `g${i}`,
-      title: `Contract ${i}`,
-      agency: "DoD",
-      awardCeiling: "100000",
-      responseDeadline: new Date("2026-05-01"),
-      totalCount: 12,
-    }));
-    state.maybeRowsResult = [];
 
     const { sendWeeklyDigest } =
       await import("@/lib/notifications/weekly-digest");
     const result = await sendWeeklyDigest("run-1");
 
     expect(result.good).toBe(12);
-    expect(state.sentMessage).toContain("…and 7 more.");
-    expect(state.sentMessage).toContain("12 new GOOD");
+    expect(result.maybe).toBe(5);
+    expect(state.sentMessage).toContain("12 GOOD");
+    expect(state.sentMessage).toContain("5 MAYBE");
+    expect(state.sentMessage).toContain("483 DISCARD");
+    expect(state.sentMessage).toContain("500 crawled from SAM.gov");
+    expect(state.sentMessage).not.toContain("top");
   });
 
-  it("no overflow when total equals rendered", async () => {
-    state.runRowsResult = [
-      {
-        id: "run-1",
-        windowStart: new Date("2026-04-07"),
-        windowEnd: new Date("2026-04-14"),
-        contractsFound: 10,
-        digestSentAt: null,
-      },
+  it("includes triage activity when present", async () => {
+    state.queryResults = [
+      [
+        {
+          id: "run-1",
+          windowStart: new Date("2026-04-07"),
+          windowEnd: new Date("2026-04-14"),
+          contractsFound: 100,
+          digestSentAt: null,
+        },
+      ],
+      [{ count: 3 }],
+      [{ count: 2 }],
+      [{ count: 95 }],
+      // triaged rows
+      [{ id: "c1" }, { id: "c2" }],
+      // transition rows
+      [
+        { status: "PURSUING" },
+        { status: "PURSUING" },
+        { status: "BID_SUBMITTED" },
+      ],
     ];
-    state.goodRowsResult = Array.from({ length: 3 }, (_, i) => ({
-      id: `g${i}`,
-      title: `Contract ${i}`,
-      agency: "DoD",
-      awardCeiling: "100000",
-      responseDeadline: new Date("2026-05-01"),
-      totalCount: 3,
-    }));
-    state.maybeRowsResult = [];
 
     const { sendWeeklyDigest } =
       await import("@/lib/notifications/weekly-digest");
     const result = await sendWeeklyDigest("run-1");
 
-    expect(result.good).toBe(3);
-    expect(state.sentMessage).not.toContain("more.");
+    expect(result.triaged).toBe(2);
+    expect(result.transitions).toEqual({ PURSUING: 2, BID_SUBMITTED: 1 });
+    expect(state.sentMessage).toContain("2 triaged");
+    expect(state.sentMessage).toContain("2 → pursuing");
+    expect(state.sentMessage).toContain("1 → bid submitted");
   });
 });

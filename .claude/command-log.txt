@@ -818,3 +818,8 @@ sql\`SELECT title, agency, notice_type, set_aside_code, award_ceiling, ai_reason
   return sql.end();
 });
 " 2>&1
+[2026-04-16T19:20:54] npm run dev -- -p 3001 2>&1 &
+[2026-04-16T19:22:30] npx tsc --noEmit 2>&1 | tail -5
+[2026-04-16T19:22:32] npm run test:run 2>&1 | tail -5
+[2026-04-16T19:22:43] npm run test:run -- src/__tests__/lib/notifications/weekly-digest.test.ts 2>&1 | tail -40
+[2026-04-16T19:23:27] npm run test:run 2>&1 | tail -5
