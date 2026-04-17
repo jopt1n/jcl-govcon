@@ -44,8 +44,11 @@ export function KanbanBoard() {
   const searchParams = useSearchParams();
 
   const noticeTypeParam = searchParams.get("noticeType") ?? "";
-  const postedWindow =
-    (searchParams.get("postedWindow") as PostedWindow) ?? "all";
+  const rawPostedWindow = searchParams.get("postedWindow");
+  const postedWindow: PostedWindow =
+    rawPostedWindow === "week" || rawPostedWindow === "month"
+      ? rawPostedWindow
+      : "all";
   const qualifyingOnly = searchParams.get("setAsideQualifying") === "1";
   const search = searchParams.get("search") ?? "";
   const agencyFilter = searchParams.get("agency") ?? "";

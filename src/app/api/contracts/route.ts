@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { contracts } from "@/lib/db/schema";
+import { RESTRICTED_SET_ASIDE_PREFIXES } from "@/lib/sam-gov/set-aside-filter";
 import {
   eq,
   ilike,
@@ -120,8 +121,12 @@ export async function GET(req: NextRequest) {
     }
 
     if (setAsideQualifying) {
+      // Mirror isRestrictedSetAside(): NULL/empty qualify; otherwise exclude
+      // any code whose uppercase form starts with a restricted prefix
+      // (8A, SDVOSB, HZ, WOSB, EDWOSB, ISBEE, VSA, VSB).
+      const prefixPattern = `^(${RESTRICTED_SET_ASIDE_PREFIXES.join("|")})`;
       conditions.push(
-        sql`(${contracts.setAsideCode} IN ('SBA', 'SBP', 'NONE', '') OR ${contracts.setAsideCode} IS NULL)`,
+        sql`(${contracts.setAsideCode} IS NULL OR ${contracts.setAsideCode} = '' OR ${contracts.setAsideCode} !~* ${prefixPattern})`,
       );
     }
 
