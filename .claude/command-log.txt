@@ -1003,3 +1003,20 @@ git log -1 --oneline
 echo "---"
 git push origin main 2>&1 | tail -20
 [2026-04-17T08:00:35] git status --short && echo "---" && git log origin/main -1 --oneline
+[2026-04-17T22:25:57] grep -n "DashboardStats" /Users/joelaptin/jcl-govcon/src/app/page.tsx /Users/joelaptin/jcl-govcon/src/components/dashboard-stats.tsx 2>&1 | head -20
+echo "---"
+ls /Users/joelaptin/jcl-govcon/src/components/dashboard-stats*
+[2026-04-17T22:26:09] ls /Users/joelaptin/jcl-govcon/src/__tests__/components/dashboard-stats* 2>&1 || echo "no tests"
+[2026-04-17T22:26:30] rm /Users/joelaptin/jcl-govcon/src/components/dashboard-stats.tsx && echo "removed"
+[2026-04-17T22:26:34] npx tsc --noEmit 2>&1 | tail -5 && echo "---" && npm run test:run 2>&1 | tail -5
+[2026-04-17T22:27:33] git add src/app/page.tsx src/components/dashboard-stats.tsx progress.md 2>&1; git status --short
+[2026-04-17T22:27:38] git commit -m "$(cat <<'EOF'
+refactor: remove DashboardStats all-zero summary row
+
+The secondary stat row on the dashboard showed all zeros because its
+query filter didn't match DB state. Pipeline Status widget already
+shows live counts, so the row was redundant clutter.
+
+Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>
+EOF
+)" && git push origin main 2>&1 | tail -3
