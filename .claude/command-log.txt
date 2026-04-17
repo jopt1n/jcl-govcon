@@ -1022,3 +1022,38 @@ EOF
 )" && git push origin main 2>&1 | tail -3
 [2026-04-17T22:36:24] git log --oneline -3 && echo "---" && git status --short && echo "---" && git stash list
 [2026-04-17T22:36:28] git stash drop stash@{0} 2>&1 && git stash drop stash@{0} 2>&1 && echo "---" && git stash list
+[2026-04-17T23:39:39] git status --short
+echo "---LOG---"
+git log -10 --oneline
+echo "---BRANCH---"
+git branch --show-current
+echo "---"
+ls /Users/joelaptin/jcl-govcon/docs/ 2>&1 | head -20
+[2026-04-17T23:39:44] ls /Users/joelaptin/jcl-govcon/docs/archive 2>&1 | head -20
+echo "---"
+ls /Users/joelaptin/jcl-govcon/docs 2>&1
+echo "---"
+find /Users/joelaptin/jcl-govcon -maxdepth 3 -name "handoff-*.md" -o -name "session-log.md" -o -name "*.prev.md" 2>/dev/null
+[2026-04-17T23:39:52] git show --stat 1cb6ffd 2>&1 | head -20
+[2026-04-17T23:42:02] git add progress.md plan.md docs/handoff-2026-04-17.md docs/session-log.md
+git status --short
+[2026-04-17T23:42:09] git commit -m "$(cat <<'EOF'
+handoff: chips shipped, classifier stays lenient
+
+Builds on auto-checkpoint 34b2324. Session deliverables:
+- Kanban filter chips with URL-persisted state (PR #1 merged as a087f8e)
+- RESTRICTED_SET_ASIDE_PREFIXES as single source of truth
+- DashboardStats removed
+
+Full briefing: docs/handoff-2026-04-17.md
+
+Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>
+EOF
+)" 2>&1 | tail -5
+[2026-04-17T23:42:21] ls ~/.claude/commands/continue* /Users/joelaptin/jcl-govcon/.claude/commands/continue* 2>&1 | head -5
+[2026-04-17T23:42:29] find ~/.claude -name "continue*" -maxdepth 4 2>/dev/null | head -10
+[2026-04-17T23:42:47] find ~ -maxdepth 3 -type d -name ".claude" 2>/dev/null | grep -v "/.claude/.claude" | grep -v "^/Users/joelaptin/.claude$" | head -10
+[2026-04-17T23:42:53] for d in UGC_creator cantmisscalls etsyseller; do
+  last=$(cd ~/$d 2>/dev/null && git log -1 --format="%ar" 2>/dev/null || echo "unknown")
+  echo "$d: last commit $last"
+done
