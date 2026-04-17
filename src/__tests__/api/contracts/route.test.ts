@@ -32,6 +32,9 @@ vi.mock("@/lib/db/schema", () => ({
     status: "status",
     postedDate: "posted_date",
     userOverride: "user_override",
+    setAsideCode: "set_aside_code",
+    reviewedAt: "reviewed_at",
+    createdAt: "created_at",
   },
 }));
 
@@ -77,12 +80,16 @@ vi.mock("@/lib/db", () => {
 });
 
 import { GET } from "@/app/api/contracts/route";
+import * as drizzleOrm from "drizzle-orm";
 
 beforeEach(() => {
   selectCallCount = 0;
   mockRows = [];
   mockTotal = 0;
   shouldError = false;
+  vi.mocked(drizzleOrm.inArray).mockClear();
+  vi.mocked(drizzleOrm.gte).mockClear();
+  vi.mocked(drizzleOrm.eq).mockClear();
 });
 
 describe("GET /api/contracts", () => {
@@ -121,6 +128,60 @@ describe("GET /api/contracts", () => {
   it("filters by notice type", async () => {
     const req = new NextRequest(
       "http://localhost/api/contracts?noticeType=Solicitation",
+    );
+    const res = await GET(req);
+    expect(res.status).toBe(200);
+    // Single value uses eq, not inArray
+    expect(drizzleOrm.inArray).not.toHaveBeenCalled();
+  });
+
+  it("filters by multiple notice types via comma-separated list", async () => {
+    const req = new NextRequest(
+      "http://localhost/api/contracts?noticeType=Solicitation,Presolicitation",
+    );
+    const res = await GET(req);
+    expect(res.status).toBe(200);
+    expect(drizzleOrm.inArray).toHaveBeenCalledWith("notice_type", [
+      "Solicitation",
+      "Presolicitation",
+    ]);
+  });
+
+  it("filters by postedAfter using gte", async () => {
+    const iso = "2026-04-10T00:00:00.000Z";
+    const req = new NextRequest(
+      `http://localhost/api/contracts?postedAfter=${iso}`,
+    );
+    const res = await GET(req);
+    expect(res.status).toBe(200);
+    expect(drizzleOrm.gte).toHaveBeenCalledWith(
+      "posted_date",
+      expect.any(Date),
+    );
+    const call = vi.mocked(drizzleOrm.gte).mock.calls[0];
+    expect((call[1] as Date).toISOString()).toBe(iso);
+  });
+
+  it("ignores invalid postedAfter", async () => {
+    const req = new NextRequest(
+      "http://localhost/api/contracts?postedAfter=not-a-date",
+    );
+    const res = await GET(req);
+    expect(res.status).toBe(200);
+    expect(drizzleOrm.gte).not.toHaveBeenCalled();
+  });
+
+  it("filters by setAsideQualifying=true", async () => {
+    const req = new NextRequest(
+      "http://localhost/api/contracts?setAsideQualifying=true",
+    );
+    const res = await GET(req);
+    expect(res.status).toBe(200);
+  });
+
+  it("accepts setAsideQualifying=1 as truthy", async () => {
+    const req = new NextRequest(
+      "http://localhost/api/contracts?setAsideQualifying=1",
     );
     const res = await GET(req);
     expect(res.status).toBe(200);

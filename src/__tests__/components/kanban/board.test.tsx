@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { vi } from "vitest";
-import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 
 vi.mock("next/link", () => ({
@@ -33,6 +33,23 @@ vi.mock("lucide-react", () => {
   };
 });
 
+// next/navigation mock — mutable search params so router.replace updates state
+let mockSearchParams = new URLSearchParams();
+const mockReplace = vi.fn((url: string) => {
+  const qIdx = url.indexOf("?");
+  mockSearchParams = new URLSearchParams(qIdx >= 0 ? url.slice(qIdx + 1) : "");
+});
+
+vi.mock("next/navigation", () => ({
+  useRouter: () => ({
+    replace: mockReplace,
+    push: vi.fn(),
+    refresh: vi.fn(),
+  }),
+  useSearchParams: () => mockSearchParams,
+  usePathname: () => "/",
+}));
+
 import { KanbanBoard } from "@/components/kanban/board";
 
 const emptyResponse = {
@@ -53,8 +70,21 @@ function makeMockFetch(responses?: Record<string, any>) {
   });
 }
 
+function lastFetchUrlsByClassification() {
+  const calls = (global.fetch as ReturnType<typeof vi.fn>).mock.calls;
+  const byClass: Record<string, string> = {};
+  for (const [url] of calls) {
+    const parsed = new URL(url, "http://localhost");
+    const cls = parsed.searchParams.get("classification") ?? "";
+    byClass[cls] = url;
+  }
+  return byClass;
+}
+
 describe("KanbanBoard", () => {
   beforeEach(() => {
+    mockSearchParams = new URLSearchParams();
+    mockReplace.mockClear();
     global.fetch = makeMockFetch();
   });
 
@@ -99,9 +129,24 @@ describe("KanbanBoard", () => {
     expect(screen.getByPlaceholderText("Search contracts...")).toBeDefined();
   });
 
-  it("shows filter button", async () => {
+  it("shows agency filter button", async () => {
     render(<KanbanBoard />);
-    expect(screen.getByText("Filters")).toBeDefined();
+    expect(screen.getByText("Agency")).toBeDefined();
+  });
+
+  it("renders filter chips (notice type, posted window, set-aside)", async () => {
+    render(<KanbanBoard />);
+    expect(screen.getByRole("button", { name: "Solicitation" })).toBeDefined();
+    expect(
+      screen.getByRole("button", { name: "Presolicitation" }),
+    ).toBeDefined();
+    expect(
+      screen.getByRole("button", { name: "Sources Sought" }),
+    ).toBeDefined();
+    expect(screen.getByRole("button", { name: "This week" })).toBeDefined();
+    expect(
+      screen.getByRole("button", { name: "Qualifying only" }),
+    ).toBeDefined();
   });
 
   it("renders contracts in columns when data returned", async () => {
@@ -130,7 +175,7 @@ describe("KanbanBoard", () => {
     });
   });
 
-  it("search form submission triggers re-fetch", async () => {
+  it("search form submission pushes search param to URL", async () => {
     render(<KanbanBoard />);
 
     await waitFor(() => {
@@ -143,31 +188,112 @@ describe("KanbanBoard", () => {
     await user.keyboard("{Enter}");
 
     await waitFor(() => {
-      // Initial 4 + 4 re-fetches after search
-      expect(
-        (global.fetch as ReturnType<typeof vi.fn>).mock.calls.length,
-      ).toBeGreaterThanOrEqual(8);
+      expect(mockReplace).toHaveBeenCalled();
+    });
+    const lastCall = mockReplace.mock.calls.at(-1)![0] as string;
+    expect(lastCall).toContain("search=test+query");
+  });
+
+  it("clicking a notice type chip updates the URL with noticeType param", async () => {
+    render(<KanbanBoard />);
+    await waitFor(() => expect(global.fetch).toHaveBeenCalledTimes(4));
+
+    const user = userEvent.setup();
+    await user.click(screen.getByRole("button", { name: "Solicitation" }));
+
+    await waitFor(() => {
+      const lastCall = mockReplace.mock.calls.at(-1)![0] as string;
+      expect(lastCall).toContain("noticeType=Solicitation");
     });
   });
 
-  it("clear filters button appears when filters are active", async () => {
+  it("toggling a second notice type produces a comma-separated list", async () => {
+    mockSearchParams = new URLSearchParams("noticeType=Solicitation");
+    render(<KanbanBoard />);
+    await waitFor(() => expect(global.fetch).toHaveBeenCalledTimes(4));
+
+    const user = userEvent.setup();
+    await user.click(screen.getByRole("button", { name: "Presolicitation" }));
+
+    await waitFor(() => {
+      const lastCall = mockReplace.mock.calls.at(-1)![0] as string;
+      expect(decodeURIComponent(lastCall)).toContain(
+        "noticeType=Solicitation,Presolicitation",
+      );
+    });
+  });
+
+  it("re-clicking an active notice type chip removes it from the URL", async () => {
+    mockSearchParams = new URLSearchParams("noticeType=Solicitation");
+    render(<KanbanBoard />);
+    await waitFor(() => expect(global.fetch).toHaveBeenCalledTimes(4));
+
+    const user = userEvent.setup();
+    await user.click(screen.getByRole("button", { name: "Solicitation" }));
+
+    await waitFor(() => {
+      const lastCall = mockReplace.mock.calls.at(-1)![0] as string;
+      expect(lastCall).not.toContain("noticeType");
+    });
+  });
+
+  it("picking 'This week' writes postedWindow=week to the URL", async () => {
+    render(<KanbanBoard />);
+    await waitFor(() => expect(global.fetch).toHaveBeenCalledTimes(4));
+
+    const user = userEvent.setup();
+    await user.click(screen.getByRole("button", { name: "This week" }));
+
+    await waitFor(() => {
+      const lastCall = mockReplace.mock.calls.at(-1)![0] as string;
+      expect(lastCall).toContain("postedWindow=week");
+    });
+  });
+
+  it("hydrates chip state from URL on mount", async () => {
+    mockSearchParams = new URLSearchParams(
+      "noticeType=Solicitation&postedWindow=week&setAsideQualifying=1",
+    );
     render(<KanbanBoard />);
 
-    await waitFor(() => {
-      expect(global.fetch).toHaveBeenCalledTimes(4);
-    });
+    await waitFor(() => expect(global.fetch).toHaveBeenCalledTimes(4));
 
-    // Initially no clear button
-    expect(screen.queryByText("Clear")).toBeNull();
+    const byClass = lastFetchUrlsByClassification();
+    expect(byClass["GOOD"]).toContain("noticeType=Solicitation");
+    expect(byClass["GOOD"]).toMatch(/postedAfter=/);
+    expect(byClass["GOOD"]).toContain("setAsideQualifying=1");
 
-    // Type search and submit
-    const input = screen.getByPlaceholderText("Search contracts...");
+    // Active chips reflect URL state
+    expect(
+      screen
+        .getByRole("button", { name: "Solicitation" })
+        .getAttribute("aria-pressed"),
+    ).toBe("true");
+    expect(
+      screen
+        .getByRole("button", { name: "This week" })
+        .getAttribute("aria-pressed"),
+    ).toBe("true");
+    expect(
+      screen
+        .getByRole("button", { name: "Qualifying only" })
+        .getAttribute("aria-pressed"),
+    ).toBe("true");
+  });
+
+  it("clear filters button appears when filters are active and wipes URL", async () => {
+    mockSearchParams = new URLSearchParams("noticeType=Solicitation");
+    render(<KanbanBoard />);
+
+    await waitFor(() => expect(global.fetch).toHaveBeenCalledTimes(4));
+
+    const clear = screen.getByText("Clear");
     const user = userEvent.setup();
-    await user.type(input, "something");
-    await user.keyboard("{Enter}");
+    await user.click(clear);
 
     await waitFor(() => {
-      expect(screen.getByText("Clear")).toBeDefined();
+      const lastCall = mockReplace.mock.calls.at(-1)![0] as string;
+      expect(lastCall).toBe("/");
     });
   });
 });

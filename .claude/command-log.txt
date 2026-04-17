@@ -889,3 +889,22 @@ Co-Authored-By: Claude Opus 4.6 (1M context) <noreply@anthropic.com>
 EOF
 )"
 [2026-04-16T21:53:11] ls /Users/joelaptin/jcl-govcon/progress.md /Users/joelaptin/jcl-govcon/plan.md /Users/joelaptin/jcl-govcon/tasks/todo.md 2>&1 | head -20
+[2026-04-17T07:39:18] find /Users/joelaptin/jcl-govcon -type f -name "*.tsx" -o -name "*.ts" | xargs grep -l "bg-.*-.*-" | head -5
+[2026-04-17T07:39:22] find /Users/joelaptin/jcl-govcon -type f \( -name "*.test.ts" -o -name "*.test.tsx" -o -name "*.spec.ts" \) | head -10
+[2026-04-17T07:39:25] grep -r "Solicitation\|Presolicitation\|Combined\|Sources Sought" /Users/joelaptin/jcl-govcon/src --include="*.ts" --include="*.tsx" | head -20
+[2026-04-17T07:39:25] grep -r "noticeType" /Users/joelaptin/jcl-govcon/src --include="*.ts" --include="*.tsx" -A 2 -B 2 | head -40
+[2026-04-17T07:39:28] grep -r "Solicitation\|Presolicitation\|Combined\|RFQ\|RFP\|IFB" /Users/joelaptin/jcl-govcon/src --include="*.ts" -h | sort -u | head -20
+[2026-04-17T07:47:48] cat /Users/joelaptin/jcl-govcon/next.config.mjs
+[2026-04-17T07:50:51] npx tsc --noEmit 2>&1 | tail -60
+[2026-04-17T07:50:58] npm run test:run 2>&1 | tail -100
+[2026-04-17T07:51:36] npm run test:run 2>&1 | tail -20
+[2026-04-17T07:51:48] npm run lint 2>&1 | tail -30
+[2026-04-17T07:52:02] lsof -ti :3001 2>/dev/null | head -5; lsof -ti :3000 2>/dev/null | head -5
+[2026-04-17T07:52:06] lsof -nP -iTCP:3001 -sTCP:LISTEN 2>/dev/null | head -5; lsof -nP -iTCP:3000 -sTCP:LISTEN 2>/dev/null | head -5
+[2026-04-17T07:52:13] curl -sS -o /dev/null -w "HTTP %{http_code}\n" http://localhost:3001/ ; curl -sS 'http://localhost:3001/api/contracts?classification=GOOD&noticeType=Solicitation,Presolicitation&postedAfter=2026-04-10T00:00:00.000Z&setAsideQualifying=1&limit=1' | head -c 600 ; echo
+[2026-04-17T07:52:30] echo "=== all GOOD ===" && curl -sS 'http://localhost:3001/api/contracts?classification=GOOD&limit=1' | python3 -c 'import sys,json;d=json.load(sys.stdin);print("total:",d["pagination"]["total"])'
+echo "=== GOOD + Solicitation ===" && curl -sS 'http://localhost:3001/api/contracts?classification=GOOD&noticeType=Solicitation&limit=1' | python3 -c 'import sys,json;d=json.load(sys.stdin);print("total:",d["pagination"]["total"])'
+echo "=== GOOD + Solicitation,Presolicitation ===" && curl -sS 'http://localhost:3001/api/contracts?classification=GOOD&noticeType=Solicitation,Presolicitation&limit=1' | python3 -c 'import sys,json;d=json.load(sys.stdin);print("total:",d["pagination"]["total"])'
+echo "=== GOOD + setAsideQualifying=1 ===" && curl -sS 'http://localhost:3001/api/contracts?classification=GOOD&setAsideQualifying=1&limit=1' | python3 -c 'import sys,json;d=json.load(sys.stdin);print("total:",d["pagination"]["total"])'
+echo "=== GOOD + postedAfter 7d ===" && curl -sS 'http://localhost:3001/api/contracts?classification=GOOD&postedAfter=2026-04-10T00:00:00.000Z&limit=1' | python3 -c 'import sys,json;d=json.load(sys.stdin);print("total:",d["pagination"]["total"])'
+[2026-04-17T07:52:44] curl -sS 'http://localhost:3001/' | grep -oE 'Solicitation|Presolicitation|Sources Sought|Qualifying only|This week|This month' | sort -u

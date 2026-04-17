@@ -6,10 +6,12 @@ import {
   ilike,
   and,
   gt,
+  gte,
   ne,
   sql,
   desc,
   asc,
+  inArray,
   isNull,
   isNotNull,
   type SQL,
@@ -20,7 +22,15 @@ import {
  *
  * List contracts with filters, pagination, search.
  * Query params: classification, search, page, limit, agency, noticeType,
- *               unreviewed, includeUnreviewed
+ *               postedAfter, setAsideQualifying, unreviewed, includeUnreviewed
+ *
+ * noticeType accepts a single value or comma-separated list:
+ *   ?noticeType=Solicitation,Presolicitation
+ *
+ * postedAfter: ISO timestamp string; filters postedDate >= value.
+ *
+ * setAsideQualifying=true restricts to set-aside codes JCL qualifies for
+ * (SBA, SBP, NONE, empty, or NULL).
  *
  * Review filter (default behavior):
  *   Main Kanban only shows contracts the user has triaged (reviewedAt IS
@@ -46,7 +56,18 @@ export async function GET(req: NextRequest) {
       Math.max(1, parseInt(searchParams.get("limit") ?? "50", 10)),
     );
     const agency = searchParams.get("agency");
-    const noticeType = searchParams.get("noticeType");
+    const noticeTypeParam = searchParams.get("noticeType");
+    const noticeTypes = noticeTypeParam
+      ? noticeTypeParam
+          .split(",")
+          .map((s) => s.trim())
+          .filter(Boolean)
+      : [];
+    const postedAfterParam = searchParams.get("postedAfter");
+    const postedAfter = postedAfterParam ? new Date(postedAfterParam) : null;
+    const setAsideQualifying =
+      searchParams.get("setAsideQualifying") === "true" ||
+      searchParams.get("setAsideQualifying") === "1";
     const unreviewed = searchParams.get("unreviewed") === "true";
     const includeUnreviewed = searchParams.get("includeUnreviewed") === "true";
     const offset = (page - 1) * limit;
@@ -88,8 +109,20 @@ export async function GET(req: NextRequest) {
       conditions.push(ilike(contracts.agency, `%${agency}%`));
     }
 
-    if (noticeType) {
-      conditions.push(eq(contracts.noticeType, noticeType));
+    if (noticeTypes.length === 1) {
+      conditions.push(eq(contracts.noticeType, noticeTypes[0]));
+    } else if (noticeTypes.length > 1) {
+      conditions.push(inArray(contracts.noticeType, noticeTypes));
+    }
+
+    if (postedAfter && !Number.isNaN(postedAfter.getTime())) {
+      conditions.push(gte(contracts.postedDate, postedAfter));
+    }
+
+    if (setAsideQualifying) {
+      conditions.push(
+        sql`(${contracts.setAsideCode} IN ('SBA', 'SBP', 'NONE', '') OR ${contracts.setAsideCode} IS NULL)`,
+      );
     }
 
     const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
