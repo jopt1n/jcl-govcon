@@ -1,7 +1,6 @@
 import { Suspense } from "react";
 import { KanbanBoard } from "@/components/kanban/board";
 import { CrawlStatus } from "@/components/crawl-status";
-import { DashboardStats } from "@/components/dashboard-stats";
 
 export default function DashboardPage() {
   return (
@@ -16,7 +15,6 @@ export default function DashboardPage() {
         </p>
       </div>
       <CrawlStatus />
-      <DashboardStats />
       <Suspense fallback={null}>
         <KanbanBoard />
       </Suspense>

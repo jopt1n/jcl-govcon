@@ -908,3 +908,115 @@ echo "=== GOOD + Solicitation,Presolicitation ===" && curl -sS 'http://localhost
 echo "=== GOOD + setAsideQualifying=1 ===" && curl -sS 'http://localhost:3001/api/contracts?classification=GOOD&setAsideQualifying=1&limit=1' | python3 -c 'import sys,json;d=json.load(sys.stdin);print("total:",d["pagination"]["total"])'
 echo "=== GOOD + postedAfter 7d ===" && curl -sS 'http://localhost:3001/api/contracts?classification=GOOD&postedAfter=2026-04-10T00:00:00.000Z&limit=1' | python3 -c 'import sys,json;d=json.load(sys.stdin);print("total:",d["pagination"]["total"])'
 [2026-04-17T07:52:44] curl -sS 'http://localhost:3001/' | grep -oE 'Solicitation|Presolicitation|Sources Sought|Qualifying only|This week|This month' | sort -u
+[2026-04-17T07:54:43] ls /Users/joelaptin/.claude/projects/-Users-joelaptin-jcl-govcon/memory/ 2>&1 | head -20
+[2026-04-17T07:55:36] _UPD=$(~/.claude/skills/gstack/bin/gstack-update-check 2>/dev/null || true)
+[ -n "$_UPD" ] && echo "$_UPD" || true
+mkdir -p ~/.gstack/sessions
+touch ~/.gstack/sessions/"$PPID"
+_PROACTIVE=$(~/.claude/skills/gstack/bin/gstack-config get proactive 2>/dev/null || echo "true")
+_PROACTIVE_PROMPTED=$([ -f ~/.gstack/.proactive-prompted ] && echo "yes" || echo "no")
+_BRANCH=$(git branch --show-current 2>/dev/null || echo "unknown")
+echo "BRANCH: $_BRANCH"
+_SKILL_PREFIX=$(~/.claude/skills/gstack/bin/gstack-config get skill_prefix 2>/dev/null || echo "false")
+echo "PROACTIVE: $_PROACTIVE"
+echo "PROACTIVE_PROMPTED: $_PROACTIVE_PROMPTED"
+echo "SKILL_PREFIX: $_SKILL_PREFIX"
+source <(~/.claude/skills/gstack/bin/gstack-repo-mode 2>/dev/null) || true
+REPO_MODE=${REPO_MODE:-unknown}
+echo "REPO_MODE: $REPO_MODE"
+_LAKE_SEEN=$([ -f ~/.gstack/.completeness-intro-seen ] && echo "yes" || echo "no")
+echo "LAKE_INTRO: $_LAKE_SEEN"
+_TEL=$(~/.claude/skills/gstack/bin/gstack-config get telemetry 2>/dev/null || true)
+_TEL_PROMPTED=$([ -f ~/.gstack/.telemetry-prompted ] && echo "yes" || echo "no")
+_TEL_START=$(date +%s)
+_SESSION_ID="$$-$(date +%s)"
+echo "TELEMETRY: ${_TEL:-off}"
+echo "TEL_PROMPTED: $_TEL_PROMPTED"
+eval "$(~/.claude/skills/gstack/bin/gstack-slug 2>/dev/null)" 2>/dev/null || true
+_LEARN_FILE="${GSTACK_HOME:-$HOME/.gstack}/projects/${SLUG:-unknown}/learnings.jsonl"
+if [ -f "$_LEARN_FILE" ]; then
+  _LEARN_COUNT=$(wc -l < "$_LEARN_FILE" 2>/dev/null | tr -d ' ')
+  echo "LEARNINGS: $_LEARN_COUNT entries loaded"
+else
+  echo "LEARNINGS: 0"
+fi
+_HAS_ROUTING="no"
+if [ -f CLAUDE.md ] && grep -q "## Skill routing" CLAUDE.md 2>/dev/null; then
+  _HAS_ROUTING="yes"
+fi
+_ROUTING_DECLINED=$(~/.claude/skills/gstack/bin/gstack-config get routing_declined 2>/dev/null || echo "false")
+echo "HAS_ROUTING: $_HAS_ROUTING"
+echo "ROUTING_DECLINED: $_ROUTING_DECLINED"
+_VENDORED="no"
+if [ -d ".claude/skills/gstack" ] && [ ! -L ".claude/skills/gstack" ]; then
+  if [ -f ".claude/skills/gstack/VERSION" ] || [ -d ".claude/skills/gstack/.git" ]; then
+    _VENDORED="yes"
+  fi
+fi
+echo "VENDORED_GSTACK: $_VENDORED"
+[ -n "$OPENCLAW_SESSION" ] && echo "SPAWNED_SESSION: true" || true
+echo "SESSION_ID: $_SESSION_ID"
+[2026-04-17T07:55:53] git remote get-url origin 2>/dev/null
+echo "---"
+git branch --show-current
+echo "---"
+git fetch origin main --quiet 2>&1 && git diff origin/main --stat
+[2026-04-17T07:56:17] git log origin/main..HEAD --oneline | head -40
+[2026-04-17T07:56:23] git diff origin/main -- src/app/api/contracts/route.ts src/components/kanban/board.tsx src/components/kanban/filter-chips.tsx src/app/page.tsx 2>&1 | head -400
+[2026-04-17T07:58:28] npx tsc --noEmit 2>&1 | tail -20 && echo "---LINT---" && npm run lint 2>&1 | tail -5 && echo "---TESTS---" && npm run test:run 2>&1 | tail -10
+[2026-04-17T07:58:46] echo "=== GOOD + setAsideQualifying (should match reviewed GOOD) ==="
+curl -sS 'http://localhost:3001/api/contracts?classification=GOOD&setAsideQualifying=1&limit=1' | python3 -c 'import sys,json;d=json.load(sys.stdin);print("total:",d["pagination"]["total"])'
+echo "=== All classifications with qualifying=1 ==="
+curl -sS 'http://localhost:3001/api/contracts?includeUnreviewed=true&setAsideQualifying=1&limit=1' | python3 -c 'import sys,json;d=json.load(sys.stdin);print("total:",d["pagination"]["total"])'
+echo "=== All (no filter) ==="
+curl -sS 'http://localhost:3001/api/contracts?includeUnreviewed=true&limit=1' | python3 -c 'import sys,json;d=json.load(sys.stdin);print("total:",d["pagination"]["total"])'
+echo "=== Sample distinct set-aside codes in DB ==="
+curl -sS 'http://localhost:3001/api/contracts?includeUnreviewed=true&limit=1' | python3 -c 'import sys,json;d=json.load(sys.stdin);print("sample:",d.get("data")[:1])'
+[2026-04-17T07:59:20] git status --short
+echo "---"
+git diff --stat
+[2026-04-17T07:59:53] npx tsc --noEmit 2>&1 | tail -5 && echo "---" && npm run test:run 2>&1 | tail -5 && echo "---" && npm run lint 2>&1 | tail -3
+[2026-04-17T08:00:11] ~/.claude/skills/gstack/bin/gstack-review-log '{"skill":"review","timestamp":"'"$(date -u +%Y-%m-%dT%H:%M:%SZ)"'","status":"issues_found","issues_found":2,"critical":1,"informational":1,"quality_score":8.5,"specialists":{},"findings":[{"fingerprint":"src/app/api/contracts/route.ts:set-aside-allowlist","severity":"CRITICAL","action":"auto-fixed"},{"fingerprint":"src/components/kanban/board.tsx:posted-window-validation","severity":"INFORMATIONAL","action":"auto-fixed"}],"commit":"'"$(git rev-parse --short HEAD)"'"}' 2>&1 || true
+[2026-04-17T08:00:17] git add src/app/api/contracts/route.ts src/lib/sam-gov/set-aside-filter.ts src/components/kanban/board.tsx
+git status --short
+echo "---"
+git diff --cached --stat
+[2026-04-17T08:00:25] git commit -m "$(cat <<'EOF'
+fix: align setAsideQualifying filter with isRestrictedSetAside prefix blocklist
+
+The Kanban "Qualifying only" filter used an allowlist (SBA, SBP, NONE, '')
+while the rest of the app (batch-classify pre-filter) uses the prefix
+blocklist in isRestrictedSetAside. These diverge on any SAM.gov code not
+in either list, silently hiding contracts from the Kanban that the
+classifier keeps. Export the shared prefix list and build the SQL to
+mirror the JS logic.
+
+Also validate postedWindow URL param at runtime to avoid silently
+treating a garbage value as "month".
+
+Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>
+EOF
+)"
+echo "---"
+git log -1 --oneline
+[2026-04-17T08:00:29] git log origin/main..HEAD --oneline | wc -l
+echo "---"
+git push origin main 2>&1 | tail -20
+[2026-04-17T08:00:35] git status --short && echo "---" && git log origin/main -1 --oneline
+[2026-04-17T22:25:57] grep -n "DashboardStats" /Users/joelaptin/jcl-govcon/src/app/page.tsx /Users/joelaptin/jcl-govcon/src/components/dashboard-stats.tsx 2>&1 | head -20
+echo "---"
+ls /Users/joelaptin/jcl-govcon/src/components/dashboard-stats*
+[2026-04-17T22:26:09] ls /Users/joelaptin/jcl-govcon/src/__tests__/components/dashboard-stats* 2>&1 || echo "no tests"
+[2026-04-17T22:26:30] rm /Users/joelaptin/jcl-govcon/src/components/dashboard-stats.tsx && echo "removed"
+[2026-04-17T22:26:34] npx tsc --noEmit 2>&1 | tail -5 && echo "---" && npm run test:run 2>&1 | tail -5
+[2026-04-17T22:27:33] git add src/app/page.tsx src/components/dashboard-stats.tsx progress.md 2>&1; git status --short
+[2026-04-17T22:27:38] git commit -m "$(cat <<'EOF'
+refactor: remove DashboardStats all-zero summary row
+
+The secondary stat row on the dashboard showed all zeros because its
+query filter didn't match DB state. Pipeline Status widget already
+shows live counts, so the row was redundant clutter.
+
+Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>
+EOF
+)" && git push origin main 2>&1 | tail -3
