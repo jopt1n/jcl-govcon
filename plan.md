@@ -75,18 +75,22 @@ Automated government contract pipeline: SAM.gov → PostgreSQL → Gemini AI cla
 
 ---
 
-## Phase 8: Go Live — IN PROGRESS
+## Phase 8: Go Live — COMPLETE (2026-04-16)
 
 - [x] Fix NEXT_PUBLIC_INGEST_SECRET — moved to server-only env var
-- [ ] Set `SAM_DRY_RUN=false` and run bulk metadata crawl (~18K contracts, ~2 days)
-- [ ] Run metadata classification (~$2-5 Gemini cost)
-- [ ] Run selective description fetch for GOOD/MAYBE (~500-2K contracts)
-- [ ] Run re-classification with descriptions
-- [ ] Spot-check quality: 10 GOOD, 10 MAYBE, 10 DISCARD
-- [ ] Deploy to Railway
-- [ ] Configure n8n daily workflow (6 AM: ingest → classify → digest)
-- [ ] Set `NEXT_PUBLIC_APP_URL` and `RESEND_API_KEY` in Railway env
-- [ ] Verify email digest delivery
+- [x] Set `SAM_DRY_RUN=false` and run bulk metadata crawl (35,667 contracts ingested)
+- [x] Run metadata classification (Grok xAI Batch API)
+- [x] Run selective description fetch for GOOD/MAYBE (1,014 fetched)
+- [x] Run re-classification with descriptions
+- [x] Deploy to Railway web service (`jcl-govcon-web`)
+- [x] Configure weekly cron workflow (Mon 15:00 UTC: crawl → batch → digest)
+- [x] Verify Telegram digest delivery (replaced email digest per user)
+
+## Phase 8.5: Dashboard UX — COMPLETE (2026-04-17)
+
+- [x] Kanban filter chips (Notice / Posted / Set-aside) with URL-persisted state
+- [x] Shared `RESTRICTED_SET_ASIDE_PREFIXES` for "qualifying only" filter
+- [x] Remove all-zero DashboardStats summary row
 
 ## Phase 9: Application Facilitation — NOT STARTED
 
@@ -98,13 +102,23 @@ Automated government contract pipeline: SAM.gov → PostgreSQL → Gemini AI cla
 
 ## Phase 10: Refinements — BACKLOG
 
-- [ ] NAICS code filtering in SAM.gov queries (reduce irrelevant contracts pre-classification)
-- [ ] Increase DB connection pool (max: 1 → 5-10 for Railway)
+- [ ] Presol → Solicitation merge strategy (needs `solicitationNumber` stability check)
+- [ ] `api_usage` purge cron (P2, trivial addition to check-batches or separate cron)
+- [ ] Internal Railway DATABASE_URL for lower latency (~1ms vs 20-50ms public proxy)
+- [ ] Chip row `overflow-x-auto` on narrow screens if wrapping feels messy
+- [ ] "This week" chip empty-state → affordance to /inbox for unreviewed
+- [ ] Inbox filter chips (parallel to Kanban, for triage)
+- [ ] NAICS code filtering in SAM.gov queries
 - [ ] Fix `updatedAt` auto-update (app-level or Postgres trigger)
-- [x] Replace `NEXT_PUBLIC_INGEST_SECRET` with server-side proxy (`/api/pipeline`)
+- [x] Replace `NEXT_PUBLIC_INGEST_SECRET` with server-side proxy
 - [ ] Clickable document links in contract detail
 - [ ] DOCX text extraction for classification (currently PDF-only)
-- [ ] Consider Gemini batch API when SDK supports it
 - [ ] React `act()` warnings in KanbanBoard tests (cosmetic)
-- [ ] Consider turbopuffer for semantic search (future enhancement)
-- [ ] Explore self-hosted LLM (Kimi K2.5 on Hetzner) for document analysis at scale
+- [ ] Next.js 14 → 15 upgrade
+- [ ] Consider turbopuffer for semantic search
+- [ ] Explore self-hosted LLM for document analysis at scale
+
+## Later (deprioritized)
+
+- [ ] Configure n8n daily workflow — superseded by Railway cron on Next.js routes
+- [ ] Email digest via Resend — superseded by Telegram digest
