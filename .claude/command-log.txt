@@ -1057,3 +1057,126 @@ EOF
   last=$(cd ~/$d 2>/dev/null && git log -1 --format="%ar" 2>/dev/null || echo "unknown")
   echo "$d: last commit $last"
 done
+[2026-04-17T23:52:59] cat > /tmp/contract_lookup.ts << 'EOF'
+import { db } from "./src/lib/db";
+import { contracts } from "./src/lib/db/schema";
+import { eq } from "drizzle-orm";
+
+const id = "2694ecd4-9bd4-4698-a5cd-c65551fa0bda";
+const rows = await db.select().from(contracts).where(eq(contracts.id, id));
+if (!rows.length) {
+  console.log("NOT FOUND");
+  process.exit(1);
+}
+const c = rows[0];
+console.log(JSON.stringify({
+  id: c.id,
+  noticeId: c.noticeId,
+  solicitationNumber: c.solicitationNumber,
+  title: c.title,
+  agency: c.agency,
+  orgPathName: c.orgPathName,
+  naicsCode: c.naicsCode,
+  pscCode: c.pscCode,
+  noticeType: c.noticeType,
+  setAsideType: c.setAsideType,
+  setAsideCode: c.setAsideCode,
+  awardCeiling: c.awardCeiling,
+  responseDeadline: c.responseDeadline,
+  postedDate: c.postedDate,
+  classification: c.classification,
+  aiReasoning: c.aiReasoning,
+  summary: c.summary,
+  popState: c.popState,
+  popCity: c.popCity,
+  popZip: c.popZip,
+  officeCity: c.officeCity,
+  officeState: c.officeState,
+  contactEmail: c.contactEmail,
+  samUrl: c.samUrl,
+  resourceLinks: c.resourceLinks,
+  tags: c.tags,
+  descriptionFetched: c.descriptionFetched,
+  documentsAnalyzed: c.documentsAnalyzed,
+  actionPlan: c.actionPlan,
+  descriptionLength: c.descriptionText?.length ?? 0,
+}, null, 2));
+console.log("\n--- DESCRIPTION TEXT ---");
+console.log(c.descriptionText ?? "(no description)");
+process.exit(0);
+EOF
+npx tsx /tmp/contract_lookup.ts 2>&1 | head -500
+[2026-04-17T23:53:08] cat > /tmp/contract_lookup.ts << 'EOF'
+import { db } from "@/lib/db";
+import { contracts } from "@/lib/db/schema";
+import { eq } from "drizzle-orm";
+
+async function main() {
+  const id = "2694ecd4-9bd4-4698-a5cd-c65551fa0bda";
+  const rows = await db.select().from(contracts).where(eq(contracts.id, id));
+  if (!rows.length) {
+    console.log("NOT FOUND");
+    process.exit(1);
+  }
+  const c = rows[0];
+  console.log(JSON.stringify({
+    id: c.id,
+    noticeId: c.noticeId,
+    solicitationNumber: c.solicitationNumber,
+    title: c.title,
+    agency: c.agency,
+    orgPathName: c.orgPathName,
+    naicsCode: c.naicsCode,
+    pscCode: c.pscCode,
+    noticeType: c.noticeType,
+    setAsideType: c.setAsideType,
+    setAsideCode: c.setAsideCode,
+    awardCeiling: c.awardCeiling,
+    responseDeadline: c.responseDeadline,
+    postedDate: c.postedDate,
+    classification: c.classification,
+    aiReasoning: c.aiReasoning,
+    summary: c.summary,
+    popState: c.popState,
+    popCity: c.popCity,
+    popZip: c.popZip,
+    officeCity: c.officeCity,
+    officeState: c.officeState,
+    contactEmail: c.contactEmail,
+    samUrl: c.samUrl,
+    resourceLinks: c.resourceLinks,
+    tags: c.tags,
+    descriptionFetched: c.descriptionFetched,
+    documentsAnalyzed: c.documentsAnalyzed,
+    actionPlan: c.actionPlan,
+    descriptionLength: c.descriptionText?.length ?? 0,
+  }, null, 2));
+  console.log("\n--- DESCRIPTION TEXT ---");
+  console.log(c.descriptionText ?? "(no description)");
+  process.exit(0);
+}
+main().catch((e) => { console.error(e); process.exit(1); });
+EOF
+cp /tmp/contract_lookup.ts /Users/joelaptin/jcl-govcon/scripts/contract_lookup.ts
+npx tsx scripts/contract_lookup.ts 2>&1 | head -500
+[2026-04-17T23:53:12] node -r dotenv/config node_modules/tsx/dist/cli.mjs scripts/contract_lookup.ts dotenv_config_path=.env 2>&1 | head -400
+[2026-04-17T23:53:15] ls scripts/ | head -20 && grep -l "DATABASE_URL\|dotenv\|loadEnv" scripts/*.ts 2>/dev/null | head -5
+[2026-04-17T23:53:36] npx tsx scripts/contract_lookup.ts 2>&1 | head -300
+[2026-04-17T23:54:00] source .env && curl -sL -o /tmp/takata-doc -D /tmp/takata-headers "https://sam.gov/api/prod/opps/v3/opportunities/resources/files/5d1607ad40754d78bda53d567973a9dc/download?api_key=$SAM_GOV_API_KEY" && file /tmp/takata-doc && ls -la /tmp/takata-doc && head -20 /tmp/takata-headers
+[2026-04-17T23:54:08] ls src/lib/pdf* 2>/dev/null; grep -rn "pdf-parse\|pdfjs" package.json 2>/dev/null
+[2026-04-17T23:54:13] cat > /tmp/pdf-extract.mjs << 'EOF'
+import { readFile } from "node:fs/promises";
+import pdf from "pdf-parse";
+const buf = await readFile("/tmp/takata-doc");
+const { text, numpages, info } = await pdf(buf);
+console.log(`Pages: ${numpages}`);
+console.log(`Title: ${info?.Title ?? "(none)"}`);
+console.log("=== TEXT ===");
+console.log(text);
+EOF
+node /tmp/pdf-extract.mjs 2>&1 | head -500
+[2026-04-17T23:54:27] npx tsx scripts/pdf_extract.ts /tmp/takata-doc 2>&1 | head -500
+[2026-04-17T23:54:32] ls node_modules/pdf-parse/ 2>/dev/null | head -20 && cat node_modules/pdf-parse/package.json 2>/dev/null | head -30
+[2026-04-17T23:54:35] grep -rn "pdf-parse" src/lib/ 2>/dev/null | head -5
+[2026-04-17T23:54:49] npx tsx scripts/pdf_extract.ts /tmp/takata-doc 2>&1 | head -800
+[2026-04-17T23:54:55] rm scripts/contract_lookup.ts scripts/pdf_extract.ts /tmp/takata-doc /tmp/takata-headers /tmp/pdf-extract.mjs /tmp/contract_lookup.ts 2>/dev/null; echo done
