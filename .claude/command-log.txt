@@ -1187,3 +1187,301 @@ node /tmp/pdf-extract.mjs 2>&1 | head -500
 [2026-04-18T01:11:29] ls docs/ 2>/dev/null | head -20
 [2026-04-18T01:11:32] ls docs/procurement/ 2>/dev/null
 [2026-04-18T05:18:59] npx tsx scripts/contract_lookup.ts da6bc501-a75d-449d-ae24-e99e1b287a1b 2>&1 | head -500
+[2026-04-18T05:45:10] find /Users/joelaptin/jcl-govcon/src -type f \( -name "*.tsx" -o -name "*.ts" \) | grep -v __tests__ | head -50
+[2026-04-18T05:45:21] find /Users/joelaptin/jcl-govcon -name "*.test.ts" -o -name "*.test.tsx" | head -20
+[2026-04-18T05:45:25] find /Users/joelaptin/jcl-govcon/src/__tests__ -name "*.test.ts" -o -name "*.test.tsx" | head -20
+[2026-04-18T05:45:36] grep -r "classification" /Users/joelaptin/jcl-govcon/src --include="*.ts" --include="*.tsx" | grep -E "(WHERE|where|filter|switch|case)" | head -20
+[2026-04-18T05:45:47] find /Users/joelaptin/jcl-govcon -name "*.sql" -o -name "migrations" -type d
+[2026-04-18T05:45:47] grep -r "userOverride" /Users/joelaptin/jcl-govcon/src --include="*.ts" --include="*.tsx" | head -15
+[2026-04-18T05:45:52] grep -r "GOOD\|MAYBE\|DISCARD\|PENDING" /Users/joelaptin/jcl-govcon/src/lib/ai --include="*.ts" | grep -v node_modules | head -20
+[2026-04-18T05:49:03] ls /Users/joelaptin/jcl-govcon/src/app
+[2026-04-18T05:49:11] ls /Users/joelaptin/jcl-govcon/src/__tests__/api/contracts /Users/joelaptin/jcl-govcon/src/__tests__/components
+[2026-04-18T05:49:14] ls /Users/joelaptin/.claude/plans/ 2>/dev/null || echo "plans dir does not exist"
+[2026-04-18T05:51:18] cat > /Users/joelaptin/.claude/plans/synthetic-stargazing-feigenbaum-agent-a757351cb533993c6.md << 'PLAN_EOF'
+# Plan: CHOSEN tier — user-driven promotion above AI's GOOD
+
+Dynamic working name in code: **promoted** (boolean flag). Displayed to the user as **"Great"** (verb: "Promote to Great") and on its own page as **/chosen**. Color token: **gold**.
+
+## Architectural decision: Option B (promoted boolean)
+
+Adopting your recommendation. Justification:
+
+1. **Data integrity.** The AI classification is the durable signal from the model — it's what powers the "was the classifier right?" analytics loop the memory file explicitly calls out (recall-over-precision). Overwriting GOOD → CHOSEN destroys that signal. A boolean `promoted` keeps the AI's answer intact and records the human decision orthogonally.
+2. **Blast radius.** Option A touches ~38 hardcoded classification sites, a Postgres `ALTER TYPE` (which requires a DB round-trip outside the Drizzle `push` flow), and the AI prompt + classifier variants. Option B touches roughly **7** files with additive changes.
+3. **Precedent.** The schema already has two orthogonal boolean/timestamp axes: `userOverride` (did the human change the AI's mind?) and `reviewedAt` (did the human triage this?). `promoted` / `promotedAt` sits naturally next to them: did the human elevate this one?
+4. **Reversibility.** A "demote" is one boolean flip; contracts flow back to their original classification column with no data loss. An enum approach has to remember the "previous" value explicitly.
+5. **No AI-prompt surgery.** Grok keeps emitting GOOD/MAYBE/DISCARD. There is zero risk of the AI outputting CHOSEN, zero risk of the recall-over-precision policy drifting.
+6. **Composition with status.** The pipeline status enum (IDENTIFIED → WON) is already orthogonal to classification. `promoted` adds a third orthogonal dimension in exactly the same style.
+
+Only case where Option A wins is if we want a single sortable column in SQL (`ORDER BY classification`). We don't — we already sort by `promoted DESC, posted_date DESC` trivially.
+
+## 1. Data model
+
+**File:** `src/lib/db/schema.ts` (table `contracts`, around line 100 between `reviewedAt` and `statusChangedAt`).
+
+Additive fields:
+
+```ts
+// User-driven promotion above the AI classifier.
+// The AI is tuned for recall (see feedback_classification_recall.md) —
+// most GOOD contracts aren't actually ideal. Promoted contracts are the
+// small subset the user has personally elevated: shown on /chosen with
+// gold accent. Orthogonal to classification (we keep the AI's original
+// answer) and to status (the pipeline lifecycle).
+promoted: boolean("promoted").notNull().default(false),
+promotedAt: timestamp("promoted_at", { withTimezone: true }),
+```
+
+Index (in the same `(table) => ({ ... })` block):
+
+```ts
+// Powers /chosen page (promoted DESC, promoted_at DESC) and the nav
+// badge count. Partial index keeps it tiny — 99%+ of rows are false.
+promotedIdx: index("contracts_promoted_idx")
+  .on(table.promotedAt)
+  .where(sql`${table.promoted} = true`),
+```
+
+(If Drizzle's partial-index syntax is awkward, fall back to a non-partial `index("contracts_promoted_idx").on(table.promoted, table.promotedAt)` — still cheap.)
+
+Apply with `npx drizzle-kit push`. No migration file per CLAUDE.md. Default `false`, nullable timestamp — backfill is implicit.
+
+## 2. API surface
+
+### 2a. Extend `PATCH /api/contracts/[id]`
+
+**File:** `src/app/api/contracts/[id]/route.ts`.
+
+Add after the `userOverride` block (~line 107):
+
+```ts
+if (body.promoted !== undefined) {
+  if (typeof body.promoted !== "boolean") {
+    return NextResponse.json({ error: "Invalid promoted" }, { status: 400 });
+  }
+  updates.promoted = body.promoted;
+  updates.promotedAt = body.promoted ? new Date() : null;
+}
+```
+
+**Validation rule:** Any classification can be promoted. Rationale: the user may spot a gem the AI tagged MAYBE or even DISCARD; blocking would force them to re-classify first, which destroys the "AI said X, human said great anyway" signal. The whole point is human override. No restriction.
+
+Also include `promoted` and `promotedAt` in the row returned from `GET /api/contracts/[id]` — it already `select()`s the whole row, so this is free once the schema field exists.
+
+### 2b. Extend `GET /api/contracts` list endpoint
+
+**File:** `src/app/api/contracts/route.ts`.
+
+1. Add query params to the docstring and parser:
+   - `promoted=true` → filter `WHERE promoted = true`
+   - `promoted=false` → filter `WHERE promoted = false` (used if /chosen-only mode ever needed on Kanban)
+2. Add the field to the select projection (line ~146):
+   ```ts
+   promoted: contracts.promoted,
+   promotedAt: contracts.promotedAt,
+   ```
+3. In the condition block (after the `unreviewed` handling):
+   ```ts
+   const promotedParam = searchParams.get("promoted");
+   if (promotedParam === "true") conditions.push(eq(contracts.promoted, true));
+   else if (promotedParam === "false") conditions.push(eq(contracts.promoted, false));
+   ```
+4. Sort: when `promoted=true`, order by `desc(contracts.promotedAt)` first. Implement by special-casing `promotedParam === "true"` the same way `isDeadlines` is handled.
+
+### 2c. Analytics endpoint (drop-in, minor)
+
+**File:** `src/app/api/analytics/route.ts`. Add a `promotedCount` tile:
+
+```ts
+db.select({ count: sql<number>`count(*) FILTER (WHERE ${contracts.promoted} = true)::int` })
+  .from(contracts),
+```
+
+Return as `{ promotedCount: number }` alongside the existing payload. UI can display later; wiring the number is cheap and lets the sidebar badge + empty-state copy share it.
+
+No new endpoint. No new auth surface. PATCH already guards via the existing Next middleware.
+
+## 3. UI treatment
+
+### 3a. Gold CSS token
+
+**File:** `src/app/globals.css`. Add to both `:root` and `.dark` blocks, right after `--urgent`:
+
+```css
+--chosen: #eab308;        /* Tailwind yellow-500, gold feel */
+--chosen-bg: #fef3c7;     /* soft gold wash for light mode */
+```
+
+Dark-mode block uses the same `--chosen: #eab308` and `--chosen-bg: rgba(234, 179, 8, 0.08)` for a subtle fill. This matches the existing `--good: #10b981` dual-mode pattern (same hex both themes).
+
+### 3b. Where the promote button lives
+
+**Primary: contract detail page** (`src/components/contract-detail.tsx`). This is the "I am reading the contract carefully" surface where promotion is a deliberate act. User's own words: *"when I judge the contract, I can click 'Great.'"*
+
+Treatment in the Classification row block (~line 461, next to the GOOD/MAYBE/DISCARD button group):
+
+- Add a separate gold "Promote to Great" / "Demote" toggle button to the right of the classification buttons and to the left of the Pipeline Status dropdown.
+- When `contract.promoted === false`: `<button>` with Star icon, label "Promote to Great", gold border/text.
+- When `contract.promoted === true`: same position, filled gold bg, label "Chosen — Demote", clicking flips back.
+- Clicking PATCHes `{ promoted: true }` / `{ promoted: false }` via the existing `updateField` helper — no new client state needed.
+- Also append a **gold pill** next to the classification badge in the header (~line 337), e.g. `<span class="... bg-[var(--chosen-bg)] text-[var(--chosen)] border-[var(--chosen)]/30">CHOSEN ★</span>`. Appears only when `promoted`.
+
+**Secondary: /inbox and Kanban GOOD column cards.** Do NOT add the promote action there. Rationale: /inbox is for triage (mark reviewed, move on); promotion is post-triage. Kanban is pan-view; the click-through to detail is the correct promotion gesture. Adding a button on the card clutters the triage surface and encourages impulse-promotion. Star only appears as a **read-only indicator** on cards (see 3c).
+
+Icon choice: **Star (lucide-react `Star`)**. Crown is too coronation-heavy for "good enough to chase"; Sparkles reads AI-y and conflicts with the Brain icon already used for AI reasoning. Star is the universal "favorite" gesture.
+
+### 3c. How promoted contracts render
+
+**Kanban card (`src/components/kanban/card.tsx`):**
+
+1. Extend `ContractCard` interface: `promoted?: boolean;`
+2. When `promoted === true`, change the left border from `classificationBorder[classification]` to `border-l-[var(--chosen)]` and bump border width to 4px (via an inline extra class). This overrides the green stripe with gold for GOOD-promoted cards — gold wins.
+3. Add a small `<Star className="w-3 h-3 fill-[var(--chosen)] text-[var(--chosen)]" />` next to the title, filled when promoted.
+4. Update `classificationBadge` map: not changed (promoted is an overlay, not a classification).
+
+**Kanban column (`src/components/kanban/column.tsx`):** no change. Promoted contracts stay in their home column (GOOD column on main Kanban). **They do NOT disappear from the Kanban GOOD column.** Rationale: /chosen is a *filtered view*, not a move. If promoted cards vanished from GOOD, the GOOD column would lie about how many active GOODs exist, and demote would feel like a teleport. Gold accent on the card visually separates them within the column.
+
+**Contract detail (`src/components/contract-detail.tsx`):**
+
+1. Add `promoted: boolean; promotedAt: string | null;` to the `Contract` interface (~line 49).
+2. Header pill (described in 3b).
+3. Entire page gets a subtle gold top border `border-t-2 border-[var(--chosen)]` on the outer container when `promoted` — so opening a promoted contract *feels* different without being garish.
+
+**/inbox page (`src/app/inbox/page.tsx`):** leave unchanged. Unreviewed contracts are almost never pre-promoted (the flow is triage → view detail → promote). If a promoted-unreviewed card does appear, it gets the gold left-border automatically via the KanbanCard component. No copy changes.
+
+**Analytics dashboard (`src/components/analytics-dashboard.tsx`):** add a "Chosen" stat card sourced from `promotedCount`, gold-tinted. One-line addition.
+
+## 4. New /chosen page
+
+**File to create:** `src/app/chosen/page.tsx`. Clone of `src/app/inbox/page.tsx`, simplified.
+
+Shape:
+
+```tsx
+"use client";
+// /chosen — contracts the user has personally promoted above the AI's GOOD.
+//
+// The AI's GOOD classification is tuned for recall — most GOOD contracts
+// aren't actually ideal. This page shows only the ones the user has
+// starred with "Promote to Great." Single flat list, most recently
+// promoted first; deadline shown but does not re-sort.
+```
+
+- Fetch: `GET /api/contracts?promoted=true&includeUnreviewed=true&limit=100`. Use `includeUnreviewed=true` so a contract promoted straight from /inbox (after you reviewed it) also shows without needing a secondary triage step.
+- Single flat list (no grouping by classification — the whole point is that these transcend classification). Sort: promotedAt DESC (server-side).
+- Each card: existing `KanbanCard` with `showClassification={true}` so the user still sees what the AI thought (useful signal: "I promoted 3 MAYBEs this week — AI is too conservative"). Gold left-border automatic.
+- Each card gets a "Demote" button underneath (same pattern as `Mark reviewed` on /inbox), that PATCHes `{ promoted: false }` and optimistically removes.
+
+Header: `<h1><Star /> Chosen</h1>` with subtitle "Contracts you've personally elevated. Re-ranked weekly, never classified by AI."
+
+Empty state:
+
+```
+★
+Nothing here yet
+Open a contract from the board and click "Promote to Great" to add it.
+```
+
+(Icon + line + line, mirrors the /inbox empty state structure.)
+
+Count in header: "N chosen • M with deadlines in <7d" (computed client-side from the fetched list; no new endpoint).
+
+## 5. Sidebar nav
+
+**File:** `src/components/sidebar.tsx`.
+
+1. Import `Star` from lucide-react (already have others; one more import).
+2. Insert nav item **directly after Inbox, before Pipeline**:
+   ```ts
+   { href: "/chosen", label: "Chosen", icon: Star, badgeKey: "chosen" },
+   ```
+   Ordering justification: Inbox → Chosen → Pipeline mirrors the user's actual funnel (triage → elevate → pursue).
+3. Extend `NavItem.badgeKey` union: `"inbox" | "chosen"`.
+4. Extend `useUnreadCount` hook to return both counts. Easiest: rename to `useNavCounts()` returning `{ inbox, chosen }`; add a second `fetch("/api/contracts?promoted=true&limit=1&page=1")` in the same poll interval. Both are lightweight (limit=1 just for the total).
+5. Update `badgeMap` to include both.
+
+The "Chosen" badge uses the same accent color as Inbox by default — keeping CSS simple. If you want a gold dot specifically for Chosen, add a `badgeColor?: string` hook to `NavItem` and render `bg-[var(--chosen)]` for this one. Recommendation: **do it** — visual consistency with gold throughout the rest of the feature. ~6 extra lines in sidebar.
+
+## 6. Test updates
+
+### Existing tests to update
+
+- **`src/__tests__/api/contracts/id.test.ts`**: add two tests — `accepts promoted: true` (verifies `promotedAt` gets set to a Date) and `accepts promoted: false` (verifies `promotedAt` set to null). Update the schema mock object at line ~22 to include `promoted: "promoted"` and `promotedAt: "promoted_at"`.
+- **`src/__tests__/api/contracts/route.test.ts`**: add `promoted: "promoted"` to mock schema (line ~34) and one test asserting `?promoted=true` adds the correct WHERE condition.
+- **`src/__tests__/components/contract-detail.test.tsx`**: update mock contract to include `promoted: false, promotedAt: null` (line ~59). Add a new test: "renders Promote to Great button → clicking calls PATCH with promoted:true → optimistic gold pill renders."
+- **`src/__tests__/components/kanban/card.test.tsx`**: add "renders gold left-border and star icon when promoted=true."
+- **`src/__tests__/api/cron/weekly-crawl.test.ts`**: schema mock update (line ~54), add `promoted: "promoted", promotedAt: "promoted_at"`. No behavior change — crawl does not touch `promoted`.
+- **`src/__tests__/api/contracts/import.test.ts`** and **`src/__tests__/lib/email/digest.test.ts`** and **`src/__tests__/lib/ai/reclassify-with-description.test.ts`**: schema mock additions only. Same pattern.
+
+Any test that asserts against the full row shape of `contracts` needs the two new columns in its mock. That's purely mechanical.
+
+### New tests to add
+
+- **`src/__tests__/app/chosen/page.test.tsx`** (new file). Tests: renders header; renders empty state when no promoted contracts; renders cards sorted by promotedAt DESC; Demote button PATCHes and optimistically removes the card.
+- **`src/__tests__/components/sidebar.test.tsx`** — if one exists already, add a "Chosen badge shows count" case; if not, skip.
+
+Expect final test count to go from 351 → ~356–358.
+
+## 7. Verification plan
+
+Run in order from `/Users/joelaptin/jcl-govcon`:
+
+```bash
+# 1. Apply schema
+npx drizzle-kit push      # confirm "2 columns added, 1 index added"
+
+# 2. Type check
+npx tsc --noEmit          # must be clean
+
+# 3. Tests
+npm run test:run          # must be all green (target 356+)
+
+# 4. Lint
+npm run lint
+
+# 5. Dev server
+npm run dev               # localhost:3001
+```
+
+**Happy-path manual demo on localhost:3001:**
+
+1. Open `/` (Kanban). Pick any GOOD card → opens `/contracts/:id`.
+2. Detail page: click gold "Promote to Great" button next to classification row.
+3. Expect: button flips to "Chosen — Demote"; header sprouts gold CHOSEN pill; top of page gains gold border; saving indicator appears then clears.
+4. Sidebar: Chosen nav item shows a "1" badge (gold if we shipped the per-item color).
+5. Navigate to `/chosen`. Expect: the promoted contract appears, gold left-border, star icon, "1 chosen" in header, AI classification badge (GOOD) still visible.
+6. Click Demote on the /chosen card. Expect: card disappears optimistically; empty state renders.
+7. Back to `/`. Expect: card back in GOOD column, no gold stripe.
+8. Repeat starting from a MAYBE contract to verify no validation blocks cross-classification promotion.
+9. Analytics page: "Chosen" stat reads 1 after the first promotion; 0 after demote.
+
+## 8. Out of scope (flag, do not touch in this PR)
+
+- **AI prompts** (`src/lib/ai/prompts.ts`, `metadata-classifier.ts`, `classifier.ts`, `batch-classifier.ts`). The AI must never emit CHOSEN — easiest way to guarantee that is to never tell it the concept exists. Leave alone.
+- **Weekly digest** (`src/lib/notifications/weekly-digest.ts`, `src/lib/email/digest.ts`). Do not add a "promoted this week" section yet — wait for real usage data. Separate PR.
+- **Reclassification skip-list.** Current rule is "skip if userOverride=true." Do NOT add "skip if promoted=true" — promotion and classification are orthogonal; a user can legitimately want the AI to re-score a promoted contract after documents arrive. Keep decoupled.
+- **Import/export** (CSV). Leave `promoted` out of the export CSV for v1. It's a personal signal, not a data-interchange field.
+- **Drag-to-promote** on Kanban. Nice idea, out of scope. The GOOD column already doesn't support drag between classifications; adding a gold "promoted zone" is a larger UX change.
+- **Pipeline status page** (`/pipeline`). No changes. Promoted contracts with status PURSUING etc. continue to render there identically (the gold accent carries via shared KanbanCard).
+- **SAM.gov mappers, crawl, batch classifier.** Zero changes. New contracts default `promoted=false`, which is correct.
+- **Analytics tile styling.** Add the number, not the full time-series/chart. Save the "promotion rate over time" chart for later.
+
+## Summary of files touched
+
+Additive (new code, minimal overlap with existing logic):
+1. `src/lib/db/schema.ts` — 2 columns, 1 index
+2. `src/app/globals.css` — 1 token (2 hex per theme)
+3. `src/app/api/contracts/[id]/route.ts` — promoted PATCH handler (~8 lines)
+4. `src/app/api/contracts/route.ts` — promoted query param + select + sort branch
+5. `src/app/api/analytics/route.ts` — one count query
+6. `src/components/contract-detail.tsx` — promote button + header pill + top border
+7. `src/components/kanban/card.tsx` — gold border override + star icon
+8. `src/components/sidebar.tsx` — Chosen nav item + dual-badge hook
+9. `src/components/analytics-dashboard.tsx` — one Chosen tile
+10. `src/app/chosen/page.tsx` — new page (~150 lines, /inbox clone)
+
+Test files: schema-mock updates in ~6 files + 2 new tests + 1 new test file.
+
+Total: ~10 source files changed, 1 new source file, ~7 test files touched, 1 new test file. No Postgres migration file. No AI prompt change.
+PLAN_EOF
+echo "plan written"; wc -l /Users/joelaptin/.claude/plans/synthetic-stargazing-feigenbaum-agent-a757351cb533993c6.md
