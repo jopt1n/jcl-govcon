@@ -1485,3 +1485,60 @@ Test files: schema-mock updates in ~6 files + 2 new tests + 1 new test file.
 Total: ~10 source files changed, 1 new source file, ~7 test files touched, 1 new test file. No Postgres migration file. No AI prompt change.
 PLAN_EOF
 echo "plan written"; wc -l /Users/joelaptin/.claude/plans/synthetic-stargazing-feigenbaum-agent-a757351cb533993c6.md
+[2026-04-18T08:05:53] mkdir -p ~/.gstack/sessions && touch ~/.gstack/sessions/"$PPID"
+_BRANCH=$(git branch --show-current 2>/dev/null || echo "unknown")
+echo "BRANCH: $_BRANCH"
+_TEL_PROMPTED=$([ -f ~/.gstack/.telemetry-prompted ] && echo "yes" || echo "no")
+_PROACTIVE_PROMPTED=$([ -f ~/.gstack/.proactive-prompted ] && echo "yes" || echo "no")
+_LAKE_SEEN=$([ -f ~/.gstack/.completeness-intro-seen ] && echo "yes" || echo "no")
+echo "TEL_PROMPTED: $_TEL_PROMPTED"
+echo "PROACTIVE_PROMPTED: $_PROACTIVE_PROMPTED"
+echo "LAKE_INTRO: $_LAKE_SEEN"
+_HAS_ROUTING=$(grep -q "## Skill routing" CLAUDE.md 2>/dev/null && echo "yes" || echo "no")
+echo "HAS_ROUTING: $_HAS_ROUTING"
+[2026-04-18T08:06:06] echo "=== git log --oneline -30 ==="
+git log --oneline -30
+echo ""
+echo "=== git diff main --stat (no diff since on main) ==="
+git status --short
+echo ""
+echo "=== git stash list ==="
+git stash list
+echo ""
+echo "=== grep TODO/FIXME/HACK/XXX (top 30) ==="
+grep -r "TODO\|FIXME\|HACK\|XXX" -l --exclude-dir=node_modules --exclude-dir=.git --exclude-dir=.next . 2>/dev/null | head -30
+echo ""
+echo "=== Recently touched files (last 30d) ==="
+git log --since=30.days --name-only --format="" 2>/dev/null | sort | uniq -c | sort -rn | head -20
+[2026-04-18T08:06:17] echo "=== TODOS.md (top 80 lines) ==="
+head -80 TODOS.md 2>/dev/null || echo "(no TODOS.md)"
+echo ""
+echo "=== frontend-spec.md header + relevant bits ==="
+head -60 frontend-spec.md 2>/dev/null | sed -n '/analytics/I,+20p' || echo "(no frontend-spec.md)"
+echo ""
+echo "=== design doc check ==="
+SLUG=$(~/.claude/skills/gstack/browse/bin/remote-slug 2>/dev/null || basename "$(git rev-parse --show-toplevel 2>/dev/null || pwd)")
+BRANCH=$(git rev-parse --abbrev-ref HEAD 2>/dev/null | tr '/' '-' || echo 'no-branch')
+DESIGN=$(ls -t ~/.gstack/projects/$SLUG/*-$BRANCH-design-*.md 2>/dev/null | head -1)
+[ -z "$DESIGN" ] && DESIGN=$(ls -t ~/.gstack/projects/$SLUG/*-design-*.md 2>/dev/null | head -1)
+[ -n "$DESIGN" ] && echo "Design doc found: $DESIGN" || echo "No design doc found"
+echo ""
+echo "=== handoff note check ==="
+HANDOFF=$(ls -t ~/.gstack/projects/$SLUG/*-$BRANCH-ceo-handoff-*.md 2>/dev/null | head -1)
+[ -n "$HANDOFF" ] && echo "HANDOFF_FOUND: $HANDOFF" || echo "NO_HANDOFF"
+[2026-04-18T21:37:52] which codex 2>/dev/null && echo "CODEX_AVAILABLE" || echo "CODEX_NOT_AVAILABLE"
+[2026-04-18T22:07:08] ls /Users/joelaptin/jcl-govcon/src/__tests__/ 2>/dev/null
+[2026-04-18T22:07:11] ls /Users/joelaptin/jcl-govcon/src/__tests__/components/ /Users/joelaptin/jcl-govcon/src/__tests__/api/ 2>/dev/null
+[2026-04-18T22:09:16] grep -n "unreviewed\|reviewedAt" src/app/api/contracts/route.ts | head -20
+[2026-04-18T23:32:15] _COMMIT=$(git rev-parse --short HEAD)
+_TS=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+~/.claude/skills/gstack/bin/gstack-review-log "{\"skill\":\"plan-ceo-review\",\"timestamp\":\"$_TS\",\"status\":\"clean\",\"unresolved\":0,\"critical_gaps\":0,\"mode\":\"HOLD_SCOPE\",\"scope_proposed\":0,\"scope_accepted\":0,\"scope_deferred\":0,\"commit\":\"$_COMMIT\"}" 2>&1
+~/.claude/skills/gstack/bin/gstack-review-log "{\"skill\":\"codex-plan-review\",\"timestamp\":\"$_TS\",\"status\":\"issues_found\",\"source\":\"claude\",\"commit\":\"$_COMMIT\"}" 2>&1
+echo "---"
+~/.claude/skills/gstack/bin/gstack-review-read 2>&1 | head -40
+[2026-04-18T23:32:25] tail -20 /Users/joelaptin/.claude/plans/synthetic-stargazing-feigenbaum.md
+[2026-04-18T23:32:53] _DUR=2400  # approx duration in seconds (multi-turn review)
+_SESSION_ID="$$-$(date +%s)"
+echo '{"skill":"plan-ceo-review","duration_s":"'"$_DUR"'","outcome":"success","browse":"false","session":"'"$_SESSION_ID"'","ts":"'$(date -u +%Y-%m-%dT%H:%M:%SZ)'"}' >> ~/.gstack/analytics/skill-usage.jsonl 2>/dev/null
+~/.claude/skills/gstack/bin/gstack-timeline-log "{\"skill\":\"plan-ceo-review\",\"event\":\"completed\",\"branch\":\"$(git branch --show-current 2>/dev/null)\",\"outcome\":\"success\",\"duration_s\":\"$_DUR\",\"session\":\"$_SESSION_ID\"}" 2>/dev/null
+echo "telemetry logged"
