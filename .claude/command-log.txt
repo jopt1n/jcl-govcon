@@ -1184,3 +1184,5 @@ node /tmp/pdf-extract.mjs 2>&1 | head -500
 [2026-04-18T00:43:14] find ~ -maxdepth 5 -type d -name "*jcl*" 2>/dev/null | head -20; echo "---"; find ~ -maxdepth 5 -type d -name "*wild-paper*" 2>/dev/null | head -5; echo "---"; ls ~ | head -40
 [2026-04-18T01:00:45] npx tsx scripts/fetch_notice_desc.ts 2>&1 | head -400
 [2026-04-18T01:01:11] rm scripts/fetch_notice_desc.ts 2>/dev/null; echo done
+[2026-04-18T01:11:29] ls docs/ 2>/dev/null | head -20
+[2026-04-18T01:11:32] ls docs/procurement/ 2>/dev/null
