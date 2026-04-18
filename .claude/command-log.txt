@@ -1186,3 +1186,4 @@ node /tmp/pdf-extract.mjs 2>&1 | head -500
 [2026-04-18T01:01:11] rm scripts/fetch_notice_desc.ts 2>/dev/null; echo done
 [2026-04-18T01:11:29] ls docs/ 2>/dev/null | head -20
 [2026-04-18T01:11:32] ls docs/procurement/ 2>/dev/null
+[2026-04-18T05:18:59] npx tsx scripts/contract_lookup.ts da6bc501-a75d-449d-ae24-e99e1b287a1b 2>&1 | head -500
