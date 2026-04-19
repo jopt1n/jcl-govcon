@@ -128,7 +128,7 @@ export function Sidebar() {
                     className={cn(
                       "flex items-center h-10 px-5 text-sm transition-colors",
                       isActive
-                        ? "bg-[var(--accent)]/20 text-[var(--accent)] border-r-2 border-[var(--accent)]"
+                        ? "bg-[var(--accent-20)] text-[var(--accent)] border-r-2 border-[var(--accent)]"
                         : "hover:bg-[var(--sidebar-hover)] hover:text-white",
                     )}
                   >
@@ -177,7 +177,7 @@ export function Sidebar() {
                 className={cn(
                   "flex items-center h-10 px-5 text-sm transition-colors relative",
                   isActive
-                    ? "bg-[var(--accent)]/20 text-[var(--accent)] border-r-2 border-[var(--accent)]"
+                    ? "bg-[var(--accent-20)] text-[var(--accent)] border-r-2 border-[var(--accent)]"
                     : "hover:bg-[var(--sidebar-hover)] hover:text-white",
                 )}
               >
