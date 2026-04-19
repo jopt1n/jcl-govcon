@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { contracts } from "@/lib/db/schema";
-import { eq } from "drizzle-orm";
+import { contracts, auditLog } from "@/lib/db/schema";
+import { eq, sql } from "drizzle-orm";
 import { generateActionPlan } from "@/lib/ai/classifier";
 import { downloadDocuments } from "@/lib/sam-gov/documents";
 import { extractAllDocumentTexts } from "@/lib/document-text";
@@ -133,6 +133,32 @@ export async function PATCH(
       }
     }
 
+    // User-driven promotion above the AI classifier. Any classification can
+    // be promoted (promoting a DISCARD signals "AI was wrong"; the original
+    // label stays visible). This block runs AFTER the reviewedAt block so
+    // that promote-implies-reviewed wins when the client sends only
+    // `{ promoted: true }` — but if the client EXPLICITLY sent a reviewedAt
+    // value in the same PATCH, that value is respected and we skip the
+    // COALESCE default (see the `body.reviewedAt === undefined` guard).
+    // NOTE: no row-level CAS / SERIALIZABLE wrapping — single-user assumption
+    // (v1). Concurrent promote=true / promote=false is last-write-wins; the
+    // audit_log table reveals if this bites. Tighten with WHERE-clause CAS
+    // if it does.
+    if (body.promoted !== undefined) {
+      if (typeof body.promoted !== "boolean") {
+        return NextResponse.json(
+          { error: "Invalid promoted" },
+          { status: 400 },
+        );
+      }
+      const setPromoted = body.promoted;
+      updates.promoted = setPromoted;
+      updates.promotedAt = setPromoted ? new Date() : null;
+      if (setPromoted && body.reviewedAt === undefined) {
+        updates.reviewedAt = sql`COALESCE(${contracts.reviewedAt}, now())`;
+      }
+    }
+
     if (Object.keys(updates).length === 0) {
       return NextResponse.json(
         { error: "No valid fields to update" },
@@ -142,11 +168,37 @@ export async function PATCH(
 
     updates.updatedAt = new Date();
 
-    const [updated] = await db
-      .update(contracts)
-      .set(updates)
-      .where(eq(contracts.id, params.id))
-      .returning();
+    // Atomic transaction when promoted is touched: UPDATE and audit_log
+    // INSERT must both persist or both fail. Either operation raising
+    // rolls back the other. IMPORTANT: both calls inside the callback
+    // use the `tx` argument, NOT the outer `db` — using `db` silently
+    // breaks atomicity (the INSERT runs on its own connection).
+    let updated: typeof contracts.$inferSelect | undefined;
+    if (body.promoted !== undefined) {
+      updated = await db.transaction(async (tx) => {
+        const [row] = await tx
+          .update(contracts)
+          .set(updates)
+          .where(eq(contracts.id, params.id))
+          .returning();
+        if (row) {
+          // Use strict === true so a future relaxation of the typeof guard
+          // above (e.g. accepting truthy values) doesn't silently log
+          // "demote" for 0 / "" / null / undefined payloads.
+          await tx.insert(auditLog).values({
+            contractId: params.id,
+            action: body.promoted === true ? "promote" : "demote",
+          });
+        }
+        return row;
+      });
+    } else {
+      [updated] = await db
+        .update(contracts)
+        .set(updates)
+        .where(eq(contracts.id, params.id))
+        .returning();
+    }
 
     if (!updated) {
       return NextResponse.json(

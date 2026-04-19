@@ -71,7 +71,18 @@ export async function GET(req: NextRequest) {
       searchParams.get("setAsideQualifying") === "1";
     const unreviewed = searchParams.get("unreviewed") === "true";
     const includeUnreviewed = searchParams.get("includeUnreviewed") === "true";
+    // ?promoted=true|false — filter by user-driven promotion. Anything other
+    // than those two literal strings is rejected below with 400.
+    const promotedParam = searchParams.get("promoted");
     const offset = (page - 1) * limit;
+
+    if (
+      promotedParam !== null &&
+      promotedParam !== "true" &&
+      promotedParam !== "false"
+    ) {
+      return NextResponse.json({ error: "Invalid promoted" }, { status: 400 });
+    }
 
     const isDeadlines = classification === "DEADLINES";
 
@@ -130,15 +141,26 @@ export async function GET(req: NextRequest) {
       );
     }
 
+    if (promotedParam === "true") {
+      conditions.push(eq(contracts.promoted, true));
+    } else if (promotedParam === "false") {
+      conditions.push(eq(contracts.promoted, false));
+    }
+
     const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
 
-    // Deadlines mode: sort by classification priority (GOOD=1, MAYBE=2, DISCARD=3), then deadline ASC
+    // Deadlines mode: sort by classification priority (GOOD=1, MAYBE=2, DISCARD=3), then deadline ASC.
+    // Promoted mode: sort by promotedAt DESC (most recently elevated first) so /chosen
+    // surfaces fresh promotions at the top. Tiebreak on id DESC so same-millisecond
+    // promotions (bulk scripts, test fixtures) have deterministic page boundaries.
     const orderClause = isDeadlines
       ? [
           sql`CASE classification WHEN 'GOOD' THEN 1 WHEN 'MAYBE' THEN 2 ELSE 3 END`,
           asc(contracts.responseDeadline),
         ]
-      : [desc(contracts.postedDate)];
+      : promotedParam === "true"
+        ? [desc(contracts.promotedAt), desc(contracts.id)]
+        : [desc(contracts.postedDate)];
 
     const [rows, countResult] = await Promise.all([
       db
@@ -155,6 +177,8 @@ export async function GET(req: NextRequest) {
           postedDate: contracts.postedDate,
           userOverride: contracts.userOverride,
           reviewedAt: contracts.reviewedAt,
+          promoted: contracts.promoted,
+          promotedAt: contracts.promotedAt,
           createdAt: contracts.createdAt,
         })
         .from(contracts)
