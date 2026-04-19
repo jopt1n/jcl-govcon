@@ -1579,3 +1579,612 @@ _SESSION_ID="$$-$(date +%s)"
 echo '{"skill":"plan-eng-review","duration_s":"'"$_DUR"'","outcome":"success","browse":"false","session":"'"$_SESSION_ID"'","ts":"'$(date -u +%Y-%m-%dT%H:%M:%SZ)'"}' >> ~/.gstack/analytics/skill-usage.jsonl 2>/dev/null
 ~/.claude/skills/gstack/bin/gstack-timeline-log "{\"skill\":\"plan-eng-review\",\"event\":\"completed\",\"branch\":\"$(git branch --show-current 2>/dev/null)\",\"outcome\":\"success\",\"duration_s\":\"$_DUR\",\"session\":\"$_SESSION_ID\"}" 2>/dev/null
 echo "telemetry logged"
+[2026-04-19T00:33:57] git status --short && echo "---" && git fetch origin main 2>&1 | tail -5 && git checkout main && git pull --ff-only
+[2026-04-19T00:34:27] git checkout -b feat/chosen-tier && git status --short
+[2026-04-19T00:34:44] grep -n "from \"drizzle-orm\"" /Users/joelaptin/jcl-govcon/src/lib/db/schema.ts
+[2026-04-19T00:35:49] npx drizzle-kit push 2>&1 | tail -40
+[2026-04-19T00:36:02] source .env 2>/dev/null
+psql "$DATABASE_URL" -c '\d audit_log' 2>&1 | head -25
+echo "---"
+psql "$DATABASE_URL" -c '\d contracts' 2>&1 | grep -E "promoted|contracts_promoted_idx" | head -10
+echo "---"
+psql "$DATABASE_URL" -c "SELECT indexname, indexdef FROM pg_indexes WHERE tablename IN ('contracts','audit_log') AND indexname IN ('contracts_promoted_idx','audit_log_contract_id_idx');" 2>&1
+[2026-04-19T00:39:21] npx tsx scripts/verify-chosen-schema.ts 2>&1 | head -60
+[2026-04-19T00:39:36] rm scripts/verify-chosen-schema.ts && mkdir -p docs/plans && cp ~/.claude/plans/synthetic-stargazing-feigenbaum.md docs/plans/chosen-tier.md && ls docs/plans/
+[2026-04-19T00:39:42] grep -n "^## P" TODOS.md
+[2026-04-19T00:40:32] ls src/__mocks__ 2>/dev/null
+echo "---"
+grep -rn "Proxy\|contracts.classification\|contracts.id" src/__tests__/_helpers 2>/dev/null | head -20
+echo "---"
+ls src/__tests__/_helpers 2>/dev/null
+[2026-04-19T00:40:38] ls src/__mocks__/lib/ && head -60 src/__mocks__/lib/db.ts 2>/dev/null
+[2026-04-19T00:40:56] npx tsc --noEmit 2>&1 | tail -20
+[2026-04-19T00:41:02] npm run test:run 2>&1 | tail -25
+[2026-04-19T00:41:18] git status --short
+[2026-04-19T00:41:22] git add src/lib/db/schema.ts TODOS.md docs/plans/chosen-tier.md && git status --short
+[2026-04-19T00:41:34] git commit -m "$(cat <<'EOF'
+feat(chosen): schema + index + audit_log + plan doc + e2e TODO
+
+Add the user-driven Chosen tier substrate. AI classifier stays as-is;
+this introduces a second, orthogonal axis the user controls.
+
+Schema changes (applied via drizzle-kit push):
+- contracts: promoted boolean NOT NULL DEFAULT false
+- contracts: promoted_at timestamptz nullable
+- contracts: partial index on promoted_at WHERE promoted=true (verified
+  in pg_indexes with WHERE clause intact, no fallback to composite)
+- audit_log table: written-only audit of promote/demote actions, generic
+  enough to absorb Phase 9 status transitions later
+- audit_log.contract_id is intentionally nullable + onDelete: 'set null'
+  so audit history survives contract deletion (orphaned forensic rows)
+
+Plan doc copied to docs/plans/chosen-tier.md so the design lands in git.
+
+TODOS.md gains a P2 entry capturing the deferred E2E test infrastructure
+follow-up (Playwright is installed but not wired up; the three CHOSEN
+user flows currently rely on §8 manual verification).
+
+No behavior changes. tsc --noEmit clean. 351/351 tests pass.
+
+Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>
+EOF
+)" 2>&1 | tail -10
+[2026-04-19T00:49:37] echo "=== 1a. Central mock file ==="
+cat src/__mocks__/lib/db.ts 2>/dev/null || echo "FILE NOT FOUND"
+echo ""
+echo "=== 1b. __mocks__ tree ==="
+ls src/__mocks__/ 2>/dev/null
+ls src/__mocks__/lib/ 2>/dev/null
+[2026-04-19T00:49:46] echo "=== 2a. classification: 'GOOD' fixture pattern ==="
+grep -rn "classification.*'GOOD'\|classification.*\"GOOD\"" src/__tests__/
+echo ""
+echo "=== 2b. reviewedAt: in tests ==="
+grep -rn "reviewedAt:" src/__tests__/
+echo ""
+echo "=== 2c. statusChangedAt: in tests ==="
+grep -rn "statusChangedAt:" src/__tests__/
+echo ""
+echo "=== 2d. userOverride: in tests ==="
+grep -rn "userOverride:" src/__tests__/
+echo ""
+echo "=== 2e. actionPlan: in tests ==="
+grep -rn "actionPlan:" src/__tests__/
+[2026-04-19T00:49:53] echo "=== 3. Per-file fixture/mock-shape grep ==="
+for f in src/__tests__/api/contracts/id.test.ts src/__tests__/api/contracts/route.test.ts src/__tests__/api/cron/weekly-crawl.test.ts src/__tests__/api/contracts/import.test.ts src/__tests__/lib/email/digest.test.ts src/__tests__/lib/ai/reclassify-with-description.test.ts; do
+  echo "--- $f ---"
+  if [ -f "$f" ]; then
+    grep -n "classification:\|reviewedAt:\|statusChangedAt:" "$f" | head -10
+  else
+    echo "FILE NOT FOUND"
+  fi
+done
+[2026-04-19T00:51:15] echo "=== 4a. PATCH/GET handler return shapes — [id] route ==="
+grep -n "returning\|\.select\b\|\.select(" src/app/api/contracts/\[id\]/route.ts
+echo ""
+echo "=== 4b. PATCH/GET handler return shapes — list route ==="
+grep -n "returning\|\.select\b\|\.select(" src/app/api/contracts/route.ts
+[2026-04-19T05:38:37] grep -n "promoted\|setAsideQualifying\|const conditions" src/app/api/contracts/route.ts | head -15
+[2026-04-19T05:40:59] wc -l src/__tests__/api/contracts/route.test.ts
+[2026-04-19T05:41:36] npx tsc --noEmit 2>&1 | tail -30
+[2026-04-19T05:42:26] npx tsc --noEmit 2>&1 | tail -15
+[2026-04-19T05:42:33] npm run test:run 2>&1 | tail -50
+[2026-04-19T05:42:45] git status --short
+[2026-04-19T05:43:02] echo "BRANCH: $(git branch --show-current)"
+echo "BASE: main"
+git fetch origin main --quiet
+echo ""
+echo "=== DIFF STAT vs origin/main ==="
+git diff origin/main --stat
+echo ""
+echo "=== DIFF LINE TOTALS ==="
+git diff origin/main --stat | tail -1
+[2026-04-19T05:43:22] echo "=== Commits on feat/chosen-tier (branch-only, vs local main) ==="
+git log main..HEAD --oneline
+echo ""
+echo "=== DIFF STAT vs main (branch-only) ==="
+git diff main --stat
+echo ""
+echo "=== Also include working tree changes ==="
+git status --short
+[2026-04-19T05:43:49] git diff main -- src/lib/db/schema.ts src/app/api/contracts/\[id\]/route.ts src/app/api/contracts/route.ts 2>&1 | head -300
+[2026-04-19T05:45:06] git diff main...HEAD -- src/lib/db/schema.ts 'src/app/api/contracts/[id]/route.ts' src/app/api/contracts/route.ts src/__tests__/api/contracts/id.test.ts src/__tests__/api/contracts/route.test.ts
+[2026-04-19T05:45:09] git diff main...HEAD -- 'src/app/api/contracts/[id]/route.ts' src/app/api/contracts/route.ts
+[2026-04-19T05:45:11] git branch --show-current && git log --oneline main..HEAD | head -30
+[2026-04-19T05:45:13] git diff main...HEAD --stat
+[2026-04-19T05:48:38] npx tsc --noEmit 2>&1 | tail -15
+echo "---"
+npm run test:run 2>&1 | tail -8
+[2026-04-19T06:02:03] npx tsc --noEmit 2>&1 | tail -5
+npm run test:run 2>&1 | tail -6
+[2026-04-19T06:02:23] _COMMIT=$(git rev-parse --short HEAD)
+_TS=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+~/.claude/skills/gstack/bin/gstack-review-log "{\"skill\":\"review\",\"timestamp\":\"$_TS\",\"status\":\"clean\",\"issues_found\":0,\"critical\":0,\"informational\":0,\"quality_score\":9.0,\"specialists\":{\"testing\":{\"dispatched\":false,\"reason\":\"manual-pass\"},\"adversarial\":{\"dispatched\":true,\"findings\":21,\"critical\":7,\"informational\":14}},\"findings\":[{\"fingerprint\":\"src/app/api/contracts/[id]/route.ts:block-order-coalesce\",\"severity\":\"CRITICAL\",\"action\":\"auto-fixed\"},{\"fingerprint\":\"src/app/api/contracts/[id]/route.ts:audit-action-strict-check\",\"severity\":\"INFORMATIONAL\",\"action\":\"auto-fixed\"},{\"fingerprint\":\"src/app/api/contracts/route.ts:promoted-sort-tiebreaker\",\"severity\":\"INFORMATIONAL\",\"action\":\"fixed\"}],\"commit\":\"$_COMMIT\"}" 2>&1
+echo "---"
+echo "logged"
+[2026-04-19T06:02:29] git add src/app/api/contracts/\[id\]/route.ts src/app/api/contracts/route.ts src/__tests__/api/contracts/id.test.ts src/__tests__/api/contracts/route.test.ts && git status --short
+[2026-04-19T06:02:50] git commit -m "$(cat <<'EOF'
+feat(chosen): api
+
+Wire promote/demote through the existing /api/contracts surface.
+
+PATCH /api/contracts/[id]:
+- Adds `promoted: boolean` field with strict `typeof === "boolean"`
+  validation (400 on any other shape).
+- Wraps UPDATE + audit_log INSERT in `db.transaction(async (tx) => ...)`
+  when body.promoted is touched. Both calls use `tx`, not `db` — atomic
+  rollback if either fails.
+- Promote-implies-reviewed via COALESCE(reviewedAt, now()), but only
+  when the client did NOT explicitly send reviewedAt in the same PATCH.
+  Block order: reviewedAt first, promoted last — explicit client intent
+  wins, COALESCE fills in the default. Regression test covers the
+  { promoted: true, reviewedAt: null } interaction.
+- audit_log action uses strict `=== true` so a future relaxation of
+  the type guard can't silently miscategorize falsy payloads as
+  "demote".
+- Non-promoted PATCHes take the existing single-statement path.
+
+GET /api/contracts:
+- `?promoted=true|false` filter. Any other value returns 400
+  "Invalid promoted" — no silent filter-drop.
+- Select projection includes promoted + promotedAt so /chosen
+  (Commit 5) can render them.
+- When promoted=true, orderBy is `desc(promotedAt), desc(id)`.
+  Tiebreak on id makes page boundaries deterministic for
+  same-millisecond promotions.
+
+Tests: 362 -> 363 passing. New coverage:
+- PATCH promoted true/false, invalid type, 404 no-audit, atomic
+  rollback on failing audit insert, non-promoted path skips tx
+- GET ?promoted=true, ?promoted=false, 400 on ?promoted=yes / ?promoted=1
+- Regression: { promoted: true, reviewedAt: null } honors explicit
+  reviewedAt
+
+Schema-mock updates in id.test.ts + route.test.ts (promoted,
+promotedAt, auditLog). The other four files originally flagged
+in the plan's mock-update list don't have handlers that reference
+these fields yet — they'll get touched naturally in later commits.
+
+/review auto-fixed 2 findings (block-order COALESCE bug, audit
+action strict check) and applied 1 approved fix (sort tiebreaker).
+Adversarial pass ran Claude subagent; 7 critical findings triaged
+(2 fixed, 5 accepted per v1 plan — race tolerance, integration-test
+coverage, empty-tx on 404, drizzle-kit verified post-push).
+
+Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>
+EOF
+)" 2>&1 | tail -10
+[2026-04-19T06:18:21] grep -n -A 12 "PATCH on nonexistent contract with promoted" src/__tests__/api/contracts/id.test.ts
+[2026-04-19T06:18:26] sed -n '311,330p' src/__tests__/api/contracts/id.test.ts
+[2026-04-19T06:19:52] npx tsc --noEmit 2>&1 | tail -10
+[2026-04-19T06:20:00] npm run test:run 2>&1 | grep -E "Tests|FAIL|✓ src/__tests__/api/contracts/id" | tail -10
+[2026-04-19T06:20:14] npm run test:run -- src/__tests__/api/contracts/id.test.ts 2>&1 | grep -E "✓|×|Tests" | tail -30
+[2026-04-19T06:20:19] git status --short
+[2026-04-19T06:20:26] git add src/__tests__/api/contracts/id.test.ts && git commit --amend --no-edit 2>&1 | tail -5
+[2026-04-19T06:20:32] git log --oneline -8
+[2026-04-19T06:20:48] git log --oneline --name-only -5 HEAD
+[2026-04-19T06:21:04] git reset --soft ebb1688 2>&1
+echo "---"
+git status --short
+[2026-04-19T06:21:09] git reset HEAD -- .claude/command-log.txt 2>&1
+echo "---"
+git status --short
+[2026-04-19T06:21:35] git commit -m "$(cat <<'EOF'
+feat(chosen): api
+
+Wire promote/demote through the existing /api/contracts surface.
+
+PATCH /api/contracts/[id]:
+- Adds `promoted: boolean` field with strict `typeof === "boolean"`
+  validation (400 on any other shape).
+- Wraps UPDATE + audit_log INSERT in `db.transaction(async (tx) => ...)`
+  when body.promoted is touched. Both calls use `tx`, not `db` — atomic
+  rollback if either fails.
+- Promote-implies-reviewed via COALESCE(reviewedAt, now()), but ONLY
+  when the client did not explicitly send reviewedAt in the same PATCH.
+  Block order: reviewedAt first, promoted last — explicit client intent
+  wins, COALESCE fills in the default. Regression guards cover both
+  { promoted: true, reviewedAt: null } and the explicit-ISO-timestamp
+  positive case.
+- audit_log action uses strict `=== true` so a future relaxation of
+  the type guard can't silently miscategorize falsy payloads as
+  "demote".
+- Non-promoted PATCHes take the existing single-statement path.
+
+GET /api/contracts:
+- `?promoted=true|false` filter. Any other value returns 400
+  "Invalid promoted" — no silent filter-drop.
+- Select projection includes promoted + promotedAt so /chosen
+  (Commit 5) can render them.
+- When promoted=true, orderBy is `desc(promotedAt), desc(id)`.
+  Tiebreak on id makes page boundaries deterministic for
+  same-millisecond promotions.
+
+Tests (351 -> 365 passing). New coverage:
+- PATCH promoted true/false, invalid type, 404 no-audit, atomic
+  rollback on failing audit insert, non-promoted path skips tx
+- GET ?promoted=true, ?promoted=false, 400 on ?promoted=yes/1
+- Regression: { promoted: true, reviewedAt: null } honors explicit
+  null
+- Positive: { promoted: true, reviewedAt: <iso> } passes a Date
+  (not the COALESCE SQL fragment) to .set()
+- promote -> demote -> promote writes three audit_log rows in
+  order, closing the firstPromotedAt-preservation finding
+  (audit_log is the durable source of truth for promotion history)
+
+Schema-mock updates in id.test.ts + route.test.ts (promoted,
+promotedAt, auditLog). The transaction tx.update mock captures
+.set() args so tests can assert exact payloads (Date vs SQL
+fragment).
+
+/review surfaced 7 critical findings; 2 ship-blockers auto-fixed
+(block-order COALESCE bug, strict === true on audit action), 1
+approved fix applied (sort tiebreaker), 3 follow-up findings closed
+via additional tests, the rest accepted per v1 plan (race tolerance,
+integration-test coverage in /qa, drizzle-kit partial index already
+verified post-push).
+
+Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>
+EOF
+)" 2>&1 | tail -5
+[2026-04-19T06:21:41] git log --oneline main..HEAD
+echo "---"
+echo "Final gate:"
+npx tsc --noEmit 2>&1 | tail -3
+npm run test:run 2>&1 | grep -E "Tests " | tail -3
+[2026-04-19T06:26:30] grep -rn 'classification: "GOOD"' src/__tests__/components/
+echo "---"
+grep -rn "classification: 'GOOD'" src/__tests__/components/
+[2026-04-19T06:26:38] echo "=== kanban/card.test.tsx:59 context ==="
+sed -n '55,75p' src/__tests__/components/kanban/card.test.tsx
+echo ""
+echo "=== kanban/board.test.tsx:162 context ==="
+sed -n '155,180p' src/__tests__/components/kanban/board.test.tsx
+echo ""
+echo "=== contract-detail.test.tsx:56 context ==="
+sed -n '50,85p' src/__tests__/components/contract-detail.test.tsx
+[2026-04-19T06:26:58] grep -n "\-\-good\|\-\-maybe\|\-\-urgent\|\-\-discard" src/app/globals.css | head -20
+[2026-04-19T06:29:17] grep -n "classificationColors\|updateField\|classification-badge\|Classification" src/components/contract-detail.tsx | head -30
+[2026-04-19T06:29:45] grep -n "^import\|from \"lucide-react\"" src/components/contract-detail.tsx | head -10
+[2026-04-19T06:30:28] grep -n "<div className=\"min-h-\|<div className=\"flex flex-col\|return (" src/components/contract-detail.tsx | head -10
+[2026-04-19T06:32:13] grep -n "^  it\|^  describe\|updateField\|fetch.*mock" src/__tests__/components/contract-detail.test.tsx | head -30
+[2026-04-19T06:33:22] head -15 src/__tests__/components/contract-detail.test.tsx
+[2026-04-19T06:34:03] grep -n "lucide-react\|Star\|icon" src/__tests__/components/kanban/card.test.tsx | head -15
+[2026-04-19T06:34:37] npx tsc --noEmit 2>&1 | tail -20
+[2026-04-19T06:35:21] npx tsc --noEmit 2>&1 | tail -10
+[2026-04-19T06:35:28] npm run test:run 2>&1 | grep -E "Tests |FAIL |✓ src/__tests__/components|× src/__tests__/components" | tail -20
+[2026-04-19T06:35:41] npm run test:run -- src/__tests__/components/kanban/card.test.tsx src/__tests__/components/contract-detail.test.tsx 2>&1 | grep -E "✓|×|Tests " | tail -10
+[2026-04-19T06:35:49] git status --short
+[2026-04-19T06:36:24] git status && git log --oneline -10
+[2026-04-19T06:36:28] git diff -- src/app/globals.css src/components/kanban/card.tsx src/components/contract-detail.tsx src/__tests__/components/kanban/card.test.tsx src/__tests__/components/contract-detail.test.tsx
+[2026-04-19T06:36:37] ls /Users/joelaptin/jcl-govcon/src/app/ | head -30 && echo "---" && ls /Users/joelaptin/jcl-govcon/src/components/ | head -30
+[2026-04-19T06:36:40] ls /Users/joelaptin/jcl-govcon/src/app/contracts/ && echo "---" && ls /Users/joelaptin/jcl-govcon/src/app/contracts/\[id\]/ 2>/dev/null
+[2026-04-19T06:36:49] ls /Users/joelaptin/jcl-govcon/src/components/kanban/
+[2026-04-19T06:36:56] grep -n "promoted" /Users/joelaptin/jcl-govcon/src/app/api/contracts/route.ts
+[2026-04-19T06:37:13] ls /Users/joelaptin/jcl-govcon/ | grep -E 'tailwind|postcss'
+[2026-04-19T06:37:21] grep -E '"(next|react|tailwindcss|lucide-react|@testing-library/react)"' /Users/joelaptin/jcl-govcon/package.json
+[2026-04-19T06:37:38] grep -n "audit\|promoted" /Users/joelaptin/jcl-govcon/src/app/api/contracts/\[id\]/route.ts | head -40
+[2026-04-19T06:37:54] grep -rn "var(--[a-z]*)/[0-9]" /Users/joelaptin/jcl-govcon/src | head -20
+[2026-04-19T06:38:08] grep -rn 'fill-\[' /Users/joelaptin/jcl-govcon/src --include='*.tsx' | head -10
+[2026-04-19T06:41:22] npx tsc --noEmit 2>&1 | tail -5
+echo "---"
+npm run test:run 2>&1 | grep -E "Tests " | tail -3
+[2026-04-19T06:41:41] _COMMIT=$(git rev-parse --short HEAD)
+_TS=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+~/.claude/skills/gstack/bin/gstack-review-log "{\"skill\":\"review\",\"timestamp\":\"$_TS\",\"status\":\"clean\",\"issues_found\":0,\"critical\":0,\"informational\":0,\"quality_score\":9.0,\"specialists\":{\"adversarial\":{\"dispatched\":true,\"findings\":14,\"critical\":4,\"informational\":10}},\"findings\":[{\"fingerprint\":\"src/components/contract-detail.tsx:top-accent-negative-margin\",\"severity\":\"CRITICAL\",\"action\":\"auto-fixed\"},{\"fingerprint\":\"src/components/contract-detail.tsx:header-pill-flex-wrap\",\"severity\":\"INFORMATIONAL\",\"action\":\"auto-fixed\"},{\"fingerprint\":\"src/app/globals.css:dark-chosen-bg-alpha\",\"severity\":\"INFORMATIONAL\",\"action\":\"auto-fixed\"},{\"fingerprint\":\"src/components/contract-detail.tsx:border-alpha-inconsistency\",\"severity\":\"INFORMATIONAL\",\"action\":\"auto-fixed\"}],\"commit\":\"$_COMMIT\"}" 2>&1
+echo "logged"
+[2026-04-19T06:41:52] git add src/app/globals.css src/components/kanban/card.tsx src/components/contract-detail.tsx src/__tests__/components/kanban/card.test.tsx src/__tests__/components/contract-detail.test.tsx
+git status --short
+[2026-04-19T06:42:20] git commit -m "$(cat <<'EOF'
+feat(chosen): styling + detail page
+
+Gold CSS tokens + Kanban card + contract-detail UI for CHOSEN tier.
+
+globals.css:
+- --chosen: #eab308 (Tailwind yellow-500)
+- --chosen-bg: #fef3c7 light / rgba(234,179,8,0.15) dark
+  (0.15 alpha per /review — 0.08 was effectively invisible against the
+  dark surface)
+
+Kanban card (src/components/kanban/card.tsx):
+- ContractCard gains optional promoted?: boolean
+- State-exclusive border styling: when promoted=true, ONLY the gold
+  4px classes are in the DOM (border-l-[4px] border-l-[var(--chosen)]).
+  The default 3px + classification-color classes are OMITTED entirely.
+  Rendering both sets and relying on Tailwind specificity/order would
+  be fragile; this way the regression test can assert exclusivity.
+- Filled gold Star icon renders next to the title when promoted.
+
+Contract detail (src/components/contract-detail.tsx):
+- Contract interface gains promoted: boolean; promotedAt: string | null
+  (non-optional — fixture in contract-detail.test.tsx updated).
+- Star Promote / Star Demote toggle button in the classification row,
+  next to the GOOD/MAYBE/DISCARD button group. Renders for ALL
+  classifications including DISCARD (promoting a DISCARD signals
+  "AI was wrong"; original classification stays visible in the badge).
+  Clicking PATCHes { promoted: !contract.promoted }.
+- CHOSEN pill with Star icon appears next to the classification badge
+  in the header when promoted. Flex wrapping allows the title to break
+  cleanly on narrow viewports.
+- Top 2px gold accent bar at the start of the content container (when
+  promoted). Lives INSIDE max-w-5xl mx-auto — no negative margins, no
+  reach into parent layout. /review caught the original -mx-4 md:-mx-6
+  pattern as a cross-breakpoint hazard; this version is parent-safe.
+
+Tests (365 -> 373 passing):
+- Kanban card: gold border + star when promoted=true, default 3px +
+  classification color when not promoted, cross-classification promote
+  (MAYBE + DISCARD) shows gold override. State-exclusivity asserted.
+- Contract detail: Promote button when promoted=false, Demote + CHOSEN
+  pill + top accent when promoted=true, button renders on DISCARD
+  classification, click PATCHes { promoted: true } / { promoted: false }.
+- Lucide icon mocks widened to pass through all props (data-testid,
+  aria-label) so tests can target specific icons.
+
+/review adversarial pass: 14 findings (4 critical, 10 informational).
+4 auto-fixed (top accent positioning, header flex-wrap, dark-mode
+alpha bump, /40 vs /50 normalize). Rest accepted per v1 plan:
+- Double-click race producing duplicate audit rows -- v1 intentionally
+  lets audit_log SURFACE races as forensic signal (per plan).
+- Shared `saving` state disables promote during notes save -- minor
+  UX, accepted race tradeoff.
+- Tailwind JIT scanning of arbitrary-value classes -- ternary branches
+  are string literals; visual /qa will confirm rendered CSS.
+- aria-pressed + changing label -- label carries semantic meaning,
+  screen reader hears action + state.
+
+Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>
+EOF
+)" 2>&1 | tail -5
+[2026-04-19T06:42:27] git log --oneline main..HEAD
+[2026-04-19T06:54:25] echo "=== 1. Branch log ==="
+git log --oneline main..feat/chosen-tier
+echo ""
+echo "=== 2. Stray auto-checkpoint 6f9db09 stats ==="
+git show --stat 6f9db09 2>&1 | head -30
+echo ""
+echo "=== 3. Claude Code settings (project) ==="
+cat .claude/settings.json 2>/dev/null || echo "no project .claude/settings.json"
+echo ""
+echo "=== 4. Claude Code settings (user) ==="
+cat ~/.claude/settings.json 2>/dev/null | head -80
+echo ""
+echo "=== 5. Hook files in project ==="
+ls -la .claude/hooks/ 2>/dev/null || echo "no .claude/hooks dir"
+echo ""
+echo "=== 6. Hook files in user ==="
+ls -la ~/.claude/hooks/ 2>/dev/null | head -20 || echo "no ~/.claude/hooks dir"
+[2026-04-19T06:54:53] npx tsx scripts/chosen-verify.ts pick 2>&1
+[2026-04-19T06:55:01] npm run dev 2>&1 | head -1
+[2026-04-19T06:55:07] sleep 8 && curl -s http://localhost:3001 -I 2>&1 | head -3
+[2026-04-19T06:55:25] lsof -i :3001 2>/dev/null | head -5 || echo "nothing on 3001"
+[2026-04-19T06:55:33] curl -s -X PATCH "http://localhost:3001/api/contracts/95765eb2-8289-46fb-b031-e1078d914b7f" \
+  -H "Content-Type: application/json" \
+  -d '{"promoted": true}' | head -c 500
+echo ""
+echo "---"
+npx tsx scripts/chosen-verify.ts audit 95765eb2-8289-46fb-b031-e1078d914b7f 2>&1
+[2026-04-19T06:57:53] grep '"tailwindcss"' package.json
+echo "---"
+# The button in non-promoted state would use /40 too — verify its CSS
+# But our test contract IS promoted, so the button uses bg-[var(--chosen)] (no alpha)
+# The only /40 usage that's visible right now is the pill
+[2026-04-19T06:58:05] grep -n "border-\[var(--chosen)\]/" src/components/contract-detail.tsx
+[2026-04-19T07:00:18] curl -s -X PATCH "http://localhost:3001/api/contracts/95765eb2-8289-46fb-b031-e1078d914b7f" \
+  -H "Content-Type: application/json" \
+  -d '{"promoted": false}' | head -c 200
+echo ""
+echo "---"
+npx tsx scripts/chosen-verify.ts audit 95765eb2-8289-46fb-b031-e1078d914b7f 2>&1
+echo ""
+npx tsx scripts/chosen-verify.ts state 95765eb2-8289-46fb-b031-e1078d914b7f 2>&1
+[2026-04-19T07:00:37] lsof -i :3001 2>/dev/null | awk 'NR>1 && $1=="node" {print $2}' | xargs -r kill 2>/dev/null
+sleep 1
+lsof -i :3001 2>/dev/null | head -3 || echo "port 3001 clear"
+echo "---"
+rm -f scripts/chosen-verify.ts chosen-kanban-dark.png chosen-kanban-light.png chosen-detail-dark.png chosen-detail-light.png
+rm -rf .playwright-mcp
+git status --short
+[2026-04-19T07:00:52] npx tsc --noEmit 2>&1 | tail -3
+echo "---"
+npm run test:run 2>&1 | grep -E "Tests " | tail -3
+[2026-04-19T07:01:07] git add src/components/contract-detail.tsx
+git commit --amend --no-edit 2>&1 | tail -4
+echo "---"
+git log --oneline main..HEAD
+[2026-04-19T07:01:29] git reset --soft 639234e 2>&1
+echo "---"
+git reset HEAD -- .claude/command-log.txt 2>&1
+echo "---"
+git status --short
+[2026-04-19T07:02:01] git commit -m "$(cat <<'EOF'
+feat(chosen): styling + detail page
+
+Gold CSS tokens + Kanban card + contract-detail UI for CHOSEN tier.
+
+globals.css:
+- --chosen: #eab308 (Tailwind yellow-500)
+- --chosen-bg: #fef3c7 light / rgba(234,179,8,0.15) dark
+  (0.15 alpha per /review — 0.08 was effectively invisible against the
+  dark surface; bumped based on adversarial pass)
+
+Kanban card (src/components/kanban/card.tsx):
+- ContractCard gains optional promoted?: boolean
+- State-exclusive border: when promoted=true, ONLY the gold 4px classes
+  are in the DOM (border-l-[4px] border-l-[var(--chosen)]). The default
+  3px + classification-color classes are OMITTED. No Tailwind
+  specificity fragility.
+- Filled gold Star next to the title when promoted.
+
+Contract detail (src/components/contract-detail.tsx):
+- Contract interface gains promoted: boolean; promotedAt: string | null
+  (non-optional — fixture in contract-detail.test.tsx updated).
+- Star Promote / Star Demote toggle button in the classification row,
+  renders for ALL classifications including DISCARD. Clicking PATCHes
+  { promoted: !contract.promoted }.
+- CHOSEN pill with Star icon beside the classification badge in the
+  header when promoted. Flex-wrap + min-w-0 on the header keeps the
+  title readable on narrow viewports.
+- Top 2px gold accent bar at the start of the content container (when
+  promoted). Lives INSIDE max-w-5xl mx-auto — no negative margins, no
+  reach into parent layout. /review's C2 finding caught the original
+  -mx-4 md:-mx-6 pattern as a cross-breakpoint hazard; this version is
+  parent-safe.
+- Pill + un-promoted button use border-[#eab308]/40 (hex literal) not
+  border-[var(--chosen)]/40. Visual verification caught that the alpha
+  modifier silently falls back to gray-200 when applied to a CSS var
+  in Tailwind 3.4 — literal hex compiles to the expected rgba.
+
+Tests (365 -> 373 passing):
+- Kanban card: gold border + star when promoted=true, default 3px +
+  classification color when not promoted, cross-classification promote
+  (MAYBE + DISCARD) shows gold override. State-exclusivity asserted.
+- Contract detail: Promote button when promoted=false, Demote + CHOSEN
+  pill + top accent when promoted=true, button renders on DISCARD
+  classification, click PATCHes { promoted: true } / { promoted: false }.
+- Lucide icon mocks widened to pass all props (data-testid, aria-label)
+  so tests can target specific icons.
+
+/review adversarial pass: 14 findings (4 critical, 10 informational).
+4 auto-fixed (top accent positioning, header flex-wrap, dark-mode
+alpha bump 0.08 -> 0.15, /40 vs /50 normalize).
+
+Visual verification on live dev server in both light and dark mode
+confirmed: gold border on Kanban card (rgb 234,179,8) distinct from
+neighbor GOOD (rgb 16,185,129); filled star renders gold; top accent
+2px full-width inside container with zero margin leakage; CHOSEN pill
+bg + text + border all gold; Demote button filled gold with white
+text. End-to-end audit trail verified via live PATCH: promote +
+demote actions both recorded in audit_log with correct contract_id
+and timestamps; COALESCE preserved reviewedAt through the cycle.
+
+Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>
+EOF
+)" 2>&1 | tail -4
+[2026-04-19T07:02:08] git log --oneline main..HEAD
+echo "---"
+npx tsc --noEmit 2>&1 | tail -3
+npm run test:run 2>&1 | grep -E "Tests " | tail -3
+[2026-04-19T07:09:36] grep -rn "border-\[var(--\|bg-\[var(--\|text-\[var(--" src/ | grep "/[0-9]"
+[2026-04-19T07:10:37] npm run dev 2>&1 > /tmp/dev-stdout.log &
+sleep 5
+curl -s http://localhost:3001 -I 2>&1 | head -1
+[2026-04-19T07:13:28] grep -n "\[var(--accent)\]/" src/components/contract-detail.tsx
+[2026-04-19T07:14:58] set -e
+files=(
+  "src/app/pipeline/page.tsx"
+  "src/components/csv-import.tsx"
+  "src/components/kanban/filter-chips.tsx"
+  "src/components/kanban/board.tsx"
+  "src/components/kanban/column.tsx"
+  "src/components/sidebar.tsx"
+  "src/components/crawl-status.tsx"
+)
+for f in "${files[@]}"; do
+  sed -i '' \
+    -e 's|bg-\[var(--accent)\]/5|bg-[var(--accent-5)]|g' \
+    -e 's|bg-\[var(--accent)\]/10|bg-[var(--accent-10)]|g' \
+    -e 's|bg-\[var(--accent)\]/20|bg-[var(--accent-20)]|g' \
+    -e 's|bg-\[var(--accent)\]/60|bg-[var(--accent-60)]|g' \
+    -e 's|border-\[var(--accent)\]/20|border-[var(--accent-20)]|g' \
+    -e 's|border-\[var(--accent)\]/30|border-[var(--accent-30)]|g' \
+    -e 's|ring-\[var(--accent)\]/20|ring-[var(--accent-20)]|g' \
+    -e 's|hover:bg-\[var(--accent)\]/5|hover:bg-[var(--accent-5)]|g' \
+    -e 's|hover:bg-\[var(--accent)\]/10|hover:bg-[var(--accent-10)]|g' \
+    "$f"
+done
+echo "=== Remaining broken var/alpha patterns ==="
+grep -rn "\[var(--accent)\]/[0-9]\|\[var(--chosen)\]/[0-9]" src/ || echo "NONE"
+[2026-04-19T07:15:08] echo "=== Hex /alpha workarounds (should be empty) ==="
+grep -rn "\[#[0-9a-fA-F]\{6\}\]/[0-9]" src/ || echo "NONE"
+echo ""
+echo "=== Current var/alpha usage on CSS custom props (should be empty except globals.css comment) ==="
+grep -rn "border-\[var(--\|bg-\[var(--\|text-\[var(--\|ring-\[var(--" src/ | grep -E "/[0-9]+[^_]" | grep -v "globals.css" || echo "NONE"
+[2026-04-19T07:15:41] curl -s -X PATCH "http://localhost:3001/api/contracts/95765eb2-8289-46fb-b031-e1078d914b7f" \
+  -H "Content-Type: application/json" \
+  -d '{"promoted": true}' -o /dev/null -w "%{http_code}\n"
+[2026-04-19T07:16:13] curl -s -X PATCH "http://localhost:3001/api/contracts/95765eb2-8289-46fb-b031-e1078d914b7f" \
+  -H "Content-Type: application/json" -d '{"promoted": false}' -o /dev/null -w "%{http_code}\n"
+echo "---"
+lsof -i :3001 2>/dev/null | awk '$1=="node" {print $2}' | xargs -r kill 2>/dev/null
+rm -rf .playwright-mcp
+echo "---"
+npx tsc --noEmit 2>&1 | tail -3
+npm run test:run 2>&1 | grep -E "Tests " | tail -3
+[2026-04-19T07:16:32] git status --short
+[2026-04-19T07:16:40] git reset --soft 639234e 2>&1
+git reset HEAD -- .claude/command-log.txt 2>&1
+echo "---"
+git status --short
+[2026-04-19T07:16:48] git add src/app/globals.css src/app/pipeline/page.tsx src/components/contract-detail.tsx src/components/crawl-status.tsx src/components/csv-import.tsx src/components/kanban/board.tsx src/components/kanban/card.tsx src/components/kanban/column.tsx src/components/kanban/filter-chips.tsx src/components/sidebar.tsx src/__tests__/components/contract-detail.test.tsx src/__tests__/components/kanban/card.test.tsx
+git status --short
+[2026-04-19T07:17:20] git commit -m "$(cat <<'EOF'
+feat(chosen): styling + detail page
+
+Gold CSS tokens + Kanban card + contract-detail UI for CHOSEN tier,
+plus a cross-codebase alpha-token fix.
+
+globals.css:
+- --chosen: #eab308 (Tailwind yellow-500)
+- --chosen-bg: #fef3c7 light / rgba(234,179,8,0.15) dark
+- --chosen-border: rgba(234,179,8,0.4) — for pill + un-promoted button
+- --accent-5/10/20/30/60: precomputed rgba alphas of --accent
+
+The alpha tokens exist because Tailwind 3.4's alpha modifier on a CSS
+custom property (e.g. `bg-[var(--accent)]/10`) does NOT compile to the
+expected rgba — it falls back to transparent/gray because Tailwind
+can't synthesize alpha from an opaque var reference at build time.
+This bug has been shipping silently for months across the sidebar's
+active nav, filter chips, AI reasoning card, csv-import dropzone,
+pipeline progress, and crawl-status card — all the `bg-[var(--accent)]/N`
+tints rendered as fully transparent. Visually verified via
+getComputedStyle on the dev server: `bg-[var(--accent)]/20` →
+`rgba(0,0,0,0)` before, `rgba(59,130,246,0.2)` after. 10 files touched
+to replace every `[var(--accent)]/N` and `[var(--chosen)]/N` with its
+precomputed-token equivalent.
+
+Kanban card (src/components/kanban/card.tsx):
+- ContractCard gains optional promoted?: boolean
+- State-exclusive border: when promoted=true, ONLY the gold 4px classes
+  are in the DOM (border-l-[4px] border-l-[var(--chosen)]). The default
+  3px + classification-color classes are OMITTED. No Tailwind
+  specificity fragility.
+- Filled gold Star next to the title when promoted.
+
+Contract detail (src/components/contract-detail.tsx):
+- Contract interface gains promoted: boolean; promotedAt: string | null
+  (non-optional — fixture in contract-detail.test.tsx updated).
+- Star Promote / Star Demote toggle button in the classification row,
+  renders for ALL classifications including DISCARD.
+- CHOSEN pill with Star icon beside the classification badge in the
+  header when promoted; flex-wrap + min-w-0 keep the title readable.
+- Top 2px gold accent bar at the start of the content container (when
+  promoted). Lives INSIDE max-w-5xl mx-auto — no negative margins.
+
+Tests (365 -> 373 passing):
+- Kanban card: gold border + star when promoted=true, default 3px +
+  classification color when not promoted, cross-classification
+  (MAYBE + DISCARD) shows gold override. State-exclusivity asserted.
+- Contract detail: Promote button when promoted=false, Demote + CHOSEN
+  pill + top accent when promoted=true, button renders on DISCARD
+  classification, click PATCHes { promoted: true } / { promoted: false }.
+
+/review adversarial pass: 14 findings; 4 auto-fixed (top accent
+positioning, header flex-wrap, dark-mode alpha bump 0.08 → 0.15,
+/40 vs /50 normalize).
+
+Visual verification on live dev server: gold Kanban border distinct
+from neighbor GOOD, top accent full-width inside container, CHOSEN
+pill bg/text/border all gold, Demote button filled gold. End-to-end
+PATCH produced correct audit_log cycle (promote → demote rows,
+reviewedAt preserved via COALESCE). Sidebar active nav tint + AI
+reasoning card tint + filter chip borders all visually correct
+post-alpha-token fix.
+
+Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>
+EOF
+)" 2>&1 | tail -4
+[2026-04-19T07:17:30] git log --oneline main..HEAD
+echo "---"
+echo "Final gate:"
+npx tsc --noEmit 2>&1 | tail -3
+npm run test:run 2>&1 | grep -E "Tests " | tail -3
