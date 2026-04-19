@@ -2188,3 +2188,60 @@ echo "---"
 echo "Final gate:"
 npx tsc --noEmit 2>&1 | tail -3
 npm run test:run 2>&1 | grep -E "Tests " | tail -3
+[2026-04-19T07:31:02] npx tsc --noEmit 2>&1 | tail -10
+[2026-04-19T07:31:11] ls src/__tests__/app/ 2>/dev/null
+ls src/__tests__/inbox* src/__tests__/app/inbox* 2>/dev/null || echo "no existing inbox tests"
+[2026-04-19T07:32:16] npm run test:run -- src/__tests__/app/inbox/page.test.tsx 2>&1 | tail -30
+[2026-04-19T07:32:25] npx tsc --noEmit 2>&1 | tail -3
+echo "---"
+npm run test:run 2>&1 | grep -E "Tests " | tail -3
+[2026-04-19T07:32:41] git add src/app/inbox/page.tsx src/__tests__/app/inbox/page.test.tsx
+git status --short
+[2026-04-19T07:32:49] git diff CLAUDE.md
+[2026-04-19T07:33:27] git commit -m "$(cat <<'EOF'
+feat(chosen): inbox triage
+
+Wire ★ Promote inline on /inbox cards. Extract the shared
+optimistic-remove flow so markReviewed and promote share the same
+primitive without duplication.
+
+Refactor: removeFromInbox(id, classification, body) — inner
+function inside InboxPage that closes over setMarking, setGroups,
+and fetchGroup. Both actions become thin wrappers:
+- markReviewed → removeFromInbox(id, cls, { reviewedAt: true })
+- promote      → removeFromInbox(id, cls, { promoted: true })
+
+Chose the closure shape (not a standalone helper taking 3 params)
+per the Commit 3 eng review's C1 decision: 3 pieces of component
+state close over naturally; passing them as args just adds a noisy
+4-arg signature at call sites without readability gain. Private
+function inside the same component is the correct abstraction here.
+
+UI: each unreviewed card now has two buttons side-by-side — the
+gold ★ Promote and the neutral ✓ Mark reviewed, both disabled
+during an in-flight mutation on that card.
+
+Defensive guard: the Promote button is hidden when c.promoted ===
+true. In practice the promote-implies-reviewed COALESCE in §2a
+filters promoted-and-unreviewed cards off /inbox on the next fetch,
+so this button should never render on a promoted card. Kept for
+stale-render safety (promote in tab A while /inbox is open in
+tab B) and to make intent explicit at the render site. The
+comment above the guard is load-bearing — do not delete.
+
+Tests (373 → 379 passing). New file:
+src/__tests__/app/inbox/page.test.tsx (6 tests)
+- ★ Promote button renders on unreviewed cards
+- Click PATCHes { promoted: true } to /api/contracts/:id
+- Card optimistically disappears from the list on promote
+- Mark reviewed still PATCHes { reviewedAt: true } (shared-helper
+  regression guard — if the refactor broke markReviewed, this
+  fails)
+- Mark reviewed card also optimistically disappears (shared flow)
+- Promote button hidden when contract.promoted === true (the
+  defensive guard)
+
+Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>
+EOF
+)" 2>&1 | tail -4
+[2026-04-19T07:33:37] git log --oneline main..HEAD

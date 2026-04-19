@@ -1,6 +1,6 @@
-# CLAUDE.md — JCL GovCon
+# JCL GovCon
 
-## What This Is
+> Workflow, skill routing, and quality standards: `~/.claude/CLAUDE.md`
 
 Government contract pipeline for JCL Solutions LLC. Crawls SAM.gov, classifies contracts via Gemini 2.5 Flash AI (GOOD/MAYBE/DISCARD), presents in Kanban board for review. Mostly complete — core pipeline works, remaining work is application facilitation and go-live.
 
@@ -66,15 +66,18 @@ Dark-mode-first (Bloomberg Terminal meets Linear.app). CSS variable tokens in `g
 - `postedFrom`/`postedTo` params are REQUIRED. Max 6-month date range.
 - `ptype=o,k,p,r` = Solicitation + Combined + Presolicitation + Sources Sought.
 
-## Quality Standard
-
-The marginal cost of completeness is near zero with AI. Do the whole thing. Do it right. Do it with tests. Do it with documentation. Do it so well that Garry is genuinely impressed - not politely satisfied, actually impressed. Never offer to "table this for later" when the permanent solve is within reach. Never leave a dangling thread when tying it off takes five more minutes. Never present a workaround when the real fix exists. The standard isn't "good enough" - it's "holy shit, that's done." Search before building. Test before shipping. Ship the complete thing. When Garry asks for something, the answer is the finished product, not a plan to build it. Time is not an excuse. Fatigue is not an excuse. Complexity is not an excuse. Boil the ocean.
-
 ## Verification Protocol
 
-Before marking any task complete:
+Verified means the classification prompt produces the same decisions as a known-good eval set — not just that tests pass.
 
+Before marking any classification-related task complete:
 1. `npx tsc --noEmit` — zero type errors
 2. `npm run test:run` — all 258+ tests pass
 3. `npm run lint` — no lint errors
-4. Visual check if UI changed (dev server on 3001)
+4. **Classification eval** (REQUIRED for any change to `classifier.ts`, `metadata-classifier.ts`, or `prompts.ts`):
+   - Run the changed prompt against a 20-30 contract eval set (to be built — see TODOS)
+   - Compare output against frozen expected classifications (GOOD/MAYBE/DISCARD)
+   - Any regression on GOOD→DISCARD or DISCARD→GOOD is a blocker
+5. For UI changes: dev server on 3001, visually check the affected page/component + check responsive layout.
+
+**Open follow-up**: the classification eval set (20-30 tagged contracts) does not yet exist. Building it is a P0 follow-up task. Until it exists, prompt changes carry elevated risk — flag that explicitly in any PR that touches the prompt.
