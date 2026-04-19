@@ -92,6 +92,17 @@ Automated government contract pipeline: SAM.gov → PostgreSQL → Gemini AI cla
 - [x] Shared `RESTRICTED_SET_ASIDE_PREFIXES` for "qualifying only" filter
 - [x] Remove all-zero DashboardStats summary row
 
+## Phase 8.6: CHOSEN tier — IN FLIGHT on `feat/chosen-tier` (2026-04-19)
+
+User-driven promotion above AI's GOOD classification; supports triage of the 259-contract backlog. Full spec: `docs/plans/chosen-tier.md`. See `docs/handoff-2026-04-19.md` for decisions + state.
+
+- [x] Commit 1: schema (promoted + promotedAt + audit_log table + partial index) + plan doc + E2E TODO
+- [x] Commit 2: API (PATCH promoted with atomic audit transaction + COALESCE, GET ?promoted= filter with 400 validation)
+- [x] Commit 3: styling (gold CSS tokens + Kanban card state-exclusive border + contract-detail Promote button/pill/top-accent) + codebase-wide Tailwind alpha-token fix
+- [x] Commit 4: /inbox inline ★ Promote button + `removeFromInbox` closure-based helper
+- [ ] Commit 5: /chosen page (flat list sorted by promotedAt DESC, Load more 50/page, empty/error/loaded states, Demote per card) + sidebar `useNavCounts` (Promise.allSettled) + Chosen nav item with Star + gold badge
+- [ ] Final verification + `/qa` + `/ship` as `feat: Chosen tier — user-driven promotion above AI's GOOD`
+
 ## Phase 9: Application Facilitation — NOT STARTED
 
 - [ ] "Good" contract application workflow (status tracking: IDENTIFIED → PURSUING → BID_SUBMITTED → WON/LOST)
