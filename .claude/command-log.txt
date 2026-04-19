@@ -2262,3 +2262,58 @@ ls -la docs/plans/chosen-tier.md 2>&1
 echo ""
 wc -l docs/plans/chosen-tier.md 2>&1
 head -3 docs/plans/chosen-tier.md 2>&1
+[2026-04-19T19:45:15] echo "=== git status ==="; git status --short
+echo ""; echo "=== git log -10 ==="; git log -10 --oneline
+echo ""; echo "=== current branch ==="; git branch --show-current
+echo ""; echo "=== last session-log entries ==="; tail -5 docs/session-log.md 2>/dev/null || echo "(none)"
+echo ""; echo "=== existing handoffs ==="; ls -t docs/handoff-*.md 2>/dev/null | head -5
+echo ""; echo "=== progress.md ==="; wc -l progress.md 2>/dev/null && cat progress.md 2>/dev/null | head -45
+echo ""; echo "=== plan.md ==="; wc -l plan.md 2>/dev/null
+echo ""; echo "=== .prev.md/.prev.json files ==="; find . -maxdepth 3 -name "*.prev.*" 2>/dev/null | grep -v node_modules | head -5 || echo "(none)"
+echo ""; echo "=== auto-checkpoint commits on branch ==="; git log main..HEAD --oneline | grep -c "auto-checkpoint" 2>/dev/null
+[2026-04-19T19:45:32] echo "=== tsc + test gate ==="
+npx tsc --noEmit 2>&1 | tail -2
+npm run test:run 2>&1 | grep -E "Tests " | tail -2
+echo ""
+echo "=== plan.md current phase ==="
+grep -n "Phase" plan.md | head -5
+echo ""
+echo "=== docs/plans/chosen-tier.md GSTACK REVIEW REPORT ==="
+grep -A 1 "GSTACK REVIEW REPORT" docs/plans/chosen-tier.md | head -5
+echo ""
+echo "=== inspect continue.md behavior ==="
+cat ~/.claude/commands/continue.md 2>/dev/null | head -20 || echo "(no ~/.claude/commands/continue.md)"
+[2026-04-19T19:48:07] wc -l progress.md
+[2026-04-19T19:48:54] grep -n "Phase 8.5\|Phase 9" plan.md | head -5
+[2026-04-19T19:49:28] git status --short
+echo "---"
+git add progress.md plan.md docs/handoff-2026-04-19.md docs/session-log.md
+git status --short
+[2026-04-19T19:49:42] git commit -m "$(cat <<'EOF'
+handoff: CHOSEN tier C1-4 shipped, C5 pending
+
+- progress.md rewritten to point at Commit 5 as literal next action
+  (so /continue reads correctly — plan.md is long-horizon, progress.md
+  is authoritative for next task)
+- docs/handoff-2026-04-19.md: full briefing (REDIRECT tier — last
+  handoff anticipated triage; instead built triage infrastructure)
+- plan.md: added Phase 8.6 for CHOSEN tier with Commits 1-4 checked,
+  Commit 5 + /qa/ship pending
+- docs/session-log.md: new dated entry
+
+Branch tip: 962ef8c (Commit 4) + 3 auto-checkpoint commits that /ship
+will squash. 379/379 tests green. CLAUDE.md left untouched per
+parallel-chat coordination.
+
+Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>
+EOF
+)" 2>&1 | tail -5
+[2026-04-19T19:50:04] for d in ~/UGC_creator ~/cantmisscalls ~/etsyseller ~/newsletter ~/templates; do
+  if [ -d "$d/.git" ]; then
+    last=$(git -C "$d" log -1 --format="%ci" 2>/dev/null | cut -d" " -f1)
+    age_days=$(( ( $(date +%s) - $(date -j -f "%Y-%m-%d" "$last" "+%s" 2>/dev/null || echo 0) ) / 86400 ))
+    if [ "$age_days" -lt 30 ] 2>/dev/null; then
+      echo "$(basename $d): last commit $last ($age_days days ago)"
+    fi
+  fi
+done 2>&1 | head -10
