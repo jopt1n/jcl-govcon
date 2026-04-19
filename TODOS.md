@@ -57,6 +57,26 @@ Deferred work surfaced during the `/review` pass on `fix/batch-import-hang` (202
 **Fix:** One-shot manual run: `npx tsx scripts/batch-classify.ts --pending-only` (no `--since` flag). Safe to run anytime after Commit 4 lands on `fix/batch-import-hang`. Will cost ~$1.30 at xAI batch pricing (332 × ~$0.004).
 **Priority:** P2 follow-up. Not a blocker for merge.
 
+### E2E test infrastructure (Playwright)
+
+Playwright is installed as a dep but not wired up. No config, no `e2e/` dir, no CI integration. Three CHOSEN-tier flows currently rely on manual verification (§8 of `docs/plans/chosen-tier.md`):
+
+- `/inbox` → ★ Promote → navigate to `/chosen` → card appears with gold border
+- Promote a DISCARD-classified contract → `/chosen` shows DISCARD badge + gold border (cross-classification)
+- Detail page → ★ Demote → main Kanban GOOD column → green border restored
+
+**Setup scope for a separate PR:**
+
+- `playwright.config.ts` with a dev-server lifecycle
+- `e2e/` directory + first three tests above
+- Test database strategy (separate schema vs. transactional rollback)
+- npm script: `test:e2e`
+- CI integration decision (every PR vs. nightly vs. pre-merge gate)
+
+Value extends beyond JCL GovCon — sibling projects (CantMissCalls, EtsySeller) would benefit from the same infrastructure.
+
+**Priority:** P2 — platform concern that deserves its own plan + eng review. Captured during the eng review of CHOSEN tier (2026-04-18).
+
 ---
 
 ## P3
