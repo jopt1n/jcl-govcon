@@ -1542,3 +1542,40 @@ _SESSION_ID="$$-$(date +%s)"
 echo '{"skill":"plan-ceo-review","duration_s":"'"$_DUR"'","outcome":"success","browse":"false","session":"'"$_SESSION_ID"'","ts":"'$(date -u +%Y-%m-%dT%H:%M:%SZ)'"}' >> ~/.gstack/analytics/skill-usage.jsonl 2>/dev/null
 ~/.claude/skills/gstack/bin/gstack-timeline-log "{\"skill\":\"plan-ceo-review\",\"event\":\"completed\",\"branch\":\"$(git branch --show-current 2>/dev/null)\",\"outcome\":\"success\",\"duration_s\":\"$_DUR\",\"session\":\"$_SESSION_ID\"}" 2>/dev/null
 echo "telemetry logged"
+[2026-04-18T23:35:46] _BRANCH=$(git branch --show-current 2>/dev/null || echo "unknown")
+echo "BRANCH: $_BRANCH"
+echo "TEL/PROACTIVE/LAKE: yes (set in CEO review)"
+echo "HAS_ROUTING: $(grep -q '## Skill routing' CLAUDE.md 2>/dev/null && echo yes || echo no)"
+echo "ROUTING_DECLINED: $(~/.claude/skills/gstack/bin/gstack-config get routing_declined 2>/dev/null || echo false)"
+# Design doc check
+SLUG=$(~/.claude/skills/gstack/browse/bin/remote-slug 2>/dev/null || basename "$(git rev-parse --show-toplevel 2>/dev/null || pwd)")
+DESIGN=$(ls -t ~/.gstack/projects/$SLUG/*-$_BRANCH-design-*.md 2>/dev/null | head -1)
+[ -z "$DESIGN" ] && DESIGN=$(ls -t ~/.gstack/projects/$SLUG/*-design-*.md 2>/dev/null | head -1)
+[ -n "$DESIGN" ] && echo "Design doc: $DESIGN" || echo "No design doc found"
+echo "CEO plan from prior review:"
+ls -t ~/.gstack/projects/$SLUG/ceo-plans/*.md 2>/dev/null | head -1 || echo "(none — HOLD SCOPE mode skips CEO plan write)"
+[2026-04-18T23:36:25] grep -n "limit\|page\|offset\|pagination" src/app/api/contracts/route.ts | head -25
+[2026-04-18T23:36:31] grep -n "markReviewed\|setContracts\|filter\|optimistic" src/app/inbox/page.tsx | head -30
+[2026-04-18T23:38:05] grep -l "playwright\|cypress\|e2e\|@playwright" package.json 2>/dev/null && echo "FOUND" || echo "NO E2E FRAMEWORK"
+ls e2e/ tests/e2e/ playwright.config.* cypress.config.* 2>/dev/null || echo "NO E2E DIRS/CONFIG"
+[2026-04-18T23:38:10] grep -E "playwright|cypress|e2e" package.json
+[2026-04-19T00:24:31] echo "=== JCL TODOS.md format (existing) ==="
+head -20 /Users/joelaptin/jcl-govcon/TODOS.md
+echo ""
+echo "=== CantMissCalls TODOS ==="
+ls ~/cantmisscalls/TODOS* ~/cantmisscalls/todos* 2>/dev/null && head -30 ~/cantmisscalls/TODOS.md 2>/dev/null
+echo ""
+echo "=== EtsySeller TODOS ==="
+ls ~/etsyseller/TODOS* ~/etsyseller/todos* 2>/dev/null && head -30 ~/etsyseller/TODOS.md 2>/dev/null
+[2026-04-19T00:25:10] grep -n "audit_log\|auditLog\|onDelete\|cascade" /Users/joelaptin/.claude/plans/synthetic-stargazing-feigenbaum.md | head -20
+[2026-04-19T00:27:58] grep -n "GSTACK REVIEW REPORT" /Users/joelaptin/.claude/plans/synthetic-stargazing-feigenbaum.md
+[2026-04-19T00:28:09] _COMMIT=$(git rev-parse --short HEAD)
+_TS=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+~/.claude/skills/gstack/bin/gstack-review-log "{\"skill\":\"plan-eng-review\",\"timestamp\":\"$_TS\",\"status\":\"clean\",\"unresolved\":0,\"critical_gaps\":0,\"issues_found\":5,\"mode\":\"FULL_REVIEW\",\"commit\":\"$_COMMIT\"}" 2>&1
+~/.claude/skills/gstack/bin/gstack-review-log "{\"skill\":\"codex-plan-review\",\"timestamp\":\"$_TS\",\"status\":\"clean\",\"source\":\"none\",\"commit\":\"$_COMMIT\"}" 2>&1
+echo done
+[2026-04-19T00:28:49] _DUR=1800
+_SESSION_ID="$$-$(date +%s)"
+echo '{"skill":"plan-eng-review","duration_s":"'"$_DUR"'","outcome":"success","browse":"false","session":"'"$_SESSION_ID"'","ts":"'$(date -u +%Y-%m-%dT%H:%M:%SZ)'"}' >> ~/.gstack/analytics/skill-usage.jsonl 2>/dev/null
+~/.claude/skills/gstack/bin/gstack-timeline-log "{\"skill\":\"plan-eng-review\",\"event\":\"completed\",\"branch\":\"$(git branch --show-current 2>/dev/null)\",\"outcome\":\"success\",\"duration_s\":\"$_DUR\",\"session\":\"$_SESSION_ID\"}" 2>/dev/null
+echo "telemetry logged"
