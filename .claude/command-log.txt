@@ -2771,3 +2771,46 @@ if d['data']:
 curl -sS -o /dev/null -w "/chosen -> %{http_code}\n" http://localhost:3001/chosen
 curl -sS -o /dev/null -w "/ -> %{http_code}\n" http://localhost:3001/
 curl -sS -o /dev/null -w "/contracts/:id -> %{http_code}\n" http://localhost:3001/contracts/95765eb2-8289-46fb-b031-e1078d914b7f
+[2026-04-20T01:59:07] cat > ./scripts/tmp-null-reviewedat.ts <<'EOF'
+import postgres from 'postgres';
+import { readFileSync } from 'fs';
+
+const env = readFileSync('.env', 'utf8');
+for (const line of env.split('\n')) {
+  const m = line.match(/^([A-Z_]+)=(.*)$/);
+  if (m && !process.env[m[1]]) process.env[m[1]] = m[2].replace(/^["']|["']$/g, '');
+}
+
+async function main() {
+  const TEST_ID = '5fcfc20a-769d-4bfe-bd85-9e22a54a0a9b';
+  const sql = postgres(process.env.DATABASE_URL!);
+
+  // Before snapshot (diagnostic)
+  const before = await sql`
+    SELECT id::text as id, classification, reviewed_at, promoted
+    FROM contracts
+    WHERE id = ${TEST_ID}::uuid
+  `;
+  console.log('BEFORE:', JSON.stringify(before[0], null, 2));
+
+  // Mirror of the user's psql command
+  await sql`
+    UPDATE contracts
+    SET reviewed_at = NULL
+    WHERE id = ${TEST_ID}::uuid
+  `;
+
+  const after = await sql`
+    SELECT id::text as id, classification, reviewed_at, promoted
+    FROM contracts
+    WHERE id = ${TEST_ID}::uuid
+  `;
+  console.log('AFTER:', JSON.stringify(after[0], null, 2));
+
+  await sql.end();
+}
+
+main().catch((e) => { console.error(e); process.exit(1); });
+EOF
+npx tsx scripts/tmp-null-reviewedat.ts 2>&1
+rm scripts/tmp-null-reviewedat.ts
