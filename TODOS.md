@@ -117,6 +117,16 @@ The AI classifier labels contracts GOOD based on fit, not deadline. Once a contr
 **Why:** Works, but mutating a function parameter to re-enter a later branch is the kind of thing that breaks when a future reader splits this into two functions.
 **Fix:** Split `processRow` into `pollAndImport()` + `maybeSendDigest()` called sequentially, each taking the current row as input. Or keep the single function and add a comment explicitly flagging the fall-through intent.
 
+### Hydration warning on Kanban search input
+
+**File:** `src/components/kanban/board.tsx:189` — the search `<input>` inside `<form>` at line 187.
+**Symptom:** Dev-mode console warning `Warning: Extra attributes from the server: style` at every page that renders `DashboardPage`.
+**Not introduced by CHOSEN tier** — pre-existing, surfaced during /qa of feat/chosen-tier (2026-04-19). The only board.tsx change in that branch was the filter button's alpha-token refresh on line 199; the search input was untouched. History confirms the input predates 33a3848.
+**Severity:** Low. Dev warning only, functionally identical render.
+**Likely cause:** client-side `style` attribute injection on the input — possibly autofill, a CSS-in-JS fragment, or a Next.js 14 SSR edge case with controlled inputs. Needs React DevTools Profiler investigation.
+**Fix path:** first, add `suppressHydrationWarning` on the specific input only if root cause confirms third-party injection (browser autofill). If it's a legit state mismatch, fix the render-time value divergence between server and client.
+**Priority:** P3. Defer to an investigation-first PR.
+
 ### Inbox badge contrast (WCAG AA)
 
 **File:** `src/components/sidebar.tsx` — Inbox nav item
