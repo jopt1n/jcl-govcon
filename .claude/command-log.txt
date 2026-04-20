@@ -2814,3 +2814,128 @@ main().catch((e) => { console.error(e); process.exit(1); });
 EOF
 npx tsx scripts/tmp-null-reviewedat.ts 2>&1
 rm scripts/tmp-null-reviewedat.ts
+[2026-04-20T02:40:09] pwd && echo "---"
+ls docs/planning/rendering-plan.md 2>&1
+echo "---"
+ls ~/UGC_creator/docs/planning/rendering-plan.md 2>&1 || find ~ -maxdepth 4 -name "rendering-plan.md" -type f 2>/dev/null | head -5
+[2026-04-20T02:40:32] cd ~/UGC_creator && pwd
+echo "---"
+git branch --show-current
+git status --short | head -20
+echo "---"
+ls -la docs/planning/ 2>&1 | head -20
+echo "---"
+ls archive/ 2>&1 | head -20
+echo "---"
+cat CLAUDE.md 2>&1 | head -40
+[2026-04-20T02:40:38] find /Users/joelaptin/UGC_creator -name "rendering-bootstrap.md" -type f 2>/dev/null
+echo "---"
+find /Users/joelaptin/UGC_creator -type d -name "archive" 2>/dev/null
+echo "---"
+ls /Users/joelaptin/UGC_creator/.claude/skills/ugc/ 2>/dev/null
+[2026-04-20T02:42:04] cd ~/UGC_creator
+git log --oneline -10
+echo "---"
+ls .claude/skills/ugc/avatar-catalog.json 2>/dev/null && wc -l .claude/skills/ugc/avatar-catalog.json
+echo "---"
+ls .claude/skills/ugc/archive/
+echo "---"
+# Check §H of archived bootstrap
+grep -n "^## §H\|^### §H\|§H\b" .claude/skills/ugc/archive/rendering-bootstrap.md 2>/dev/null | head -5
+[2026-04-20T02:42:10] cd ~/UGC_creator && git show --stat c06a509 | head -20
+echo "---"
+head -40 .claude/skills/ugc/avatar-catalog.json 2>/dev/null
+echo "---"
+# Get the actual §H section from archive
+awk '/^## §H\b|^### §H\b|^# §H\b/,/^##? [A-Z§]/' .claude/skills/ugc/archive/rendering-bootstrap.md 2>/dev/null | head -30
+echo "---"
+# Fallback search
+grep -n "§H" .claude/skills/ugc/archive/rendering-bootstrap.md | head -10
+[2026-04-20T02:42:24] cd ~/UGC_creator
+ls -la .claude/skills/ugc/avatar-catalog.json 2>&1
+echo "---"
+# §H section of archived bootstrap — explicit match
+grep -n "^## " .claude/skills/ugc/archive/rendering-bootstrap.md | head -20
+echo "---"
+# Check current CLAUDE.md for any references to these items
+grep -n "Admin\|Object Read\|R2 token\|scope" CLAUDE.md 2>/dev/null | head -10
+echo "---"
+grep -n "Video Agent\|Studio API\|Premium Credits\|pay-as-you-go\|Avatar IV\|57.voice\|emotion_support" CLAUDE.md 2>/dev/null | head -10
+[2026-04-20T02:42:53] cd ~/UGC_creator
+# Read §H from archive
+awk '/^## § H\. |^## §H\. |^## H\. /,/^## § /' .claude/skills/ugc/archive/rendering-bootstrap.md 2>/dev/null | head -40
+echo "---ALT---"
+sed -n '523,539p' .claude/skills/ugc/archive/rendering-bootstrap.md
+echo "---"
+# Check scriptwriting.md for caption default
+grep -n 'caption' .claude/skills/ugc/scriptwriting.md 2>/dev/null | head -5
+[2026-04-20T02:43:28] cd ~/UGC_creator
+grep -n 'greenscreen\|green screen\|chroma\|green.screen' docs/planning/rendering-plan.md
+echo "---"
+# Check for allow-engine-unverified
+grep -n 'allow.engine\|engine_verified\|engine re' docs/planning/rendering-plan.md
+echo "---"
+# Check for any existing scope / token mentions
+grep -niE 'token|scope|admin|permissions|credentials' docs/planning/rendering-plan.md
+[2026-04-20T02:46:01] cd ~/UGC_creator
+git diff --stat
+echo "---"
+# Sanity: no orphan 'greenscreen' refs remain outside the superseded note
+grep -n 'greenscreen\|chroma' docs/planning/rendering-plan.md
+echo "---"
+# Sanity: all 6 item keywords are present
+grep -cn 'avatar-catalog\.json\|Admin Read & Write\|Video Agent\|pay-as-you-go\|57.voice\|HeyGen native' docs/planning/rendering-plan.md
+[2026-04-20T02:46:14] cd ~/UGC_creator
+git status --short
+echo "---"
+git add docs/planning/rendering-plan.md
+git status --short
+[2026-04-20T02:46:37] cd ~/UGC_creator && git commit -m "$(cat <<'EOF'
+docs(planning): rendering-plan readiness audit + locked-decision sync
+
+Doc-only sweep before opening the fresh web-chat to design rendering.md
+execution. Aligns the plan with state that landed after it was written
+(catalog pivot, schema v0.2, emotion_support resolution) and with locked
+decisions from prior handoffs that the plan hadn't yet absorbed.
+
+New section — "Upstream prerequisites (operator-critical)":
+- Heygen mapping provenance: avatar-catalog.json (v0.2 schema, c06a509)
+  is the source; companies/{brand}/kit/heygen_mapping.json is produced
+  by hand-filtering per brand. Old /render-bootstrap flow archived.
+  §H of archive/rendering-bootstrap.md remains authoritative for the
+  placeholder-substitution contract until rendering.md inlines it.
+- R2 token scope footgun: must be Admin Read & Write, NOT Object Read
+  & Write. Object-scope token passes head_bucket preflight then fails
+  on PutObject/presign. Active Apr 15 2026 Admin token named.
+- Voice pool: validated 57-voice pool (31F/26M, emotion_support=True,
+  English OR Multilingual) locked; rendering.md does not re-validate.
+- Credit model: pay-as-you-go wallet (direct Studio API, what A11 reads)
+  vs Premium Credits pool (HeyGen MCP). Not the same balance. Burn
+  rate ~1 credit per 3 seconds of Avatar IV output. Budget ~1,000
+  credits/month/client for 100 videos × 30s avg.
+
+Decision edits:
+- A1: enriched with concrete Video Agent rejection reasoning (~15 min
+  per video, invents fake brand assets, AI-slideshow b-roll).
+- A3: rewritten to match locked decision — HeyGen native b-roll, no
+  green screen, close-up only. Remotion owns captions + text only,
+  not b-roll composition. Prior greenscreen+chroma-key design marked
+  explicitly superseded so future readers don't re-propose it.
+- A8: replaced stale /render-bootstrap pointer with the hand-filter
+  workflow against avatar-catalog.json.
+- A9: added rationale for --allow-engine-unverified — avatar-details
+  endpoint can misfire on avatars that render correctly (schema drift);
+  flag lets operators proceed on independent empirical evidence.
+
+Archive references:
+- Marked archive/rendering-bootstrap.md SUPERSEDED for flow/structure,
+  authoritative for §H only until rendering.md inlines the contract.
+- Critical files entry for avatar-catalog.json updated to cite the
+  v0.2 schema lock and the hand-filter workflow.
+
+No changes to A10 (SHA256 content-hash idempotency) or A4
+(captions OFF, text OFF, music ON) — both already correctly locked.
+
+Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>
+EOF
+)" && git log --oneline -3
