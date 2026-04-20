@@ -92,3 +92,11 @@ Value extends beyond JCL GovCon — sibling projects (CantMissCalls, EtsySeller)
 **File:** `src/app/api/cron/check-batches/route.ts:356-357`
 **Why:** Works, but mutating a function parameter to re-enter a later branch is the kind of thing that breaks when a future reader splits this into two functions.
 **Fix:** Split `processRow` into `pollAndImport()` + `maybeSendDigest()` called sequentially, each taking the current row as input. Or keep the single function and add a comment explicitly flagging the fall-through intent.
+
+### Inbox badge contrast (WCAG AA)
+
+**File:** `src/components/sidebar.tsx` — Inbox nav item
+**Why:** Badge renders white text on #3b82f6 blue, ~3.7:1 contrast. WCAG AA requires 4.5:1 for small text (10px badge). Below threshold.
+**Not introduced by CHOSEN tier** — pre-existing accessibility issue surfaced during Commit 5 /review (2026-04-19). The Chosen badge fix in that commit added a `badgeTextColor` prop and a `--chosen-fg` token precomputed for readability on gold.
+**Fix:** Same pattern. Add a `--inbox-fg` token (dark text color passing AA on blue) to `globals.css`, set `badgeTextColor: "var(--inbox-fg)"` on the Inbox nav item, verify with a contrast checker. One-line change on top of the existing scaffolding.
+**Priority:** P3. Defer to an accessibility-focused PR that can audit all nav badges, toast colors, urgent flags, and classification badges for AA compliance.

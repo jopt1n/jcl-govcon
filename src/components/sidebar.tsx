@@ -14,21 +14,38 @@ import {
   Inbox,
   GitBranch,
   Activity,
+  Star,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { ThemeToggle } from "./theme-toggle";
+
+type BadgeKey = "inbox" | "chosen";
 
 type NavItem = {
   href: string;
   label: string;
   icon: React.ComponentType<{ className?: string }>;
-  /** Key to look up a badge count in the unread map. */
-  badgeKey?: "inbox";
+  /** Key to look up a badge count in the nav-counts map. */
+  badgeKey?: BadgeKey;
+  /** CSS color for the badge background + collapsed dot. Defaults to --accent. */
+  badgeColor?: string;
+  /** CSS color for the badge text. Must pass WCAG AA on the chosen bg.
+   *  Defaults to white (fine for the blue --accent, insufficient for gold). */
+  badgeTextColor?: string;
 };
 
 const navItems: NavItem[] = [
   { href: "/", label: "Dashboard", icon: LayoutDashboard },
   { href: "/inbox", label: "Inbox", icon: Inbox, badgeKey: "inbox" },
+  {
+    href: "/chosen",
+    label: "Chosen",
+    icon: Star,
+    badgeKey: "chosen",
+    badgeColor: "var(--chosen)",
+    // White (~1.95:1) fails WCAG AA on gold; --chosen-fg is dark zinc (~12:1).
+    badgeTextColor: "var(--chosen-fg)",
+  },
   { href: "/pipeline", label: "Pipeline", icon: GitBranch },
   { href: "/analytics", label: "Analytics", icon: BarChart3 },
   { href: "/admin/crawl-runs", label: "Runs", icon: Activity },
@@ -36,46 +53,72 @@ const navItems: NavItem[] = [
   { href: "/settings", label: "Settings", icon: Settings },
 ];
 
+type NavCounts = { inbox: number | null; chosen: number | null };
+
 /**
- * Poll the unreviewed-contracts count every 30 seconds. Good-enough
- * refresh rate for the nav badge. No SWR dep needed.
+ * Poll inbox + chosen counts every 30s. Each fetch is independent:
+ *   - fulfilled + ok → update that badge
+ *   - rejected or !ok → leave previous value untouched (null on first failure,
+ *     last-known thereafter)
+ *
+ * Uses Promise.allSettled so one endpoint failing doesn't block the other.
+ * Initial `null` renders no badge at all; once a fetch has succeeded once,
+ * the last-known value persists across transient failures.
  */
-function useUnreadCount(): number | null {
-  const [count, setCount] = useState<number | null>(null);
+function useNavCounts(): NavCounts {
+  const [inbox, setInbox] = useState<number | null>(null);
+  const [chosen, setChosen] = useState<number | null>(null);
 
   useEffect(() => {
     let cancelled = false;
 
-    async function fetchCount() {
-      try {
-        const res = await fetch(
-          "/api/contracts?unreviewed=true&limit=1&page=1",
-          { signal: AbortSignal.timeout(10_000) },
-        );
-        if (!res.ok) return;
-        const json = await res.json();
-        if (!cancelled) setCount(json.pagination?.total ?? 0);
-      } catch {
-        // non-fatal
+    async function fetchCounts() {
+      const settled = await Promise.allSettled([
+        fetch("/api/contracts?unreviewed=true&limit=1&page=1", {
+          signal: AbortSignal.timeout(10_000),
+        }),
+        fetch("/api/contracts?promoted=true&limit=1&page=1", {
+          signal: AbortSignal.timeout(10_000),
+        }),
+      ]);
+
+      if (settled[0].status === "fulfilled" && settled[0].value.ok) {
+        try {
+          const json = await settled[0].value.json();
+          if (!cancelled) setInbox(json.pagination?.total ?? 0);
+        } catch {
+          // JSON parse failure → keep last-known inbox value.
+        }
+      }
+      if (settled[1].status === "fulfilled" && settled[1].value.ok) {
+        try {
+          const json = await settled[1].value.json();
+          if (!cancelled) setChosen(json.pagination?.total ?? 0);
+        } catch {
+          // JSON parse failure → keep last-known chosen value.
+        }
       }
     }
 
-    fetchCount();
-    const t = setInterval(fetchCount, 30_000);
+    fetchCounts();
+    const t = setInterval(fetchCounts, 30_000);
     return () => {
       cancelled = true;
       clearInterval(t);
     };
   }, []);
 
-  return count;
+  return { inbox, chosen };
 }
 
 export function Sidebar() {
   const pathname = usePathname();
   const [mobileOpen, setMobileOpen] = useState(false);
-  const inboxCount = useUnreadCount();
-  const badgeMap: Record<"inbox", number | null> = { inbox: inboxCount };
+  const counts = useNavCounts();
+  const badgeMap: Record<BadgeKey, number | null> = {
+    inbox: counts.inbox,
+    chosen: counts.chosen,
+  };
 
   return (
     <>
@@ -120,6 +163,8 @@ export function Sidebar() {
                     : pathname.startsWith(item.href);
                 const Icon = item.icon;
                 const badge = item.badgeKey ? badgeMap[item.badgeKey] : null;
+                const badgeBg = item.badgeColor ?? "var(--accent)";
+                const badgeText = item.badgeTextColor ?? "#fff";
                 return (
                   <Link
                     key={item.href}
@@ -135,7 +180,15 @@ export function Sidebar() {
                     <Icon className="w-5 h-5 shrink-0" />
                     <span className="ml-3 flex-1">{item.label}</span>
                     {badge !== null && badge > 0 && (
-                      <span className="ml-auto text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-[var(--accent)] text-white">
+                      <span
+                        data-testid={
+                          item.badgeKey
+                            ? `nav-badge-${item.badgeKey}`
+                            : undefined
+                        }
+                        className="ml-auto text-[10px] font-semibold px-1.5 py-0.5 rounded-full"
+                        style={{ backgroundColor: badgeBg, color: badgeText }}
+                      >
                         {badge > 99 ? "99+" : badge}
                       </span>
                     )}
@@ -170,6 +223,8 @@ export function Sidebar() {
             const Icon = item.icon;
             const badge = item.badgeKey ? badgeMap[item.badgeKey] : null;
             const showBadge = badge !== null && badge > 0;
+            const badgeBg = item.badgeColor ?? "var(--accent)";
+            const badgeText = item.badgeTextColor ?? "#fff";
             return (
               <Link
                 key={item.href}
@@ -185,14 +240,25 @@ export function Sidebar() {
                   <Icon className="w-5 h-5" />
                   {/* Collapsed-sidebar dot: visible when collapsed, hidden on hover */}
                   {showBadge && (
-                    <span className="absolute -top-1 -right-1 w-2 h-2 rounded-full bg-[var(--accent)] group-hover:hidden" />
+                    <span
+                      className="absolute -top-1 -right-1 w-2 h-2 rounded-full group-hover:hidden"
+                      style={{ backgroundColor: badgeBg }}
+                    />
                   )}
                 </div>
                 <span className="ml-3 flex-1 whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity duration-200">
                   {item.label}
                 </span>
                 {showBadge && (
-                  <span className="ml-auto text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-[var(--accent)] text-white whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity duration-200">
+                  <span
+                    data-testid={
+                      item.badgeKey
+                        ? `nav-badge-desktop-${item.badgeKey}`
+                        : undefined
+                    }
+                    className="ml-auto text-[10px] font-semibold px-1.5 py-0.5 rounded-full whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity duration-200"
+                    style={{ backgroundColor: badgeBg, color: badgeText }}
+                  >
                     {badge > 99 ? "99+" : badge}
                   </span>
                 )}
