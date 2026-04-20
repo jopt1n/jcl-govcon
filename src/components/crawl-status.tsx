@@ -265,7 +265,7 @@ export function CrawlStatus() {
                     "flex items-center gap-1.5 px-2 py-1.5 rounded text-xs font-medium transition-colors",
                     "border border-[var(--border)] hover:bg-[var(--surface-alt)] disabled:opacity-40 disabled:cursor-not-allowed",
                     "text-[var(--text-secondary)]",
-                    isActive && "bg-[var(--accent)]/10 border-[var(--accent)]/30"
+                    isActive && "bg-[var(--accent-10)] border-[var(--accent-30)]"
                   )}
                 >
                   {isActive ? (

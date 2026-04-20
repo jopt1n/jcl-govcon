@@ -199,7 +199,7 @@ export function KanbanBoard() {
           className={cn(
             "flex items-center gap-1.5 px-3 py-2 text-sm border rounded-lg transition-colors",
             showFilters || agencyFilter
-              ? "bg-[var(--accent)]/10 border-[var(--accent)]/30 text-[var(--accent)]"
+              ? "bg-[var(--accent-10)] border-[var(--accent-30)] text-[var(--accent)]"
               : "border-[var(--border)] text-[var(--text-secondary)] hover:bg-[var(--surface)]",
           )}
         >

@@ -247,7 +247,7 @@ function PipelineColumn({
       className={cn(
         "flex flex-col rounded-lg border bg-[var(--surface-alt)] min-w-[280px] w-full max-w-[360px] transition-colors",
         isOver
-          ? "border-[var(--accent)] ring-2 ring-[var(--accent)]/20"
+          ? "border-[var(--accent)] ring-2 ring-[var(--accent-20)]"
           : "border-[var(--border)]",
       )}
     >

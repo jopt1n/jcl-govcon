@@ -92,7 +92,7 @@ export function KanbanColumn({
         {!loading && hasMore && (
           <button
             onClick={onLoadMore}
-            className="w-full py-2 text-xs text-[var(--text-muted)] hover:text-[var(--accent)] hover:bg-[var(--accent)]/5 rounded transition-colors"
+            className="w-full py-2 text-xs text-[var(--text-muted)] hover:text-[var(--accent)] hover:bg-[var(--accent-5)] rounded transition-colors"
           >
             Load more...
           </button>

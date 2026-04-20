@@ -1,3 +1,4 @@
+import { sql } from "drizzle-orm";
 import {
   pgTable,
   pgEnum,
@@ -100,6 +101,13 @@ export const contracts = pgTable(
       .default(false),
     // Inbox triage: null = unreviewed (shows on /inbox), non-null = triaged (shows on main Kanban)
     reviewedAt: timestamp("reviewed_at", { withTimezone: true }),
+    // User-driven promotion above the AI classifier. The classifier is tuned for
+    // recall (see feedback_classification_recall.md memory) — most GOOD contracts
+    // aren't actually ideal. `promoted=true` is the user's "this one's worth
+    // pursuing" signal. Surfaced on /chosen with gold accent. Orthogonal to
+    // classification (AI label is preserved) and to status (pipeline lifecycle).
+    promoted: boolean("promoted").notNull().default(false),
+    promotedAt: timestamp("promoted_at", { withTimezone: true }),
     // Pipeline tracking: bumped whenever status changes; powers weekly retro stats
     statusChangedAt: timestamp("status_changed_at", { withTimezone: true })
       .notNull()
@@ -126,6 +134,12 @@ export const contracts = pgTable(
     // The composite (reviewedAt, createdAt) index does not reliably serve
     // `WHERE createdAt >= X` when reviewedAt isn't in the filter.
     createdAtIdx: index("contracts_created_at_idx").on(table.createdAt),
+    // Partial index for /chosen page (ORDER BY promoted_at DESC WHERE promoted=true).
+    // Stays tiny because 99%+ of rows have promoted=false. Fallback to composite
+    // (promoted, promoted_at) if drizzle-kit drops the WHERE clause silently.
+    promotedIdx: index("contracts_promoted_idx")
+      .on(table.promotedAt)
+      .where(sql`${table.promoted} = true`),
   }),
 );
 
@@ -218,6 +232,37 @@ export const crawlRuns = pgTable(
     activeBatchIdx: index("crawl_runs_active_batch_idx").on(
       table.batchFinishedAt,
       table.batchId,
+    ),
+  }),
+);
+
+// ── Audit log ──────────────────────────────────────────────────────────────
+//
+// Records user-driven lifecycle actions on contracts (promote/demote in v1;
+// status transitions in Phase 9). Written-only in v1 — no admin viewer yet.
+//
+// IMPORTANT: contractId is intentionally nullable + onDelete: 'set null'.
+// The whole point of an audit log is to answer "what did I do?" even when the
+// source contract is deleted. Orphaned rows keep their action + created_at as
+// forensic records. Do NOT add .notNull() here — it would break the SET NULL
+// cascade and lose history on contract deletion.
+export const auditLog = pgTable(
+  "audit_log",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    contractId: uuid("contract_id").references(() => contracts.id, {
+      onDelete: "set null",
+    }),
+    action: text("action").notNull(), // "promote" | "demote" | future: status transitions
+    metadata: jsonb("metadata"), // optional forensic context, unused in v1
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => ({
+    contractIdIdx: index("audit_log_contract_id_idx").on(
+      table.contractId,
+      table.createdAt,
     ),
   }),
 );

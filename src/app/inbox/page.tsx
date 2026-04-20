@@ -13,7 +13,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { KanbanCard, type ContractCard } from "@/components/kanban/card";
-import { Check, Inbox as InboxIcon, RefreshCw } from "lucide-react";
+import { Check, Inbox as InboxIcon, RefreshCw, Star } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 type Classification = "GOOD" | "MAYBE" | "DISCARD";
@@ -110,7 +110,21 @@ export default function InboxPage() {
     refreshAll();
   }, [refreshAll]);
 
-  async function markReviewed(id: string, classification: Classification) {
+  // Shared optimistic-remove primitive for /inbox actions that triage a
+  // contract off this page in a single PATCH. Two callers today:
+  //   markReviewed  → { reviewedAt: true }
+  //   promote       → { promoted: true }   (PATCH handler also implies
+  //                                          reviewedAt via COALESCE)
+  //
+  // Kept as an inner function inside InboxPage so it closes over marking,
+  // groups, and fetchGroup naturally. A standalone helper taking all three
+  // as parameters would add a 4-arg signature at call sites for no readability
+  // gain — the Commit 3 eng review's C1 decision landed on the closure shape.
+  async function removeFromInbox(
+    id: string,
+    classification: Classification,
+    body: Record<string, unknown>,
+  ) {
     setMarking((prev) => new Set(prev).add(id));
     // Optimistic remove
     setGroups((prev) => ({
@@ -124,7 +138,7 @@ export default function InboxPage() {
       const res = await fetch(`/api/contracts/${id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ reviewedAt: true }),
+        body: JSON.stringify(body),
       });
       if (!res.ok) {
         throw new Error(`PATCH failed: ${res.status}`);
@@ -140,6 +154,12 @@ export default function InboxPage() {
       });
     }
   }
+
+  const markReviewed = (id: string, classification: Classification) =>
+    removeFromInbox(id, classification, { reviewedAt: true });
+
+  const promote = (id: string, classification: Classification) =>
+    removeFromInbox(id, classification, { promoted: true });
 
   const totalUnreviewed =
     groups.GOOD.contracts.length +
@@ -242,17 +262,41 @@ export default function InboxPage() {
                 {state.contracts.map((c) => (
                   <div key={c.id} className="relative">
                     <KanbanCard contract={c} showClassification={false} />
-                    <button
-                      onClick={(e) => {
-                        e.preventDefault();
-                        markReviewed(c.id, group.id);
-                      }}
-                      disabled={marking.has(c.id)}
-                      className="mt-2 w-full flex items-center justify-center gap-1.5 text-xs font-medium px-3 py-2 rounded-md border border-[var(--border)] bg-[var(--surface-alt)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--surface)] disabled:opacity-50"
-                    >
-                      <Check className="w-3.5 h-3.5" />
-                      {marking.has(c.id) ? "Marking…" : "Mark reviewed"}
-                    </button>
+                    <div className="mt-2 flex gap-2">
+                      {/* Defensive guard — promote-implies-reviewed COALESCE in
+                          the PATCH handler (§2a) should filter any just-promoted
+                          contract off /inbox on the next fetch, so this button
+                          should never render on a c.promoted === true card in
+                          practice. Kept for stale-render safety (promote in
+                          tab A, /inbox still open in tab B) and to make intent
+                          explicit. Do not delete. */}
+                      {!c.promoted && (
+                        <button
+                          data-testid={`inbox-promote-${c.id}`}
+                          onClick={(e) => {
+                            e.preventDefault();
+                            promote(c.id, group.id);
+                          }}
+                          disabled={marking.has(c.id)}
+                          className="flex-1 flex items-center justify-center gap-1.5 text-xs font-medium px-3 py-2 rounded-md border border-[var(--chosen-border)] bg-[var(--surface)] text-[var(--chosen)] hover:bg-[var(--chosen-bg)] disabled:opacity-50"
+                        >
+                          <Star className="w-3.5 h-3.5" />
+                          {marking.has(c.id) ? "Promoting…" : "Promote"}
+                        </button>
+                      )}
+                      <button
+                        data-testid={`inbox-mark-reviewed-${c.id}`}
+                        onClick={(e) => {
+                          e.preventDefault();
+                          markReviewed(c.id, group.id);
+                        }}
+                        disabled={marking.has(c.id)}
+                        className="flex-1 flex items-center justify-center gap-1.5 text-xs font-medium px-3 py-2 rounded-md border border-[var(--border)] bg-[var(--surface-alt)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--surface)] disabled:opacity-50"
+                      >
+                        <Check className="w-3.5 h-3.5" />
+                        {marking.has(c.id) ? "Marking…" : "Mark reviewed"}
+                      </button>
+                    </div>
                   </div>
                 ))}
               </div>

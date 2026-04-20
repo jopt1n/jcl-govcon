@@ -24,9 +24,33 @@
   --pending: #3b82f6;
   --urgent: #ef4444;
 
+  /* User-driven promotion (CHOSEN tier). Gold accent sits above the AI's
+     classification palette. --chosen is the border/icon color; --chosen-bg
+     is a soft wash used behind the CHOSEN pill and promote button;
+     --chosen-border is --chosen at 40% for soft pill/button outlines;
+     --chosen-fg is the foreground color for text rendered ON TOP of the
+     solid --chosen gold (badge text, solid-fill labels). Dark zinc passes
+     WCAG AA against #eab308 (~12:1); white fails (~1.95:1). */
+  --chosen: #eab308;
+  --chosen-bg: #fef3c7;
+  --chosen-border: rgba(234, 179, 8, 0.4);
+  --chosen-fg: #18181b;
+
   /* Accent */
   --accent: #3b82f6;
   --accent-hover: #2563eb;
+
+  /* Precomputed accent alphas. Tailwind 3.4's alpha modifier on a CSS var
+     (e.g. `bg-[var(--accent)]/10`) does NOT compile to the expected rgba —
+     it falls back to transparent/gray because Tailwind can't synthesize
+     alpha from an opaque var reference at build time. Using dedicated
+     tokens at each alpha level keeps call sites readable AND correct.
+     Always use these instead of `var(--accent)/N` in className strings. */
+  --accent-5: rgba(59, 130, 246, 0.05);
+  --accent-10: rgba(59, 130, 246, 0.1);
+  --accent-20: rgba(59, 130, 246, 0.2);
+  --accent-30: rgba(59, 130, 246, 0.3);
+  --accent-60: rgba(59, 130, 246, 0.6);
 
   /* Sidebar */
   --sidebar-bg: #1e293b;
@@ -57,8 +81,29 @@
   --pending: #3b82f6;
   --urgent: #ef4444;
 
+  /* CHOSEN tier — same yellow-500 as light mode. Dark wash is 0.15 alpha
+     yellow over the dark surface (#27272a surface-raised). At 0.08 the
+     delta against the base surface was ~2% luminance and effectively
+     invisible; 0.15 keeps the tint subtle but readable. Verified via
+     Commit 3 /review. Nudge up further only if /qa flags contrast.
+     --chosen-fg stays dark zinc in both themes — it's the foreground on
+     solid gold (badge text), which is gold-on-gold regardless of theme. */
+  --chosen: #eab308;
+  --chosen-bg: rgba(234, 179, 8, 0.15);
+  --chosen-border: rgba(234, 179, 8, 0.4);
+  --chosen-fg: #18181b;
+
   --accent: #3b82f6;
   --accent-hover: #60a5fa;
+
+  /* Accent alpha tokens — same rgba values as light mode (the base hex
+     doesn't change across themes, so the precomputed alphas don't either).
+     See the :root block for why these exist. */
+  --accent-5: rgba(59, 130, 246, 0.05);
+  --accent-10: rgba(59, 130, 246, 0.1);
+  --accent-20: rgba(59, 130, 246, 0.2);
+  --accent-30: rgba(59, 130, 246, 0.3);
+  --accent-60: rgba(59, 130, 246, 0.6);
 
   --sidebar-bg: #09090b;
   --sidebar-text: #a1a1aa;

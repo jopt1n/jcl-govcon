@@ -57,6 +57,50 @@ Deferred work surfaced during the `/review` pass on `fix/batch-import-hang` (202
 **Fix:** One-shot manual run: `npx tsx scripts/batch-classify.ts --pending-only` (no `--since` flag). Safe to run anytime after Commit 4 lands on `fix/batch-import-hang`. Will cost ~$1.30 at xAI batch pricing (332 × ~$0.004).
 **Priority:** P2 follow-up. Not a blocker for merge.
 
+### E2E test infrastructure (Playwright)
+
+Playwright is installed as a dep but not wired up. No config, no `e2e/` dir, no CI integration. Three CHOSEN-tier flows currently rely on manual verification (§8 of `docs/plans/chosen-tier.md`):
+
+- `/inbox` → ★ Promote → navigate to `/chosen` → card appears with gold border
+- Promote a DISCARD-classified contract → `/chosen` shows DISCARD badge + gold border (cross-classification)
+- Detail page → ★ Demote → main Kanban GOOD column → green border restored
+
+**Setup scope for a separate PR:**
+
+- `playwright.config.ts` with a dev-server lifecycle
+- `e2e/` directory + first three tests above
+- Test database strategy (separate schema vs. transactional rollback)
+- npm script: `test:e2e`
+- CI integration decision (every PR vs. nightly vs. pre-merge gate)
+
+Value extends beyond JCL GovCon — sibling projects (CantMissCalls, EtsySeller) would benefit from the same infrastructure.
+
+**Priority:** P2 — platform concern that deserves its own plan + eng review. Captured during the eng review of CHOSEN tier (2026-04-18).
+
+### GOOD count discrepancy — Pipeline Status tile vs Kanban column
+
+Pipeline Status tile shows "369 GOOD" (all-time classified); Kanban GOOD column shows "111 GOOD" (filtered subset, likely expired-excluded). Both numbers are valid counts of different things, but neither is labeled as such — the reader has no way to tell the relationship, so both feel unreliable at a glance and the real active-pipeline size is ambiguous.
+
+**Fix direction:** first step is to investigate what filter the Kanban GOOD column applies vs the Pipeline Status tile. Grep the board component (`src/components/kanban/board.tsx`) and the Pipeline Status component for any deadline / expiration / reviewedAt filtering; that will either confirm the "expired-excluded" theory or surface a different filter. Once the divergence is understood, either (a) label each tile explicitly (Pipeline Status = "all-time classified", Kanban = "active pipeline") so the relationship is obvious, or (b) consolidate to a single active-contracts metric surfaced in the Pipeline Status tile. (b) is cleaner if the all-time count isn't serving a specific analytics purpose.
+
+**Priority:** P2. Pre-existing issue surfaced during CHOSEN visual verification (2026-04-19). Not a blocker.
+
+### Deadline date not shown on contract detail page
+
+Response deadline is only visible via the Kanban card badges (URGENT / SOON color-coding). Open an individual contract and the deadline is buried in the action-plan section or entirely absent from the header — the user has to infer it from the card's badge before clicking in, rather than seeing it on the detail page itself.
+
+**Fix:** add the deadline as a first-class element in the contract detail header or near the classification row, visible on every contract regardless of classification. Mirror the URGENT / SOON color logic already in `getDeadlineInfo()` so the detail view uses the same urgency semantics as the card badges. Format: `Due {date} ({N days} remaining)` with the same color token the card uses.
+
+**Priority:** P2. Pre-existing UX gap surfaced during CHOSEN visual verification (2026-04-19).
+
+### Expired contracts pollute the active Kanban and /inbox views
+
+The AI classifier labels contracts GOOD based on fit, not deadline. Once a contract's `responseDeadline` passes, it sits in the GOOD column indefinitely and has to be visually skipped over every triage session. Daily time tax.
+
+**Fix:** expired contracts retain their original classification (GOOD / MAYBE / DISCARD — important for recall analytics; never mutate the AI's call) but move to a separate archive view by default. Main Kanban GOOD/MAYBE columns filter to active (non-expired) contracts only. Expired view accessible via a new sidebar nav item or a "View expired" link on the Kanban. The pattern mirrors CHOSEN tier's `promoted` flag — orthogonal boolean, preserve source data, change only the default view — so this can ride the same architectural pattern: either a computed `is_expired` column or a view/query-side filter on `responseDeadline < now()`, with a new `/archive` page (or `?expired=true` filter on the existing routes) to surface them deliberately. Preserve classification intact; only the default surface changes.
+
+**Priority:** P2. Daily friction but not a blocker. Pre-existing issue surfaced during CHOSEN visual verification (2026-04-19).
+
 ---
 
 ## P3
@@ -72,3 +116,21 @@ Deferred work surfaced during the `/review` pass on `fix/batch-import-hang` (202
 **File:** `src/app/api/cron/check-batches/route.ts:356-357`
 **Why:** Works, but mutating a function parameter to re-enter a later branch is the kind of thing that breaks when a future reader splits this into two functions.
 **Fix:** Split `processRow` into `pollAndImport()` + `maybeSendDigest()` called sequentially, each taking the current row as input. Or keep the single function and add a comment explicitly flagging the fall-through intent.
+
+### Hydration warning on Kanban search input
+
+**File:** `src/components/kanban/board.tsx:189` — the search `<input>` inside `<form>` at line 187.
+**Symptom:** Dev-mode console warning `Warning: Extra attributes from the server: style` at every page that renders `DashboardPage`.
+**Not introduced by CHOSEN tier** — pre-existing, surfaced during /qa of feat/chosen-tier (2026-04-19). The only board.tsx change in that branch was the filter button's alpha-token refresh on line 199; the search input was untouched. History confirms the input predates 33a3848.
+**Severity:** Low. Dev warning only, functionally identical render.
+**Likely cause:** client-side `style` attribute injection on the input — possibly autofill, a CSS-in-JS fragment, or a Next.js 14 SSR edge case with controlled inputs. Needs React DevTools Profiler investigation.
+**Fix path:** first, add `suppressHydrationWarning` on the specific input only if root cause confirms third-party injection (browser autofill). If it's a legit state mismatch, fix the render-time value divergence between server and client.
+**Priority:** P3. Defer to an investigation-first PR.
+
+### Inbox badge contrast (WCAG AA)
+
+**File:** `src/components/sidebar.tsx` — Inbox nav item
+**Why:** Badge renders white text on #3b82f6 blue, ~3.7:1 contrast. WCAG AA requires 4.5:1 for small text (10px badge). Below threshold.
+**Not introduced by CHOSEN tier** — pre-existing accessibility issue surfaced during Commit 5 /review (2026-04-19). The Chosen badge fix in that commit added a `badgeTextColor` prop and a `--chosen-fg` token precomputed for readability on gold.
+**Fix:** Same pattern. Add a `--inbox-fg` token (dark text color passing AA on blue) to `globals.css`, set `badgeTextColor: "var(--inbox-fg)"` on the Inbox nav item, verify with a contrast checker. One-line change on top of the existing scaffolding.
+**Priority:** P3. Defer to an accessibility-focused PR that can audit all nav badges, toast colors, urgent flags, and classification badges for AA compliance.

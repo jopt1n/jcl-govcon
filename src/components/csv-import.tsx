@@ -195,7 +195,7 @@ export function CsvImport() {
         className={cn(
           "border-2 border-dashed rounded-lg p-8 text-center cursor-pointer transition-colors",
           dragOver
-            ? "border-[var(--accent)] bg-[var(--accent)]/5"
+            ? "border-[var(--accent)] bg-[var(--accent-5)]"
             : "border-[var(--border)] hover:border-[var(--text-muted)] bg-[var(--surface)]"
         )}
       >
@@ -287,7 +287,7 @@ export function CsvImport() {
             className={cn(
               "px-4 py-2 rounded-lg text-sm font-medium text-white transition-colors",
               importing
-                ? "bg-[var(--accent)]/60 cursor-not-allowed"
+                ? "bg-[var(--accent-60)] cursor-not-allowed"
                 : "bg-[var(--accent)] hover:bg-[var(--accent-hover)]"
             )}
           >

@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { vi } from "vitest";
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor, fireEvent } from "@testing-library/react";
 
 vi.mock("next/link", () => ({
   default: ({ children, href, ...props }: any) => (
@@ -11,7 +11,8 @@ vi.mock("next/link", () => ({
 }));
 
 vi.mock("lucide-react", () => {
-  const icon = ({ className }: any) => <span className={className} />;
+  // Pass through ALL props so tests can query by data-testid / aria-label.
+  const icon = (props: any) => <span {...props} />;
   return {
     Building2: icon,
     DollarSign: icon,
@@ -34,6 +35,7 @@ vi.mock("lucide-react", () => {
     AlertTriangle: icon,
     Target: icon,
     Zap: icon,
+    Star: icon,
   };
 });
 
@@ -62,6 +64,10 @@ const mockContract = {
   samUrl: "https://sam.gov/opp/123",
   resourceLinks: ["https://example.com/doc.pdf"],
   documentsAnalyzed: true,
+  promoted: false,
+  // Typed as `string | null` so overrides in CHOSEN tests can supply an ISO
+  // timestamp without TS narrowing the base type to literal null.
+  promotedAt: null as string | null,
   createdAt: "2026-03-01T00:00:00Z",
   updatedAt: "2026-03-01T00:00:00Z",
 };
@@ -182,6 +188,133 @@ describe("ContractDetail", () => {
       expect(link.closest("a")?.getAttribute("href")).toBe(
         "https://sam.gov/opp/123",
       );
+    });
+  });
+
+  // ── CHOSEN tier (Commit 3) ──────────────────────────────────────────
+  //
+  // Contract detail surfaces the user-driven promotion: a Promote/Demote
+  // toggle button, a CHOSEN pill in the header, and a top gold accent
+  // border — all gated on `contract.promoted`. The button renders for
+  // all classifications including DISCARD (promoting a DISCARD is the
+  // user signaling "AI was wrong"; original label stays in the badge).
+
+  function mockFetchContract(contract: typeof mockContract) {
+    global.fetch = vi
+      .fn()
+      .mockImplementation((url: string, init?: RequestInit) => {
+        if (init?.method === "PATCH") {
+          // Return the contract with the patched fields merged in.
+          const body = JSON.parse(init.body as string);
+          return Promise.resolve({
+            ok: true,
+            json: () => Promise.resolve({ ...contract, ...body }),
+          });
+        }
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve(contract),
+        });
+      }) as typeof global.fetch;
+  }
+
+  it("shows Promote button (not Demote) when promoted=false", async () => {
+    mockFetchContract({ ...mockContract, promoted: false });
+    render(<ContractDetail contractId="test-uuid" />);
+    await waitFor(() => {
+      expect(screen.getByTestId("promote-toggle")).toBeDefined();
+    });
+    const btn = screen.getByTestId("promote-toggle");
+    expect(btn.textContent).toContain("Promote");
+    expect(btn.textContent).not.toContain("Demote");
+    expect(btn.getAttribute("aria-pressed")).toBe("false");
+    // No CHOSEN pill, no top accent
+    expect(screen.queryByTestId("chosen-pill")).toBeNull();
+    expect(screen.queryByTestId("chosen-top-accent")).toBeNull();
+  });
+
+  it("shows Demote button + CHOSEN pill + top accent when promoted=true", async () => {
+    mockFetchContract({
+      ...mockContract,
+      promoted: true,
+      promotedAt: "2026-04-18T12:00:00Z",
+    });
+    render(<ContractDetail contractId="test-uuid" />);
+    await waitFor(() => {
+      expect(screen.getByTestId("promote-toggle")).toBeDefined();
+    });
+    const btn = screen.getByTestId("promote-toggle");
+    expect(btn.textContent).toContain("Demote");
+    expect(btn.getAttribute("aria-pressed")).toBe("true");
+    // Header pill + top accent visible
+    expect(screen.getByTestId("chosen-pill")).toBeDefined();
+    expect(screen.getByTestId("chosen-pill").textContent).toContain("CHOSEN");
+    expect(screen.getByTestId("chosen-top-accent")).toBeDefined();
+  });
+
+  it("Promote button renders on DISCARD-classified contracts too", async () => {
+    mockFetchContract({
+      ...mockContract,
+      classification: "DISCARD",
+      promoted: false,
+    });
+    render(<ContractDetail contractId="test-uuid" />);
+    await waitFor(() => {
+      expect(screen.getByTestId("promote-toggle")).toBeDefined();
+    });
+    expect(screen.getByTestId("promote-toggle").textContent).toContain(
+      "Promote",
+    );
+    // Classification badge still shows DISCARD — promote doesn't overwrite it
+    expect(screen.getAllByText("DISCARD").length).toBeGreaterThanOrEqual(1);
+  });
+
+  it("clicking Promote PATCHes { promoted: true } to the contract endpoint", async () => {
+    mockFetchContract({ ...mockContract, promoted: false });
+    render(<ContractDetail contractId="test-uuid" />);
+    await waitFor(() => {
+      expect(screen.getByTestId("promote-toggle")).toBeDefined();
+    });
+
+    fireEvent.click(screen.getByTestId("promote-toggle"));
+
+    await waitFor(() => {
+      const patchCall = vi
+        .mocked(global.fetch)
+        .mock.calls.find(
+          (args) =>
+            typeof args[0] === "string" &&
+            args[0].startsWith("/api/contracts/test-uuid") &&
+            (args[1] as RequestInit | undefined)?.method === "PATCH",
+        );
+      expect(patchCall).toBeDefined();
+      const body = JSON.parse((patchCall![1] as RequestInit).body as string);
+      expect(body).toEqual({ promoted: true });
+    });
+  });
+
+  it("clicking Demote PATCHes { promoted: false }", async () => {
+    mockFetchContract({
+      ...mockContract,
+      promoted: true,
+      promotedAt: "2026-04-18T12:00:00Z",
+    });
+    render(<ContractDetail contractId="test-uuid" />);
+    await waitFor(() => {
+      expect(screen.getByTestId("promote-toggle")).toBeDefined();
+    });
+
+    fireEvent.click(screen.getByTestId("promote-toggle"));
+
+    await waitFor(() => {
+      const patchCall = vi
+        .mocked(global.fetch)
+        .mock.calls.find(
+          (args) => (args[1] as RequestInit | undefined)?.method === "PATCH",
+        );
+      expect(patchCall).toBeDefined();
+      const body = JSON.parse((patchCall![1] as RequestInit).body as string);
+      expect(body).toEqual({ promoted: false });
     });
   });
 });

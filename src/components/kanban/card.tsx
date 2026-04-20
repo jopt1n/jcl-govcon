@@ -1,7 +1,7 @@
 "use client";
 
 import { format, differenceInDays, parseISO } from "date-fns";
-import { Building2, DollarSign, Clock, Brain } from "lucide-react";
+import { Building2, DollarSign, Clock, Brain, Star } from "lucide-react";
 import { cn } from "@/lib/utils";
 import Link from "next/link";
 
@@ -15,6 +15,9 @@ export interface ContractCard {
   classification: string;
   aiReasoning: string | null;
   status: string | null;
+  /** User-driven promotion (CHOSEN tier). Optional — cards from older code
+   *  paths may omit the field. Renders a gold border + star when true. */
+  promoted?: boolean;
 }
 
 const classificationBorder: Record<string, string> = {
@@ -75,17 +78,36 @@ export function KanbanCard({
     ? getDeadlineInfo(contract.responseDeadline)
     : null;
 
+  // Border-left styling is STATE-EXCLUSIVE: when promoted, ONLY the gold
+  // 4px classes are applied; the default 3px + classification-color classes
+  // are omitted entirely. Rendering both sets and relying on Tailwind
+  // specificity/order is fragile — this way only one border-left width and
+  // color exist in the DOM per state. Regression test asserts this exclusivity.
+  const borderClasses = contract.promoted
+    ? "border-l-[4px] border-l-[var(--chosen)]"
+    : cn(
+        "border-l-[3px]",
+        classificationBorder[contract.classification] ??
+          "border-l-[var(--border)]",
+      );
+
   return (
     <Link
       href={`/contracts/${contract.id}`}
       className={cn(
-        "block bg-[var(--surface)] rounded-lg border border-[var(--border)] border-l-[3px] p-3 cursor-pointer hover:shadow-md transition-shadow",
-        classificationBorder[contract.classification] ??
-          "border-l-[var(--border)]",
+        "block bg-[var(--surface)] rounded-lg border border-[var(--border)] p-3 cursor-pointer hover:shadow-md transition-shadow",
+        borderClasses,
       )}
     >
       <div className="flex items-start justify-between gap-2">
-        <span className="text-sm font-medium text-[var(--text-primary)] hover:text-[var(--accent)] line-clamp-2 leading-tight">
+        <span className="text-sm font-medium text-[var(--text-primary)] hover:text-[var(--accent)] line-clamp-2 leading-tight flex items-center gap-1">
+          {contract.promoted && (
+            <Star
+              data-testid="chosen-star"
+              className="w-3 h-3 shrink-0 fill-[var(--chosen)] text-[var(--chosen)]"
+              aria-label="Chosen"
+            />
+          )}
           {contract.title}
         </span>
         {deadlineInfo?.urgent && (
