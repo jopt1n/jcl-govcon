@@ -77,6 +77,30 @@ Value extends beyond JCL GovCon — sibling projects (CantMissCalls, EtsySeller)
 
 **Priority:** P2 — platform concern that deserves its own plan + eng review. Captured during the eng review of CHOSEN tier (2026-04-18).
 
+### GOOD count discrepancy — Pipeline Status tile vs Kanban column
+
+Pipeline Status tile shows "369 GOOD" (all-time classified); Kanban GOOD column shows "111 GOOD" (filtered subset, likely expired-excluded). Both numbers are valid counts of different things, but neither is labeled as such — the reader has no way to tell the relationship, so both feel unreliable at a glance and the real active-pipeline size is ambiguous.
+
+**Fix direction:** first step is to investigate what filter the Kanban GOOD column applies vs the Pipeline Status tile. Grep the board component (`src/components/kanban/board.tsx`) and the Pipeline Status component for any deadline / expiration / reviewedAt filtering; that will either confirm the "expired-excluded" theory or surface a different filter. Once the divergence is understood, either (a) label each tile explicitly (Pipeline Status = "all-time classified", Kanban = "active pipeline") so the relationship is obvious, or (b) consolidate to a single active-contracts metric surfaced in the Pipeline Status tile. (b) is cleaner if the all-time count isn't serving a specific analytics purpose.
+
+**Priority:** P2. Pre-existing issue surfaced during CHOSEN visual verification (2026-04-19). Not a blocker.
+
+### Deadline date not shown on contract detail page
+
+Response deadline is only visible via the Kanban card badges (URGENT / SOON color-coding). Open an individual contract and the deadline is buried in the action-plan section or entirely absent from the header — the user has to infer it from the card's badge before clicking in, rather than seeing it on the detail page itself.
+
+**Fix:** add the deadline as a first-class element in the contract detail header or near the classification row, visible on every contract regardless of classification. Mirror the URGENT / SOON color logic already in `getDeadlineInfo()` so the detail view uses the same urgency semantics as the card badges. Format: `Due {date} ({N days} remaining)` with the same color token the card uses.
+
+**Priority:** P2. Pre-existing UX gap surfaced during CHOSEN visual verification (2026-04-19).
+
+### Expired contracts pollute the active Kanban and /inbox views
+
+The AI classifier labels contracts GOOD based on fit, not deadline. Once a contract's `responseDeadline` passes, it sits in the GOOD column indefinitely and has to be visually skipped over every triage session. Daily time tax.
+
+**Fix:** expired contracts retain their original classification (GOOD / MAYBE / DISCARD — important for recall analytics; never mutate the AI's call) but move to a separate archive view by default. Main Kanban GOOD/MAYBE columns filter to active (non-expired) contracts only. Expired view accessible via a new sidebar nav item or a "View expired" link on the Kanban. The pattern mirrors CHOSEN tier's `promoted` flag — orthogonal boolean, preserve source data, change only the default view — so this can ride the same architectural pattern: either a computed `is_expired` column or a view/query-side filter on `responseDeadline < now()`, with a new `/archive` page (or `?expired=true` filter on the existing routes) to surface them deliberately. Preserve classification intact; only the default surface changes.
+
+**Priority:** P2. Daily friction but not a blocker. Pre-existing issue surfaced during CHOSEN visual verification (2026-04-19).
+
 ---
 
 ## P3
