@@ -2411,3 +2411,363 @@ Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>
 EOF
 )" && git log --oneline -5
 [2026-04-20T01:27:37] npx tsc --noEmit 2>&1 | tail -5 && echo "---TSC_EXIT:$?" && npm run test:run 2>&1 | tail -6
+[2026-04-20T01:42:36] npm run lint 2>&1 | tail -30
+[2026-04-20T01:42:41] npm run test:run 2>&1 | tail -6
+[2026-04-20T01:42:48] npx tsc --noEmit 2>&1 | tail -5 && echo "TSC_EXIT:$?"
+[2026-04-20T01:43:05] npm run dev 2>&1
+[2026-04-20T01:43:19] for i in {1..30}; do curl -sf -o /dev/null http://localhost:3001 && echo "READY" && break; sleep 1; done
+echo "---"
+tail -20 /private/tmp/claude-501/-Users-joelaptin-jcl-govcon/1c0d91a8-f14f-4823-932c-7ac6eeeed320/tasks/bafan2u00.output 2>/dev/null || true
+[2026-04-20T01:44:13] ls -la /Users/joelaptin/Library/Caches/ms-playwright/mcp-chrome-782c909 2>&1 | head -10
+echo "---"
+ls /Users/joelaptin/Library/Caches/ms-playwright/mcp-chrome-782c909/SingletonLock 2>&1
+echo "---"
+pgrep -lf 'Chromium|Chrome' | head -5
+[2026-04-20T01:44:29] which browse 2>/dev/null || ls ~/.claude/skills/browse/bin/ 2>/dev/null || find ~/.gstack -maxdepth 3 -name 'browse*' -type f 2>/dev/null | head -5
+echo "---"
+# Check if there's a simpler headless option
+which chromium chrome 2>/dev/null || echo "no standalone chromium"
+[2026-04-20T01:44:42] source .env 2>/dev/null
+# Find a contract that's GOOD, reviewed (so already on main Kanban), not promoted, for a clean test cycle
+curl -sS "http://localhost:3001/api/contracts?classification=GOOD&limit=3" | python3 -c "
+import json, sys
+d = json.load(sys.stdin)
+for c in d.get('data', [])[:3]:
+    print(f\"id={c['id']} | title={c['title'][:60]} | classification={c['classification']} | promoted={c.get('promoted')} | reviewedAt={c.get('reviewedAt')}\")
+"
+[2026-04-20T01:44:52] TEST_ID="95765eb2-8289-46fb-b031-e1078d914b7f"
+ORIGINAL_REVIEWED_AT="2026-04-19T06:55:34.990Z"
+echo "=== Test contract: $TEST_ID"
+echo "Original reviewedAt: $ORIGINAL_REVIEWED_AT"
+echo ""
+echo "=== STEP 1: PATCH {promoted: true}"
+curl -sS -X PATCH "http://localhost:3001/api/contracts/$TEST_ID" \
+  -H "Content-Type: application/json" \
+  -d '{"promoted": true}' | python3 -c "
+import json, sys
+d = json.load(sys.stdin)
+print(f\"  promoted={d.get('promoted')} | promotedAt={d.get('promotedAt')} | reviewedAt={d.get('reviewedAt')}\")
+print(f\"  reviewedAt_preserved_via_COALESCE: {d.get('reviewedAt') == '$ORIGINAL_REVIEWED_AT'}\")
+"
+echo ""
+echo "=== STEP 2: GET /api/contracts?promoted=true — should include our test contract"
+curl -sS "http://localhost:3001/api/contracts?promoted=true&limit=5" | python3 -c "
+import json, sys
+d = json.load(sys.stdin)
+ids = [c['id'] for c in d.get('data', [])]
+total = d.get('pagination', {}).get('total', '?')
+print(f\"  total_promoted={total}\")
+print(f\"  test_id_in_response: {'$TEST_ID' in ids}\")
+print(f\"  first_3_ids: {ids[:3]}\")
+"
+echo ""
+echo "=== STEP 3: GET /api/contracts?promoted=invalid — should 400"
+curl -sS -o /tmp/promoted-invalid.json -w "  http_status=%{http_code}\n" "http://localhost:3001/api/contracts?promoted=invalid"
+cat /tmp/promoted-invalid.json
+echo ""
+[2026-04-20T01:45:09] source .env 2>/dev/null
+TEST_ID="95765eb2-8289-46fb-b031-e1078d914b7f"
+ORIGINAL_REVIEWED_AT="2026-04-19T06:55:34.990Z"
+
+echo "=== STEP 4: audit_log after promote"
+psql "$DATABASE_URL" -c "SELECT contract_id, action, created_at FROM audit_log WHERE contract_id = '$TEST_ID' ORDER BY created_at DESC LIMIT 5;" 2>&1
+echo ""
+
+echo "=== STEP 5: PATCH {promoted: false}"
+curl -sS -X PATCH "http://localhost:3001/api/contracts/$TEST_ID" \
+  -H "Content-Type: application/json" \
+  -d '{"promoted": false}' | python3 -c "
+import json, sys
+d = json.load(sys.stdin)
+print(f'  promoted={d.get(\"promoted\")} | promotedAt={d.get(\"promotedAt\")} | reviewedAt={d.get(\"reviewedAt\")}')
+print(f'  reviewedAt_preserved_via_demote: {d.get(\"reviewedAt\") == \"$ORIGINAL_REVIEWED_AT\"}')
+print(f'  promotedAt_cleared: {d.get(\"promotedAt\") is None}')
+"
+echo ""
+
+echo "=== STEP 6: GET /api/contracts?promoted=true — should now be empty"
+curl -sS "http://localhost:3001/api/contracts?promoted=true&limit=5" | python3 -c "
+import json, sys
+d = json.load(sys.stdin)
+total = d.get('pagination', {}).get('total', '?')
+print(f'  total_promoted_after_demote={total}')
+"
+echo ""
+
+echo "=== STEP 7: audit_log after demote (should show promote + demote, DESC order)"
+psql "$DATABASE_URL" -c "SELECT contract_id, action, created_at FROM audit_log WHERE contract_id = '$TEST_ID' ORDER BY created_at DESC LIMIT 5;" 2>&1
+[2026-04-20T01:45:17] ls /opt/homebrew/opt/postgresql*/bin/psql 2>/dev/null || ls /usr/local/opt/postgresql*/bin/psql 2>/dev/null || find /opt /usr/local -maxdepth 6 -name 'psql' -type f 2>/dev/null | head -3
+echo "---"
+which node && node -e "const {Client} = require('pg'); console.log('pg module:', require.resolve('pg'));" 2>&1 || echo "no pg"
+[2026-04-20T01:45:23] ls node_modules/postgres 2>/dev/null && echo "postgres module found"
+ls node_modules/drizzle-orm 2>/dev/null | head -3
+[2026-04-20T01:45:31] TEST_ID="95765eb2-8289-46fb-b031-e1078d914b7f"
+npx tsx -e "
+import postgres from 'postgres';
+import 'dotenv/config';
+const sql = postgres(process.env.DATABASE_URL!);
+const rows = await sql\`
+  SELECT contract_id::text as contract_id, action, created_at
+  FROM audit_log
+  WHERE contract_id = \${'$TEST_ID'}::uuid
+  ORDER BY created_at DESC
+  LIMIT 5
+\`;
+console.log('audit_log rows for test contract:');
+for (const r of rows) {
+  console.log(\`  action=\${r.action} | created_at=\${r.created_at.toISOString()} | contract_id=\${r.contract_id}\`);
+}
+console.log('');
+console.log('row_count:', rows.length);
+console.log('expected: 2 rows (1 promote + 1 demote), DESC order (demote first)');
+if (rows.length >= 2) {
+  console.log('actual_order:', rows.map(r => r.action).join(' -> '));
+  console.log('demote_is_newer:', rows[0].action === 'demote' && rows[1].action === 'promote');
+}
+await sql.end();
+"
+[2026-04-20T01:45:38] cat > /tmp/audit-check.ts <<'EOF'
+import postgres from 'postgres';
+import 'dotenv/config';
+
+async function main() {
+  const TEST_ID = '95765eb2-8289-46fb-b031-e1078d914b7f';
+  const sql = postgres(process.env.DATABASE_URL!);
+  const rows = await sql`
+    SELECT contract_id::text as contract_id, action, created_at
+    FROM audit_log
+    WHERE contract_id = ${TEST_ID}::uuid
+    ORDER BY created_at DESC
+    LIMIT 5
+  `;
+  console.log('audit_log rows for test contract:');
+  for (const r of rows) {
+    console.log(`  action=${r.action} | created_at=${r.created_at.toISOString()} | contract_id=${r.contract_id}`);
+  }
+  console.log('');
+  console.log('row_count:', rows.length);
+  console.log('expected: 2 rows (1 promote + 1 demote), DESC order (demote first)');
+  if (rows.length >= 2) {
+    console.log('actual_order:', rows.map(r => r.action).join(' -> '));
+    console.log('demote_is_newer:', rows[0].action === 'demote' && rows[1].action === 'promote');
+  }
+  await sql.end();
+}
+
+main().catch((e) => { console.error(e); process.exit(1); });
+EOF
+npx tsx /tmp/audit-check.ts
+[2026-04-20T01:45:46] cat > ./scripts/tmp-audit-check.ts <<'EOF'
+import postgres from 'postgres';
+import 'dotenv/config';
+
+async function main() {
+  const TEST_ID = '95765eb2-8289-46fb-b031-e1078d914b7f';
+  const sql = postgres(process.env.DATABASE_URL!);
+  const rows = await sql`
+    SELECT contract_id::text as contract_id, action, created_at
+    FROM audit_log
+    WHERE contract_id = ${TEST_ID}::uuid
+    ORDER BY created_at DESC
+    LIMIT 5
+  `;
+  console.log('audit_log rows for test contract:');
+  for (const r of rows) {
+    console.log(`  action=${r.action} | created_at=${r.created_at.toISOString()} | contract_id=${r.contract_id}`);
+  }
+  console.log('');
+  console.log('row_count:', rows.length);
+  console.log('expected: 2 rows (1 promote + 1 demote), DESC order (demote first)');
+  if (rows.length >= 2) {
+    console.log('actual_order:', rows.map((r: any) => r.action).join(' -> '));
+    console.log('demote_is_newer:', rows[0].action === 'demote' && rows[1].action === 'promote');
+  }
+  await sql.end();
+}
+
+main().catch((e) => { console.error(e); process.exit(1); });
+EOF
+npx tsx scripts/tmp-audit-check.ts
+rm scripts/tmp-audit-check.ts
+[2026-04-20T01:45:56] cat > ./scripts/tmp-audit-check.ts <<'EOF'
+import postgres from 'postgres';
+import { readFileSync } from 'fs';
+
+// Minimal .env loader (no dotenv dep needed)
+const env = readFileSync('.env', 'utf8');
+for (const line of env.split('\n')) {
+  const m = line.match(/^([A-Z_]+)=(.*)$/);
+  if (m && !process.env[m[1]]) process.env[m[1]] = m[2].replace(/^["']|["']$/g, '');
+}
+
+async function main() {
+  const TEST_ID = '95765eb2-8289-46fb-b031-e1078d914b7f';
+  const sql = postgres(process.env.DATABASE_URL!);
+  const rows = await sql`
+    SELECT contract_id::text as contract_id, action, created_at
+    FROM audit_log
+    WHERE contract_id = ${TEST_ID}::uuid
+    ORDER BY created_at DESC
+    LIMIT 5
+  `;
+  console.log('audit_log rows for test contract:');
+  for (const r of rows) {
+    console.log(`  action=${r.action} | created_at=${r.created_at.toISOString()}`);
+  }
+  console.log('');
+  console.log('row_count:', rows.length);
+  if (rows.length >= 2) {
+    console.log('actual_order:', rows.map((r: any) => r.action).join(' -> '));
+    console.log('demote_is_newer_than_promote:', rows[0].action === 'demote' && rows[1].action === 'promote');
+  }
+
+  const contract = await sql`SELECT id::text as id, promoted, promoted_at, reviewed_at, classification FROM contracts WHERE id = ${TEST_ID}::uuid`;
+  if (contract.length) {
+    console.log('');
+    console.log('contract state after demote:');
+    console.log(`  promoted=${contract[0].promoted} | promotedAt=${contract[0].promoted_at} | reviewedAt=${contract[0].reviewed_at?.toISOString?.() ?? contract[0].reviewed_at} | classification=${contract[0].classification}`);
+  }
+
+  await sql.end();
+}
+
+main().catch((e) => { console.error(e); process.exit(1); });
+EOF
+npx tsx scripts/tmp-audit-check.ts 2>&1
+rm scripts/tmp-audit-check.ts
+[2026-04-20T01:46:14] echo "=== MAYBE cross-classification test"
+MAYBE_ID=$(curl -sS "http://localhost:3001/api/contracts?classification=MAYBE&limit=1" | python3 -c "import json,sys; print(json.load(sys.stdin)['data'][0]['id'])")
+echo "MAYBE contract id: $MAYBE_ID"
+echo ""
+echo "Promote MAYBE contract..."
+curl -sS -X PATCH "http://localhost:3001/api/contracts/$MAYBE_ID" \
+  -H "Content-Type: application/json" \
+  -d '{"promoted": true}' | python3 -c "
+import json,sys
+d = json.load(sys.stdin)
+print(f'  classification={d.get(\"classification\")} (must stay MAYBE) | promoted={d.get(\"promoted\")} | promotedAt={d.get(\"promotedAt\")}')
+"
+echo ""
+echo "Verify MAYBE contract appears in /api/contracts?promoted=true (cross-classification)"
+curl -sS "http://localhost:3001/api/contracts?promoted=true&limit=5" | python3 -c "
+import json,sys
+d = json.load(sys.stdin)
+matches = [c for c in d['data'] if c['id'] == '$MAYBE_ID']
+if matches:
+    c = matches[0]
+    print(f'  FOUND: id={c[\"id\"]} | classification={c[\"classification\"]} | promoted={c[\"promoted\"]}')
+    print(f'  AI_original_classification_preserved: {c[\"classification\"] == \"MAYBE\"}')
+else:
+    print('  NOT FOUND')
+print(f'  total_promoted_now={d[\"pagination\"][\"total\"]}')
+"
+echo ""
+echo "Demote MAYBE..."
+curl -sS -X PATCH "http://localhost:3001/api/contracts/$MAYBE_ID" \
+  -H "Content-Type: application/json" \
+  -d '{"promoted": false}' | python3 -c "
+import json,sys
+d = json.load(sys.stdin)
+print(f'  classification={d[\"classification\"]} | promoted={d[\"promoted\"]} | promotedAt={d[\"promotedAt\"]}')
+"
+[2026-04-20T01:46:30] echo "=== UNREVIEWED contract → promote sets reviewedAt via COALESCE"
+# Find an unreviewed contract
+UNREVIEWED_ID=$(curl -sS "http://localhost:3001/api/contracts?unreviewed=true&limit=1" | python3 -c "
+import json,sys
+d = json.load(sys.stdin)
+if d['data']:
+    print(d['data'][0]['id'])
+" 2>/dev/null)
+
+if [ -z "$UNREVIEWED_ID" ]; then
+  echo "  no unreviewed contracts found — skipping this sub-test"
+else
+  echo "  unreviewed contract id: $UNREVIEWED_ID"
+  echo ""
+  echo "  Before promote — verify reviewedAt IS NULL:"
+  curl -sS "http://localhost:3001/api/contracts?unreviewed=true&limit=100" | python3 -c "
+import json,sys
+d = json.load(sys.stdin)
+matches = [c for c in d['data'] if c['id'] == '$UNREVIEWED_ID']
+if matches:
+    c = matches[0]
+    print(f'    reviewedAt_before={c[\"reviewedAt\"]} (should be None)')
+"
+  echo ""
+  echo "  Promote the unreviewed contract..."
+  curl -sS -X PATCH "http://localhost:3001/api/contracts/$UNREVIEWED_ID" \
+    -H "Content-Type: application/json" \
+    -d '{"promoted": true}' | python3 -c "
+import json,sys
+d = json.load(sys.stdin)
+print(f'    classification={d[\"classification\"]} | promoted={d[\"promoted\"]} | reviewedAt={d[\"reviewedAt\"]}')
+print(f'    reviewedAt_set_via_COALESCE: {d[\"reviewedAt\"] is not None}')
+"
+  echo ""
+  echo "  Verify it's no longer on /inbox (reviewedAt is now set):"
+  curl -sS "http://localhost:3001/api/contracts?unreviewed=true&limit=100" | python3 -c "
+import json,sys
+d = json.load(sys.stdin)
+still_unreviewed = any(c['id'] == '$UNREVIEWED_ID' for c in d['data'])
+print(f'    still_on_inbox: {still_unreviewed} (should be False)')
+"
+  echo ""
+  echo "  Demote to leave the contract in a clean state..."
+  curl -sS -X PATCH "http://localhost:3001/api/contracts/$UNREVIEWED_ID" \
+    -H "Content-Type: application/json" \
+    -d '{"promoted": false}' | python3 -c "
+import json,sys
+d = json.load(sys.stdin)
+print(f'    after_demote: promoted={d[\"promoted\"]} | reviewedAt={d[\"reviewedAt\"]} (should still be set — demote does not touch reviewedAt)')
+"
+fi
+[2026-04-20T01:46:54] echo "=== Page-level SSR checks (shell HTML only — client-side hydration not verifiable via curl)"
+for path in /inbox /chosen / /contracts/95765eb2-8289-46fb-b031-e1078d914b7f; do
+  code=$(curl -sS -o /dev/null -w "%{http_code}" "http://localhost:3001$path")
+  echo "  $path → HTTP $code"
+done
+echo ""
+echo "=== Check /chosen page server response contains the expected copy"
+curl -sS "http://localhost:3001/chosen" | grep -oE 'Contracts you.{0,50}elevated' | head -1
+curl -sS "http://localhost:3001/chosen" | grep -oE 'Nothing here yet' | head -1 || echo "  (empty-state copy is client-rendered; not in SSR shell)"
+echo ""
+echo "=== Verify Chosen in sidebar nav on /inbox SSR"
+curl -sS "http://localhost:3001/inbox" | grep -oE 'href="/chosen"' | head -1
+echo ""
+echo "=== /api/contracts schema sanity — new promoted/promotedAt fields in rows"
+curl -sS "http://localhost:3001/api/contracts?limit=1" | python3 -c "
+import json,sys
+d = json.load(sys.stdin)
+if d['data']:
+    c = d['data'][0]
+    keys = set(c.keys())
+    required = {'promoted', 'promotedAt'}
+    print(f'  promoted_field_in_response: {\"promoted\" in keys}')
+    print(f'  promotedAt_field_in_response: {\"promotedAt\" in keys}')
+    print(f'  total_contracts_in_db: {d[\"pagination\"][\"total\"]}')
+"
+[2026-04-20T01:46:59] for path in /inbox /chosen / /contracts/95765eb2-8289-46fb-b031-e1078d914b7f; do
+  code=$(curl -sS -o /dev/null -w "%{http_code}" "http://localhost:3001$path")
+  echo "  $path -> HTTP $code"
+done
+[2026-04-20T01:47:02] curl -sS "http://localhost:3001/chosen" > /tmp/chosen-html.txt
+grep -oE 'Contracts you.{0,60}elevated' /tmp/chosen-html.txt | head -1
+grep -oE 'href="/chosen"' /tmp/chosen-html.txt | head -1
+grep -oE 'href="/inbox"' /tmp/chosen-html.txt | head -1
+echo "---"
+curl -sS "http://localhost:3001/api/contracts?limit=1" > /tmp/api-sample.json
+python3 -c "
+import json
+d = json.load(open('/tmp/api-sample.json'))
+if d['data']:
+    c = d['data'][0]
+    keys = list(c.keys())
+    print('sample_contract_keys:', keys)
+    print('promoted_field_in_response:', 'promoted' in c)
+    print('promotedAt_field_in_response:', 'promotedAt' in c)
+    print('total_contracts_in_db:', d['pagination']['total'])
+"
+[2026-04-20T01:47:12] curl -sS -o /dev/null -w "/inbox -> %{http_code}\n" http://localhost:3001/inbox
+curl -sS -o /dev/null -w "/chosen -> %{http_code}\n" http://localhost:3001/chosen
+curl -sS -o /dev/null -w "/ -> %{http_code}\n" http://localhost:3001/
+curl -sS -o /dev/null -w "/contracts/:id -> %{http_code}\n" http://localhost:3001/contracts/95765eb2-8289-46fb-b031-e1078d914b7f
