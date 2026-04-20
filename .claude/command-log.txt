@@ -2318,3 +2318,96 @@ EOF
   fi
 done 2>&1 | head -10
 [2026-04-19T19:57:11] git branch --show-current && git log --oneline main..HEAD | head -6
+[2026-04-20T00:19:34] ls -la /Users/joelaptin/jcl-govcon/src/app/chosen 2>/dev/null || echo "no chosen dir"
+[2026-04-20T00:20:22] ls -la /Users/joelaptin/jcl-govcon/src/__tests__/app
+[2026-04-20T00:21:28] ls /Users/joelaptin/jcl-govcon/src/components/theme-toggle.tsx && head -20 /Users/joelaptin/jcl-govcon/src/components/theme-toggle.tsx
+[2026-04-20T00:21:59] npx tsc --noEmit 2>&1 | tail -50
+[2026-04-20T00:22:04] npm run test:run 2>&1 | tail -80
+[2026-04-20T00:22:53] npx vitest run src/__tests__/components/sidebar.test.tsx src/__tests__/app/chosen/page.test.tsx 2>&1 | tail -40
+[2026-04-20T00:22:57] npm run test:run 2>&1 | tail -15
+[2026-04-20T00:23:16] git status && echo "---" && git diff --stat
+[2026-04-20T00:23:21] git add src/components/sidebar.tsx src/app/chosen/page.tsx src/__tests__/app/chosen/page.test.tsx src/__tests__/components/sidebar.test.tsx && git status
+[2026-04-20T00:23:34] git commit -m "$(cat <<'EOF'
+feat(chosen): /chosen page + nav
+
+New /chosen page clones the /inbox shape but flattens to a single list
+sorted server-side by promotedAt DESC with Load more pagination (50/page).
+Explicit three-state render: error + retry button, empty ("Nothing here
+yet"), loaded (KanbanCard + Demote button per card). Demote is an
+optimistic remove + PATCH { promoted: false } with revert on failure.
+
+Sidebar: useUnreadCount → useNavCounts. Single effect, Promise.allSettled
+over two independent fetches. Each badge updates only on fulfilled+ok; a
+rejected or non-ok response leaves the state at its last-known value
+(null on first failure, previous count thereafter). New Chosen nav item
+between Inbox and Pipeline, gold badge via a per-item badgeColor prop
+(applied as inline style to dodge Tailwind's broken alpha-on-CSS-vars).
+
+Tests: +7 for /chosen (three render states incl. retry, promotedAt-DESC
+sort, Load more append, Demote PATCH + optimistic + revert) and +4 for
+sidebar useNavCounts (both-fulfilled, inbox-rejects, chosen-rejects on
+initial load, chosen-rejects on later poll preserves last-known value).
+390/390 passing.
+
+Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>
+EOF
+)" && git log --oneline -5
+[2026-04-20T00:23:57] _BRANCH=$(git branch --show-current 2>/dev/null || echo "unknown")
+echo "BRANCH: $_BRANCH"
+source <(~/.claude/skills/gstack/bin/gstack-repo-mode 2>/dev/null) || true
+echo "REPO_MODE: ${REPO_MODE:-unknown}"
+# Commit 5 only — diff against parent
+echo "---"
+echo "SCOPED DIFF: HEAD~1..HEAD (Commit 5 only, per user request)"
+git log --oneline -1 HEAD
+echo "---"
+git diff HEAD~1 --stat
+[2026-04-20T01:25:48] npx tsc --noEmit 2>&1 | tail -30
+[2026-04-20T01:25:53] npx vitest run src/__tests__/app/chosen/page.test.tsx src/__tests__/components/sidebar.test.tsx 2>&1 | tail -60
+[2026-04-20T01:26:18] npx vitest run src/__tests__/app/chosen/page.test.tsx src/__tests__/components/sidebar.test.tsx 2>&1 | tail -15
+[2026-04-20T01:26:24] npm run test:run 2>&1 | tail -10
+[2026-04-20T01:26:36] git status
+[2026-04-20T01:26:40] git add TODOS.md src/__tests__/app/chosen/page.test.tsx src/__tests__/components/sidebar.test.tsx src/app/chosen/page.tsx src/app/globals.css src/components/sidebar.tsx && git commit --amend --no-edit && git log --oneline -3
+[2026-04-20T01:27:00] git log --oneline -5 && echo "---" && git diff a41a54d HEAD --stat | tail -20
+[2026-04-20T01:27:04] git reset --soft a41a54d && git reset HEAD .claude/command-log.txt && git status
+[2026-04-20T01:27:25] git commit -m "$(cat <<'EOF'
+feat(chosen): /chosen page + nav
+
+New /chosen page clones the /inbox shape but flattens to a single list
+sorted server-side by promotedAt DESC with Load more pagination (50/page).
+Explicit three-state render: error + retry button, empty ("Nothing here
+yet"), loaded (KanbanCard + Demote button per card). Demote is an
+optimistic remove + PATCH { promoted: false }; on failure we refetch
+page 1 to resync with server truth (matches /inbox's fetchGroup pattern
+— snapshot-capture reverts can lose data when two demotes race and both
+PATCHes fail). An inFlight ref short-circuits overlapping fetches so a
+Refresh click during an in-flight Load more can't duplicate rows.
+
+Sidebar: useUnreadCount → useNavCounts. Single effect, Promise.allSettled
+over two independent fetches. Each badge updates only on fulfilled+ok; a
+rejected or non-ok response leaves the state at its last-known value
+(null on first failure, previous count thereafter). New Chosen nav item
+between Inbox and Pipeline. Per-item badgeColor + badgeTextColor props
+applied via inline style (dodges Tailwind's broken alpha-on-CSS-vars).
+Chosen badge uses --chosen-fg (dark zinc) for text — white on --chosen
+gold was ~1.95:1, well below WCAG AA 4.5:1. Inbox badge also fails AA
+on blue; deferred as a separate accessibility PR (captured in TODOS.md).
+
+globals.css: new --chosen-fg token in both :root and .dark, precomputed
+for readability on --chosen gold.
+
+TODOS.md: P3 entry for Inbox badge contrast — pre-existing AA failure
+surfaced during this /review, not introduced by CHOSEN tier.
+
+Tests: +14 covering the three render states, promotedAt-DESC sort,
+Load more (URL assertion on page=2), Demote PATCH + optimistic + refetch
+revert, two-demote-both-fail (refetch is immune to the snapshot race),
+Refresh-during-Load-more race guard, sidebar useNavCounts across four
+fulfilled/rejected combinations, and badge contrast color regression
+(both Chosen dark and Inbox white-until-deferred-fix).
+393/393 passing.
+
+Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>
+EOF
+)" && git log --oneline -5
+[2026-04-20T01:27:37] npx tsc --noEmit 2>&1 | tail -5 && echo "---TSC_EXIT:$?" && npm run test:run 2>&1 | tail -6
