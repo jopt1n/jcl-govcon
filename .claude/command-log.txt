@@ -3287,3 +3287,33 @@ EOF
 )"
 [2026-04-21T07:54:02] git log --oneline origin/main..HEAD
 [2026-04-21T07:54:03] git status --short
+[2026-04-21T07:59:34] which docker && docker --version 2>&1 | head -1 || echo "docker not available"
+[2026-04-21T08:00:27] npx tsc --noEmit 2>&1 | tail -3; echo "---"; npm run test:run 2>&1 | tail -4; echo "---"; npm run lint 2>&1 | tail -3
+[2026-04-21T08:00:44] git add TODOS.md docs/infra-review-checklist.md && git commit -m "$(cat <<'EOF'
+chore: closed TODO history + checklist item (e) memory re-verification
+
+- TODOS.md: restore the drained-PENDING entry under a new ## Closed
+  section at the bottom, with a one-line resolution note. Preserves
+  history without cluttering the active list.
+- docs/infra-review-checklist.md: add item (e) requiring that memory
+  and handoff docs asserting current infrastructure state be
+  re-verified against live systems before acting on them. Names the
+  Sedgewick MEMORY.md "Cron active" claim as the motivating failure.
+  Summary updated from four boxes to five.
+
+Docker build sanity check was skipped — Docker not available on this
+machine. Railway builds remotely regardless.
+
+Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>
+EOF
+)"
+[2026-04-21T08:01:33] _BRANCH=$(git branch --show-current 2>/dev/null || echo "unknown"); echo "BRANCH: $_BRANCH"; which codex 2>/dev/null && echo "CODEX_AVAILABLE" || echo "CODEX_NOT_AVAILABLE"
+[2026-04-21T08:01:35] git remote get-url origin 2>/dev/null; echo "---"; gh pr view --json baseRefName -q .baseRefName 2>/dev/null || echo "no PR"; echo "---"; gh repo view --json defaultBranchRef -q .defaultBranchRef.name 2>/dev/null || echo "gh unavailable"
+[2026-04-21T08:01:36] ls .claude/skills/review/ 2>/dev/null || echo "no project-level skill files"; ls ~/.claude/skills/review/ 2>/dev/null | head -20
+[2026-04-21T08:01:43] find ~/.claude/skills -name "checklist.md" 2>/dev/null | head -10
+[2026-04-21T08:01:44] git fetch origin main --quiet && git diff origin/main --stat
+[2026-04-21T08:01:51] git diff origin/main..HEAD --stat
+[2026-04-21T08:03:47] git log --oneline origin/main..HEAD
+[2026-04-21T08:03:48] ls README.md ARCHITECTURE.md CONTRIBUTING.md 2>&1 | head -5
+[2026-04-21T08:03:54] git show --stat fa2ac99
+[2026-04-21T08:03:55] grep -n -i "cron\|weekly" README.md 2>/dev/null | head -10
