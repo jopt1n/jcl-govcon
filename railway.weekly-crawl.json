@@ -5,7 +5,7 @@
     "dockerfilePath": "dockerfiles/cron.Dockerfile"
   },
   "deploy": {
-    "startCommand": "curl -fsSi -X POST -H \"Authorization: Bearer $INGEST_SECRET\" \"$WEB_BASE_URL/api/cron/weekly-crawl\"",
+    "startCommand": "curl --fail-with-body -sSi -X POST -H \"Authorization: Bearer $INGEST_SECRET\" \"$WEB_BASE_URL/api/cron/weekly-crawl\"",
     "cronSchedule": "0 15 * * 1",
     "restartPolicyType": "NEVER"
   }

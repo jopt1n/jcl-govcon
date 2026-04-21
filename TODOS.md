@@ -128,6 +128,13 @@ The AI classifier labels contracts GOOD based on fit, not deadline. Once a contr
 **Fix path:** first, add `suppressHydrationWarning` on the specific input only if root cause confirms third-party injection (browser autofill). If it's a legit state mismatch, fix the render-time value divergence between server and client.
 **Priority:** P3. Defer to an investigation-first PR.
 
+### Measure actual cron Dockerfile build time, update deployment doc
+
+**File:** `docs/deployment-railway.md:59` (Provisioning §3 step 6)
+**Why:** The line currently reads "First build takes ~seconds (alpine + curl, not a Node build)" — softened from an earlier "~5 seconds" claim because Docker wasn't available locally to verify (see `/review` finding #2 on the cron-architecture PR, 2026-04-21). After both cron services are provisioned in Railway and the first builds complete, Railway's build logs will show the actual duration.
+**Fix:** Read the Build duration field from either new cron service's first deployment in the Railway dashboard. Update the doc line to the measured number (e.g., "First build takes ~7 seconds" or whatever it is). Low-stakes but keeps the doc concrete instead of vague.
+**Priority:** P3. Post-merge follow-up.
+
 ### Inbox badge contrast (WCAG AA)
 
 **File:** `src/components/sidebar.tsx` — Inbox nav item

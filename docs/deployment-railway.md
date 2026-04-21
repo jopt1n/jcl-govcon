@@ -56,7 +56,7 @@ After the PR landing these files merges to `main`, the two cron services still n
 3. **Settings → Config-as-code file.** Point at `railway.weekly-crawl.json` (or `railway.check-batches.json`). Railway now uses the JSON config's `build.dockerfilePath` and `deploy.cronSchedule` instead of the root `railway.toml`.
 4. **Variables tab → `INGEST_SECRET`.** Reference variable. Source: `jcl-govcon-web`. Key: `INGEST_SECRET`. Rotating the secret on the web service then propagates to the cron automatically.
 5. **Variables tab → `WEB_BASE_URL`.** Reference expression. Value: `https://${{jcl-govcon-web.RAILWAY_PUBLIC_DOMAIN}}`. Railway resolves this at container start; future domain changes propagate without edits.
-6. **Deploy.** First build should take ~5 seconds (alpine + curl). The first "cron run" slot may not show up until the next scheduled tick; use the manual trigger in step 4 below to smoke-test before waiting.
+6. **Deploy.** First build takes ~seconds (alpine + curl, not a Node build). The first "cron run" slot may not show up until the next scheduled tick; use the manual trigger in step 4 below to smoke-test before waiting.
 
 ## 4. Verification
 
