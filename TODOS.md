@@ -50,12 +50,13 @@ Deferred work surfaced during the `/review` pass on `fix/batch-import-hang` (202
 
 ---
 
-### Drain the ~332 stuck PENDING rows from the prior batch run
+### Advisory lock in weekly-crawl doesn't pin a postgres-js connection
 
-**Files:** `scripts/batch-classify.ts` (unchanged CLI wrapper)
-**Why:** After Commit 4 of the Sedgewick cleanup lands, `submitBatchClassify({ since })` scopes the weekly-crawl path to the current 7-day window, so the ~332 pre-existing PENDING rows (createdAt well before this week) will be orphaned — they'll never be picked up by the weekly cron. The CLI script remains the manual backfill tool.
-**Fix:** One-shot manual run: `npx tsx scripts/batch-classify.ts --pending-only` (no `--since` flag). Safe to run anytime after Commit 4 lands on `fix/batch-import-hang`. Will cost ~$1.30 at xAI batch pricing (332 × ~$0.004).
-**Priority:** P2 follow-up. Not a blocker for merge.
+**File:** `src/app/api/cron/weekly-crawl/route.ts:125-162`
+**Why:** `db.execute(sql\`SELECT pg_try_advisory_lock(...)\`)`and`db.execute(sql\`SELECT pg_advisory_unlock(...)\`)`run on the unpinned postgres-js pool — acquire and release can land on different pool connections. Release may return`false`on a connection that doesn't hold the lock, leaving the real lock held on the acquiring connection until that connection's`idle_timeout: 20s`inactivity expires it. The code comment at line 128 is also wrong — Postgres releases session locks on session/connection END, not on pool return.
+**Impact:** Under cron-only load (one fire per week), the lock releases naturally within 20s of pool idle, so the bug is probably benign for this workload. Under manual concurrent curls or future load, it surfaces as spurious "another weekly-crawl in progress" skips.
+**Fix:** Wrap the try/finally body in`sql.reserve()`(postgres-js 3.4+ API) or`sql.begin()`; either pins one connection for the lifetime of the lock. Add a real pool test that grabs two connections and verifies acquire/release hit the same connection.
+**Priority:** P2. Not a firing blocker; wait until real cron run data shows whether it bites before spending on the fix. Surfaced during the Sedgewick discovery audit (2026-04-21).
 
 ### E2E test infrastructure (Playwright)
 
@@ -127,6 +128,13 @@ The AI classifier labels contracts GOOD based on fit, not deadline. Once a contr
 **Fix path:** first, add `suppressHydrationWarning` on the specific input only if root cause confirms third-party injection (browser autofill). If it's a legit state mismatch, fix the render-time value divergence between server and client.
 **Priority:** P3. Defer to an investigation-first PR.
 
+### Measure actual cron Dockerfile build time, update deployment doc
+
+**File:** `docs/deployment-railway.md:59` (Provisioning §3 step 6)
+**Why:** The line currently reads "First build takes ~seconds (alpine + curl, not a Node build)" — softened from an earlier "~5 seconds" claim because Docker wasn't available locally to verify (see `/review` finding #2 on the cron-architecture PR, 2026-04-21). After both cron services are provisioned in Railway and the first builds complete, Railway's build logs will show the actual duration.
+**Fix:** Read the Build duration field from either new cron service's first deployment in the Railway dashboard. Update the doc line to the measured number (e.g., "First build takes ~7 seconds" or whatever it is). Low-stakes but keeps the doc concrete instead of vague.
+**Priority:** P3. Post-merge follow-up.
+
 ### Inbox badge contrast (WCAG AA)
 
 **File:** `src/components/sidebar.tsx` — Inbox nav item
@@ -134,3 +142,18 @@ The AI classifier labels contracts GOOD based on fit, not deadline. Once a contr
 **Not introduced by CHOSEN tier** — pre-existing accessibility issue surfaced during Commit 5 /review (2026-04-19). The Chosen badge fix in that commit added a `badgeTextColor` prop and a `--chosen-fg` token precomputed for readability on gold.
 **Fix:** Same pattern. Add a `--inbox-fg` token (dark text color passing AA on blue) to `globals.css`, set `badgeTextColor: "var(--inbox-fg)"` on the Inbox nav item, verify with a contrast checker. One-line change on top of the existing scaffolding.
 **Priority:** P3. Defer to an accessibility-focused PR that can audit all nav badges, toast colors, urgent flags, and classification badges for AA compliance.
+
+---
+
+## Closed
+
+### Drain the ~332 stuck PENDING rows from the prior batch run
+
+**Resolution (2026-04-21):** Resolved organically, mechanism unconfirmed — likely 2026-04-16 manual curl. `SELECT count(*) FROM contracts WHERE classification = 'PENDING'` returned 0 during the cron-architecture discovery audit. Preserved here as history.
+
+**Original entry:**
+
+**Files:** `scripts/batch-classify.ts` (unchanged CLI wrapper)
+**Why:** After Commit 4 of the Sedgewick cleanup lands, `submitBatchClassify({ since })` scopes the weekly-crawl path to the current 7-day window, so the ~332 pre-existing PENDING rows (createdAt well before this week) will be orphaned — they'll never be picked up by the weekly cron. The CLI script remains the manual backfill tool.
+**Fix:** One-shot manual run: `npx tsx scripts/batch-classify.ts --pending-only` (no `--since` flag). Safe to run anytime after Commit 4 lands on `fix/batch-import-hang`. Will cost ~$1.30 at xAI batch pricing (332 × ~$0.004).
+**Priority:** P2 follow-up. Not a blocker for merge.
