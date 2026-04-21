@@ -9,24 +9,15 @@ healthcheckTimeout = 300
 restartPolicyType = "on_failure"
 restartPolicyMaxRetries = 3
 
-# ── Weekly pipeline cron ───────────────────────────────────────────────────
+# ── Crons are separate Railway services ────────────────────────────────────
 #
-# Monday 15:00 UTC (08:00 Pacific): crawl the last 7 days from SAM.gov
-# and submit an xAI batch for classification. Returns immediately; the
-# batch itself takes 30 min – 24 hrs to complete.
+# Railway's native cron schema is `deploy.cronSchedule` (single value per
+# service) — NOT [[cron]] array-of-tables blocks. Cron services are their
+# own services that start on schedule, execute a task, and terminate.
 #
-# Every 30 min: check in-flight batches, import results when ready, fire
-# the Telegram weekly digest exactly once per succeeded run. Atomic claim
-# prevents concurrent runs from double-firing anything.
+# This service (jcl-govcon-web) is the always-on web app. The two scheduled
+# tasks live in sibling services, each with its own config file:
+#   - jcl-govcon-weekly-crawl   → railway.weekly-crawl.json
+#   - jcl-govcon-check-batches  → railway.check-batches.json
 #
-# Both endpoints require Authorization: Bearer $INGEST_SECRET. Railway
-# injects env vars into the cron command, so $INGEST_SECRET and
-# $RAILWAY_PUBLIC_DOMAIN resolve inside the curl call.
-
-[[cron]]
-schedule = "0 15 * * 1"
-command = "curl -sS -X POST -H 'Authorization: Bearer $INGEST_SECRET' https://$RAILWAY_PUBLIC_DOMAIN/api/cron/weekly-crawl"
-
-[[cron]]
-schedule = "*/30 * * * *"
-command = "curl -sS -X POST -H 'Authorization: Bearer $INGEST_SECRET' https://$RAILWAY_PUBLIC_DOMAIN/api/cron/check-batches"
+# See docs/deployment-railway.md for the full architecture and provisioning.
