@@ -2939,3 +2939,351 @@ No changes to A10 (SHA256 content-hash idempotency) or A4
 Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>
 EOF
 )" && git log --oneline -3
+[2026-04-20T06:43:22] # Step 17: Push
+git push -u origin feat/chosen-tier 2>&1 | tail -15
+[2026-04-20T06:44:18] gh pr create --base main --title "feat: Chosen tier — user-driven promotion above AI's GOOD" --body "$(cat <<'EOF'
+## Summary
+
+Introduces the CHOSEN tier — a user-driven layer above the AI's GOOD classification. The AI classifier is tuned for recall over precision (most "GOOD" contracts are candidates worth reviewing, not ideal fits), so users need a way to elevate the genuine gems. Click ★ Promote anywhere (inbox, Kanban card, contract detail) and the contract lands on `/chosen` with a gold accent. AI's original classification stays intact — promotion is an orthogonal flag, not a reclassification — so the recall-analytics loop is preserved.
+
+Built as 5 commits over the feat/chosen-tier branch:
+
+- **Commit 1** — `contracts` table gains `promoted boolean` + `promotedAt timestamptz` + partial index `WHERE promoted=true`. New `audit_log` table with nullable `contract_id` + `ON DELETE SET NULL` so forensic history survives contract deletion.
+- **Commit 2** — `PATCH /api/contracts/[id]` accepts `promoted` with strict boolean validation. UPDATE + audit insert wrapped in a Drizzle transaction. Promote-implies-reviewed via `COALESCE(reviewedAt, now())` — only when client didn't explicitly send `reviewedAt` in the same PATCH. `GET /api/contracts?promoted=true|false` filter + 400 on invalid values + sort by `promotedAt DESC` with `desc(id)` tiebreaker.
+- **Commit 3** — Gold CSS tokens in `globals.css` (`--chosen`, `--chosen-bg`, `--chosen-border`, `--accent-5/10/20/30/60`). Kanban card gains state-exclusive gold border + filled gold Star. Contract detail gains CHOSEN ★ header pill, top 2px gold accent, ★ Promote/Demote button (renders for ALL classifications including DISCARD). This commit also caught a codebase-wide bug: Tailwind's alpha modifier on CSS vars silently falls back to transparent — fixed across 10 files with precomputed alpha tokens.
+- **Commit 4** — `/inbox` cards gain inline ★ Promote. `removeFromInbox(id, classification, body)` helper shared between `markReviewed` and the new `promote` action. Defensive guard hides Promote when `promoted === true` for stale multi-tab views.
+- **Commit 5** — New `/chosen` page with three explicit render states (error + retry button, empty + CTA, loaded), Load more pagination at 50/page sorted server-side by `promotedAt DESC`, Demote button with optimistic-remove + refetch-on-failure (matches /inbox's pattern so two concurrent failing demotes don't lose cards). Sidebar: `useUnreadCount` → `useNavCounts` with `Promise.allSettled` over two independent fetches, last-known-value fallback on rejection, new Chosen nav item with WCAG-AA gold badge (`--chosen-fg` dark zinc text, ~12:1 on gold).
+
+## Test Coverage
+
+- 379 → 393 tests (+14 new for CHOSEN, all passing)
+- Covers: 3 `/chosen` render states, `promotedAt` DESC sort, Load more URL assertion, Demote PATCH + optimistic + refetch, two-demote-both-fail race, Refresh-during-Load-more race guard, `useNavCounts` across 4 fulfilled/rejected combinations, badge contrast regression guard
+- Commit 2 API tests: PATCH `promoted` transitions, COALESCE preservation, 400 on invalid, audit_log atomicity (mock `db.insert(auditLog)` to throw → verify UPDATE rolled back)
+
+## Pre-Landing Review
+
+Run during development (c16ee6b amended into 2cf3654). 4 findings, all fixed in the amend:
+
+- **[P2]** Refresh + Load more race on `/chosen` → `inFlight` ref + symmetric `isFetching` disable on both buttons
+- **[P3]** Two-demote-both-fail snapshot-revert race → switched to refetch-on-failure (matches /inbox)
+- **[P3]** Chosen badge contrast (~1.95:1 white on gold, fails WCAG AA) → new `--chosen-fg` token, `badgeTextColor` prop on NavItem, ~12:1 dark zinc
+- **[INFO]** Load more test didn't assert `page=2` in URL → URL capture + assertion added
+
+Zero remaining issues at ship time.
+
+## QA Results
+
+Diff-aware QA run on this branch (see `.gstack/qa-reports/qa-report-chosen-2026-04-19.md` — local artifact, gitignored):
+
+- Routes tested: `/`, `/inbox`, `/chosen`, `/contracts/:id` (with a promoted contract)
+- CHOSEN-scope bugs: **0**
+- Health score (CHOSEN scope): **100 / 100**
+- DOM verification: contract detail renders CHOSEN header + Demote button; Promote correctly hidden when already promoted
+- Backend state verified: promote/demote cycle via API, `audit_log` rows in correct DESC order, `reviewedAt` preserved through both COALESCE paths
+
+## Visual Verification
+
+Done by the user in their own browser (dark + light modes not both verified, will surface naturally in daily use):
+
+- CHOSEN ★ pill on contract detail ✓
+- Gold accent bar on promoted contract detail ✓
+- `/chosen` page renders promoted cards ✓
+- Sidebar Chosen badge with dark text visible + working ✓
+- Kanban card gold border on promoted ✓ (confirmed via card.test.tsx exclusivity assertion)
+
+## Plan Completion
+
+Plan at `docs/plans/chosen-tier.md`. 5/5 commits executed per spec. Deploy-coupling note from §7 honored (all 5 commits ship together as one merge).
+
+## TODOS
+
+This PR surfaces (but does not fix) 5 pre-existing items — captured in `TODOS.md` as P3 for future dedicated PRs:
+
+- **P3** Inbox badge contrast (WCAG AA) — same pattern as the Chosen fix; deferred to accessibility-focused PR
+- **P2** GOOD count discrepancy — Pipeline Status tile (369) vs Kanban GOOD column (111)
+- **P2** Deadline not shown on contract detail page
+- **P2** Expired contracts pollute active Kanban + `/inbox` — apply the CHOSEN orthogonal-flag pattern to move expired to archive view
+- **P3** Hydration warning on Kanban search input — dev-mode only, not CHOSEN-caused
+
+## Test plan
+
+- [x] `npx tsc --noEmit` — exit 0
+- [x] `npm run test:run` — 393 / 393 passing across 42 test files
+- [x] `npm run lint` — 0 errors, 0 warnings
+- [x] Visual verification by user (CHOSEN pill, gold border, /chosen page, sidebar badge, Demote flow)
+- [x] `/qa` diff-aware run — 0 CHOSEN-introduced bugs
+- [x] Backend state verification — API transitions, audit_log consistency, COALESCE paths
+
+**Reviewer note:** 15 commits (4 auto-checkpoints between feature commits from the session's Stop hook). Recommend **Squash and merge** at merge time for a clean main history — the branch commits capture intermediate state that's useful for bisecting within the branch but noise on `main`.
+
+🤖 Generated with [Claude Code](https://claude.com/claude-code)
+EOF
+)" 2>&1 | tail -10
+[2026-04-20T06:44:30] # Pop session-noise stash (may conflict if command-log was touched during push)
+git stash pop 2>&1 | tail -5
+echo "---"
+git status --porcelain
+echo "---"
+# Persist ship metrics (Step 20)
+eval "$(~/.claude/skills/gstack/bin/gstack-slug 2>/dev/null)" && mkdir -p ~/.gstack/projects/$SLUG
+echo "{\"skill\":\"ship\",\"timestamp\":\"$(date -u +%Y-%m-%dT%H:%M:%SZ)\",\"coverage_pct\":-1,\"plan_items_total\":5,\"plan_items_done\":5,\"verification_result\":\"pass\",\"version\":\"n/a\",\"branch\":\"feat/chosen-tier\"}" >> ~/.gstack/projects/$SLUG/feat-chosen-tier-reviews.jsonl 2>/dev/null && echo "metrics logged"
+echo "---"
+echo "PR: https://github.com/jopt1n/jcl-govcon/pull/2"
+[2026-04-20T06:44:36] # Drop the stash (it's a no-op now — command-log was already dirty)
+git stash drop 2>&1 | tail -3
+echo "---"
+# Final state check
+git log --oneline -3
+echo "---"
+gh pr view 2 --json url,title,state,baseRefName,headRefName 2>&1 | head -10
+[2026-04-20T07:06:14] pwd
+echo "---"
+git branch --show-current
+echo "---"
+git log --oneline -10
+echo "---"
+git status --short
+echo "---"
+ls progress.md plan.md docs/session-log.md 2>&1
+echo "---"
+# Any prev files?
+find . -maxdepth 3 -name "*.prev.md" -o -name "*.prev.json" 2>/dev/null | head -5
+echo "---"
+# Auto-checkpoints on branch
+git log main..HEAD --grep="wip:" --grep="checkpoint:" --oneline | wc -l
+echo "auto-checkpoint commits above"
+echo "---"
+# PR state sanity
+gh pr view 2 --json state,mergeable,reviewDecision 2>&1 | head -5
+[2026-04-20T07:06:28] git fetch origin 2>&1 | tail -2
+echo "---"
+# What's on origin/main now?
+git log origin/main --oneline -5
+echo "---"
+# Is feat/chosen-tier merged to main?
+git log --oneline main..origin/main | head -5
+echo "---"
+# Any remaining PRs or branches?
+gh pr list --state open 2>&1 | head -10
+echo "---"
+# Read existing progress.md + plan.md + session-log for context
+echo "=== progress.md ==="
+cat progress.md
+echo ""
+echo "=== session-log.md (last 10) ==="
+tail -10 docs/session-log.md 2>/dev/null
+[2026-04-20T07:06:44] # Quick validation on main (what tomorrow's session will see after switching)
+git diff main origin/main --stat | tail -3
+echo "---"
+# CLAUDE.md state
+ls -la CLAUDE.md | awk '{print CHOSEN, CHOSEN, CHOSEN}'
+head -8 CLAUDE.md
+echo "---"
+# Last handoff doc
+ls -la docs/handoff-*.md 2>&1 | tail -5
+echo "---"
+# TODOS.md state
+head -5 TODOS.md
+[2026-04-20T07:10:21] git add docs/handoff-2026-04-20.md progress.md docs/session-log.md plan.md
+git status --short
+echo "---"
+# Reference the last auto-checkpoint hash in commit body per skill spec
+LAST_CHECKPOINT=$(git log --oneline --grep="wip:" --grep="checkpoint:" -1 --format=%H | head -1)
+echo "last checkpoint: $LAST_CHECKPOINT"
+[2026-04-20T07:10:29] git commit -m "$(cat <<'EOF'
+handoff: CHOSEN tier shipped + merged
+
+PR #2 merged as fcfcea0 on main. 5 feature commits + 4 pre-landing-
+review fixes amended in + 2 housekeeping commits. 5 follow-ups
+captured in TODOS.md (3 P2 + 2 P3). Phase 8.6 complete.
+
+Last auto-checkpoint before this handoff: 99c3fe1 (branch noise,
+preserved for reference; squashed away on main via PR merge).
+
+Next session: user picks from open-question menu in
+docs/handoff-2026-04-20.md. Default if unspecified: expired-contract
+pollution (P2, daily-friction, orthogonal-flag pattern reuse).
+
+Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>
+EOF
+)" && git log --oneline -3
+[2026-04-20T07:10:50] echo "=== What /continue would read ==="
+echo ""
+echo "--- progress.md (first 20 lines) ---"
+head -20 progress.md
+echo ""
+echo "--- Next-actions anchor ---"
+grep -A2 "Next 3 Actions" progress.md | head -5
+echo ""
+echo "--- Handoff doc findable? ---"
+ls -la docs/handoff-2026-04-20.md
+echo ""
+echo "--- Cross-project scan: active Claude projects in ~ ---"
+find ~ -maxdepth 2 -name ".claude" -type d 2>/dev/null | head -10
+echo ""
+echo "--- UGC_creator last activity (touched this session) ---"
+cd ~/UGC_creator && git log --oneline -3 2>/dev/null | head -3
+[2026-04-20T07:45:05] git status
+[2026-04-20T07:45:06] git branch --show-current
+[2026-04-20T07:45:06] git log -1 --oneline main
+[2026-04-20T07:45:19] git log --oneline main -10
+[2026-04-20T07:45:19] git branch -a | head -30
+[2026-04-20T07:45:26] git log --oneline origin/main -10
+[2026-04-20T07:45:27] git cat-file -t fcfcea0 2>&1 || echo "commit not found"
+[2026-04-20T07:45:28] git log --all --oneline --grep="CHOSEN\|chosen" | head -10
+[2026-04-20T07:45:54] grep -rn "drizzle-orm" src/lib/db/ package.json
+[2026-04-20T07:46:02] grep -n "DATABASE_URL" .env.example .env.local .env 2>/dev/null
+[2026-04-20T07:46:15] git fetch origin 2>&1 | tail -5
+[2026-04-20T07:46:18] git log --oneline origin/main ^origin/fix/batch-import-hang | head -30
+[2026-04-20T07:46:19] git log --oneline origin/fix/batch-import-hang ^origin/main | head -30
+[2026-04-20T07:46:19] git diff --stat origin/main...origin/fix/batch-import-hang
+[2026-04-20T07:46:27] git log --oneline fix/batch-import-hang -20
+[2026-04-20T07:46:28] git log --oneline fix/batch-import-hang ^origin/main | head -30
+[2026-04-20T07:46:28] git log --oneline origin/main ^fix/batch-import-hang | head -30
+[2026-04-20T07:46:39] git log --all --oneline --grep="Sedgewick\|advisory lock\|telegram config preflight" | head -10
+[2026-04-20T07:46:40] git branch -a --contains db9a126 2>&1 | head -10
+[2026-04-20T07:46:40] git log --oneline --first-parent origin/main | head -20
+[2026-04-20T07:46:53] grep -n "requireTelegramConfig\|TELEGRAM_BOT_TOKEN\|TELEGRAM_CHAT_ID" src/lib/notifications/telegram.ts 2>/dev/null
+[2026-04-20T07:46:56] grep -rn "processRow\|RowSnapshot" src/app/api/cron/check-batches/ 2>/dev/null | head -20
+[2026-04-20T07:46:56] grep -n "since\|createdAt" src/app/api/cron/weekly-crawl/route.ts 2>/dev/null | head -20
+[2026-04-20T07:46:57] grep -rn "requireSameOrigin\|same-origin" src/ 2>/dev/null | head -10
+[2026-04-20T07:46:58] ls scripts/ 2>/dev/null
+[2026-04-20T07:47:46] cat package.json | grep -A 30 '"scripts"'
+[2026-04-20T07:47:49] npm run test:run 2>&1 | tail -20
+[2026-04-20T07:47:56] npx tsc --noEmit 2>&1 | tail -20
+[2026-04-20T07:47:57] npm run lint 2>&1 | tail -20
+[2026-04-20T07:48:04] ls scripts/ | grep -i "pending\|drain"
+[2026-04-20T07:48:05] ls scripts/ | grep -i "status\|query"
+[2026-04-20T07:48:06] git log origin/fix/batch-import-hang --format="%h %s %ar" | head -10
+[2026-04-20T07:48:06] git log fix/batch-import-hang --format="%h %s %ar" | head -10
+[2026-04-20T07:48:09] head -40 scripts/status-report.ts
+[2026-04-20T07:48:11] git log --oneline main -1 && git log --oneline origin/main -1
+[2026-04-20T07:48:29] ls docs/ | head -20
+[2026-04-21T02:43:18] date -u
+[2026-04-21T02:43:43] curl -sS -o /dev/null -w "HTTP %{http_code} in %{time_total}s\n" https://jcl-govcon-web-production.up.railway.app/api/health
+[2026-04-21T02:44:21] head -3 /Users/joelaptin/.claude/projects/-Users-joelaptin-jcl-govcon/12c2c67c-2d5c-4204-8f4b-ec34c5ca2ed0/tool-results/mcp-railway-get-logs-1776739446544.txt
+[2026-04-21T02:44:24] wc -l /Users/joelaptin/.claude/projects/-Users-joelaptin-jcl-govcon/12c2c67c-2d5c-4204-8f4b-ec34c5ca2ed0/tool-results/mcp-railway-get-logs-1776739446544.txt && tail -3 /Users/joelaptin/.claude/projects/-Users-joelaptin-jcl-govcon/12c2c67c-2d5c-4204-8f4b-ec34c5ca2ed0/tool-results/mcp-railway-get-logs-1776739446544.txt
+[2026-04-21T02:44:32] jq -r '.[0].text' /Users/joelaptin/.claude/projects/-Users-joelaptin-jcl-govcon/12c2c67c-2d5c-4204-8f4b-ec34c5ca2ed0/tool-results/mcp-railway-get-logs-1776739446544.txt | grep -oE '"timestamp":"[^"]+"' | sort -u | tail -5
+[2026-04-21T02:44:34] jq -r '.[0].text' /Users/joelaptin/.claude/projects/-Users-joelaptin-jcl-govcon/12c2c67c-2d5c-4204-8f4b-ec34c5ca2ed0/tool-results/mcp-railway-get-logs-1776739446544.txt | grep -oE '"timestamp":"202[0-9]-[0-9]{2}-[0-9]{2}' | sort -u
+[2026-04-21T02:44:46] curl -sS https://jcl-govcon-web-production.up.railway.app/api/health
+[2026-04-21T02:45:15] source .env && psql "$DATABASE_URL" -c "SELECT id, kind, status, window_start, window_end, created_at, digest_sent_at, error_step FROM crawl_runs ORDER BY created_at DESC LIMIT 10;"
+[2026-04-21T02:45:18] which psql; ls /opt/homebrew/opt/libpq/bin/psql 2>/dev/null; ls /usr/local/opt/libpq/bin/psql 2>/dev/null
+[2026-04-21T02:45:32] source .env && node --input-type=module -e "
+import postgres from 'postgres';
+const sql = postgres(process.env.DATABASE_URL);
+const runs = await sql\`SELECT id, kind, status, window_start, window_end, created_at, digest_sent_at, error_step FROM crawl_runs ORDER BY created_at DESC LIMIT 10\`;
+console.log(JSON.stringify(runs, null, 2));
+await sql.end();
+"
+[2026-04-21T02:45:43] export $(grep -v '^#' .env | xargs) && node --input-type=module -e "
+import postgres from 'postgres';
+const sql = postgres(process.env.DATABASE_URL);
+const runs = await sql\`SELECT id, kind, status, window_start, window_end, created_at, digest_sent_at, error_step FROM crawl_runs ORDER BY created_at DESC LIMIT 10\`;
+console.log(JSON.stringify(runs, null, 2));
+await sql.end();
+"
+[2026-04-21T02:46:01] export $(grep -v '^#' .env | xargs) && node --input-type=module -e "
+import postgres from 'postgres';
+const sql = postgres(process.env.DATABASE_URL);
+const recent = await sql\`
+  SELECT date_trunc('day', created_at) AS day, count(*)::int AS n
+  FROM contracts
+  WHERE created_at > now() - interval '14 days'
+  GROUP BY 1 ORDER BY 1 DESC
+\`;
+console.log('New contracts by day (last 14d):');
+for (const r of recent) console.log(' ', r.day, r.n);
+const pending = await sql\`SELECT count(*)::int AS n FROM contracts WHERE classification = 'PENDING'\`;
+console.log('\\nPENDING total:', pending[0].n);
+await sql.end();
+"
+[2026-04-21T05:47:49] cat src/lib/db/index.ts
+[2026-04-21T05:47:53] grep "\"postgres\":" package.json
+[2026-04-21T07:32:13] ls -la dockerfiles/ 2>&1 | head -5; echo "---"; ls railway*.json railway.toml 2>&1; echo "---"; ls docs/plans/ 2>&1
+[2026-04-21T07:45:34] git status --short && git fetch origin 2>&1 | tail -3 && git log --oneline origin/main -1
+[2026-04-21T07:45:38] git checkout -b fix/cron-service-architecture origin/main
+[2026-04-21T07:45:47] git stash push -m "cron-architecture: command-log hook noise" -- .claude/command-log.txt && git checkout -b fix/cron-service-architecture origin/main && git stash pop
+[2026-04-21T07:48:29] npx tsc --noEmit 2>&1 | tail -5
+[2026-04-21T07:48:30] npm run test:run 2>&1 | tail -5
+[2026-04-21T07:48:37] npm run lint 2>&1 | tail -5
+[2026-04-21T07:48:46] git add docs/plans/cron-services.md && git commit -m "$(cat <<'EOF'
+docs(plans): cron service architecture plan
+
+Three-service Railway topology replacing dead [[cron]] blocks:
+jcl-govcon-web (always-on) + two cron services each with its own
+config-as-code file and alpine+curl Dockerfile. See the plan for the
+Sedgewick postmortem and the reusable infra-review-checklist extracted
+from it.
+
+Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>
+EOF
+)"
+[2026-04-21T07:48:50] mkdir -p dockerfiles && ls dockerfiles
+[2026-04-21T07:49:10] jq . railway.weekly-crawl.json > /dev/null && echo "weekly-crawl JSON OK"; jq . railway.check-batches.json > /dev/null && echo "check-batches JSON OK"
+[2026-04-21T07:49:11] npx tsc --noEmit 2>&1 | tail -5
+[2026-04-21T07:49:12] npm run test:run 2>&1 | tail -5
+[2026-04-21T07:49:19] npm run lint 2>&1 | tail -5
+[2026-04-21T07:49:29] git add dockerfiles/cron.Dockerfile railway.weekly-crawl.json railway.check-batches.json && git commit -m "$(cat <<'EOF'
+feat(infra): cron dockerfile + per-service railway configs
+
+Adds an alpine+curl Dockerfile shared by both cron services, plus
+config-as-code files for the weekly-crawl (Mon 15:00 UTC) and
+check-batches (every 30 min) services. Each service's startCommand
+posts to the always-on jcl-govcon-web with a Bearer INGEST_SECRET.
+restartPolicyType=NEVER so a failed run logs and waits for the next
+scheduled run rather than retrying aggressively.
+
+Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>
+EOF
+)"
+[2026-04-21T07:49:57] python3 -c "import tomllib; d=tomllib.load(open('railway.toml','rb')); print('TOML OK, keys:', list(d.keys()))"
+[2026-04-21T07:49:58] npx tsc --noEmit 2>&1 | tail -3; echo "---"; npm run test:run 2>&1 | tail -4; echo "---"; npm run lint 2>&1 | tail -3
+[2026-04-21T07:50:14] git add railway.toml && git commit -m "$(cat <<'EOF'
+chore(infra): remove dead [[cron]] blocks from railway.toml
+
+Railway's native cron schema is deploy.cronSchedule per service, not
+[[cron]] array-of-tables — the Sedgewick blocks were silently ignored.
+Replace with a comment pointing future readers at the three-service
+architecture documented in docs/deployment-railway.md.
+
+Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>
+EOF
+)"
+[2026-04-21T07:51:33] grep -n '```mermaid\|```$' docs/deployment-railway.md | head -10
+[2026-04-21T07:51:34] npx tsc --noEmit 2>&1 | tail -3; echo "---"; npm run test:run 2>&1 | tail -4; echo "---"; npm run lint 2>&1 | tail -3
+[2026-04-21T07:51:54] git add docs/deployment-railway.md docs/infra-review-checklist.md && git commit -m "$(cat <<'EOF'
+docs(infra): Railway three-service deployment doc + review checklist
+
+docs/deployment-railway.md covers topology (with a Mermaid sequence
+diagram of a weekly-crawl fire), the public-URL-vs-private-networking
+decision, step-by-step service provisioning, verification, and a
+postmortem pointing at the reusable checklist.
+
+docs/infra-review-checklist.md extracts the four lessons from the
+Sedgewick [[cron]] failure so the next infra PR walks the list before
+merge: (a) schema validated against current docs, (b) dashboard
+screenshot proving registration, (c) end-to-end verification that the
+config does what it claims, (d) rollback plan names a working
+pre-state or explicitly flags none exists.
+
+Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>
+EOF
+)"
+[2026-04-21T07:52:00] wc -l plan.md && grep -n "^## Phase\|Infrastructure\|infrastructure\|Railway\|cron" plan.md | head -30
+[2026-04-21T07:53:41] npx tsc --noEmit 2>&1 | tail -3; echo "---"; npm run test:run 2>&1 | tail -4; echo "---"; npm run lint 2>&1 | tail -3
+[2026-04-21T07:53:59] git add TODOS.md progress.md plan.md && git commit -m "$(cat <<'EOF'
+chore: update trackers for cron architecture change
+
+- TODOS.md: drop the drained ~332 PENDING entry (count is now 0,
+  confirmed via DB). Add P2 for the postgres-js advisory-lock pinning
+  bug surfaced during the Sedgewick discovery audit.
+- progress.md: close out CHOSEN-tier in-flight status (shipped as #2),
+  capture Phase 8.7 cron-architecture work + next 3 actions.
+- plan.md: mark Phase 8.6 CHOSEN complete; add Phase 8.7 for the cron
+  architecture fix with post-merge provisioning + verification steps.
+
+Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>
+EOF
+)"
+[2026-04-21T07:54:02] git log --oneline origin/main..HEAD
+[2026-04-21T07:54:03] git status --short
