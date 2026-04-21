@@ -135,3 +135,18 @@ The AI classifier labels contracts GOOD based on fit, not deadline. Once a contr
 **Not introduced by CHOSEN tier** — pre-existing accessibility issue surfaced during Commit 5 /review (2026-04-19). The Chosen badge fix in that commit added a `badgeTextColor` prop and a `--chosen-fg` token precomputed for readability on gold.
 **Fix:** Same pattern. Add a `--inbox-fg` token (dark text color passing AA on blue) to `globals.css`, set `badgeTextColor: "var(--inbox-fg)"` on the Inbox nav item, verify with a contrast checker. One-line change on top of the existing scaffolding.
 **Priority:** P3. Defer to an accessibility-focused PR that can audit all nav badges, toast colors, urgent flags, and classification badges for AA compliance.
+
+---
+
+## Closed
+
+### Drain the ~332 stuck PENDING rows from the prior batch run
+
+**Resolution (2026-04-21):** Resolved organically, mechanism unconfirmed — likely 2026-04-16 manual curl. `SELECT count(*) FROM contracts WHERE classification = 'PENDING'` returned 0 during the cron-architecture discovery audit. Preserved here as history.
+
+**Original entry:**
+
+**Files:** `scripts/batch-classify.ts` (unchanged CLI wrapper)
+**Why:** After Commit 4 of the Sedgewick cleanup lands, `submitBatchClassify({ since })` scopes the weekly-crawl path to the current 7-day window, so the ~332 pre-existing PENDING rows (createdAt well before this week) will be orphaned — they'll never be picked up by the weekly cron. The CLI script remains the manual backfill tool.
+**Fix:** One-shot manual run: `npx tsx scripts/batch-classify.ts --pending-only` (no `--since` flag). Safe to run anytime after Commit 4 lands on `fix/batch-import-hang`. Will cost ~$1.30 at xAI batch pricing (332 × ~$0.004).
+**Priority:** P2 follow-up. Not a blocker for merge.

@@ -32,8 +32,14 @@ Extracted from the Sedgewick `[[cron]]` postmortem (see `docs/deployment-railway
 - The rollback section of the PR description either names the SHA (or dashboard state) of the working prior deploy, or it explicitly writes "There is no working pre-state" and explains why.
 - This prevents the rollback plan from becoming false comfort — a reader who assumes "we can always revert" when in fact there is nothing to revert to will defer serious due-diligence until after they're already in trouble.
 
+### (e) Memory / handoff documents asserting current infrastructure state have been re-verified against live systems, not assumed from prior-session notes
+
+- Handoff docs, `MEMORY.md` entries, and prior-session summaries are point-in-time observations. They decay quickly in infrastructure contexts where something that was "operational as of last Tuesday" may have been silently broken since.
+- Before acting on any claim like "cron active", "X is deployed", "service Y is healthy", re-verify it against the live system — query the DB, hit the endpoint, check the dashboard. The authoritative source for current state is the current system, not what a doc said days ago.
+- The Sedgewick incident is a direct case: `MEMORY.md` said "Cron active: weekly-crawl Mon 15:00 UTC" while no cron had actually fired since the initial manual curl. A reader who trusted the memory could have spent days building on top of a broken foundation. Explicit re-verification would have surfaced the break in seconds.
+
 ## Applying the checklist
 
-All four boxes matter, but they fail in characteristic orders. If (a) is skipped, the config is probably wrong. If (b) is skipped, the config is probably wrong and the reviewer won't notice. If (c) is skipped, the config looks right but may not behave right. If (d) is skipped, the response plan when things break is worse than it needed to be.
+All five boxes matter, but they fail in characteristic orders. If (a) is skipped, the config is probably wrong. If (b) is skipped, the config is probably wrong and the reviewer won't notice. If (c) is skipped, the config looks right but may not behave right. If (d) is skipped, the response plan when things break is worse than it needed to be. If (e) is skipped, the entire PR may be aimed at the wrong problem.
 
-The checklist is cheap. The Sedgewick recovery cost roughly half a session — discovery, plan, implementation, and provisioning — for a failure mode that any one of the four bullets above would have caught at PR review.
+The checklist is cheap. The Sedgewick recovery cost roughly half a session — discovery, plan, implementation, and provisioning — for a failure mode that any one of the five bullets above would have caught at PR review.
