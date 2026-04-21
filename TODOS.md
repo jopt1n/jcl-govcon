@@ -50,12 +50,13 @@ Deferred work surfaced during the `/review` pass on `fix/batch-import-hang` (202
 
 ---
 
-### Drain the ~332 stuck PENDING rows from the prior batch run
+### Advisory lock in weekly-crawl doesn't pin a postgres-js connection
 
-**Files:** `scripts/batch-classify.ts` (unchanged CLI wrapper)
-**Why:** After Commit 4 of the Sedgewick cleanup lands, `submitBatchClassify({ since })` scopes the weekly-crawl path to the current 7-day window, so the ~332 pre-existing PENDING rows (createdAt well before this week) will be orphaned — they'll never be picked up by the weekly cron. The CLI script remains the manual backfill tool.
-**Fix:** One-shot manual run: `npx tsx scripts/batch-classify.ts --pending-only` (no `--since` flag). Safe to run anytime after Commit 4 lands on `fix/batch-import-hang`. Will cost ~$1.30 at xAI batch pricing (332 × ~$0.004).
-**Priority:** P2 follow-up. Not a blocker for merge.
+**File:** `src/app/api/cron/weekly-crawl/route.ts:125-162`
+**Why:** `db.execute(sql\`SELECT pg_try_advisory_lock(...)\`)`and`db.execute(sql\`SELECT pg_advisory_unlock(...)\`)`run on the unpinned postgres-js pool — acquire and release can land on different pool connections. Release may return`false`on a connection that doesn't hold the lock, leaving the real lock held on the acquiring connection until that connection's`idle_timeout: 20s`inactivity expires it. The code comment at line 128 is also wrong — Postgres releases session locks on session/connection END, not on pool return.
+**Impact:** Under cron-only load (one fire per week), the lock releases naturally within 20s of pool idle, so the bug is probably benign for this workload. Under manual concurrent curls or future load, it surfaces as spurious "another weekly-crawl in progress" skips.
+**Fix:** Wrap the try/finally body in`sql.reserve()`(postgres-js 3.4+ API) or`sql.begin()`; either pins one connection for the lifetime of the lock. Add a real pool test that grabs two connections and verifies acquire/release hit the same connection.
+**Priority:** P2. Not a firing blocker; wait until real cron run data shows whether it bites before spending on the fix. Surfaced during the Sedgewick discovery audit (2026-04-21).
 
 ### E2E test infrastructure (Playwright)
 

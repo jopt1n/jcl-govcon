@@ -92,16 +92,26 @@ Automated government contract pipeline: SAM.gov → PostgreSQL → Gemini AI cla
 - [x] Shared `RESTRICTED_SET_ASIDE_PREFIXES` for "qualifying only" filter
 - [x] Remove all-zero DashboardStats summary row
 
-## Phase 8.6: CHOSEN tier — IN FLIGHT on `feat/chosen-tier` (2026-04-19)
+## Phase 8.6: CHOSEN tier — COMPLETE (2026-04-20)
 
-User-driven promotion above AI's GOOD classification; supports triage of the 259-contract backlog. Full spec: `docs/plans/chosen-tier.md`. See `docs/handoff-2026-04-19.md` for decisions + state.
+User-driven promotion above AI's GOOD classification. Full spec: `docs/plans/chosen-tier.md`. Shipped as PR #2 (merge commit `fcfcea0`).
 
 - [x] Commit 1: schema (promoted + promotedAt + audit_log table + partial index) + plan doc + E2E TODO
 - [x] Commit 2: API (PATCH promoted with atomic audit transaction + COALESCE, GET ?promoted= filter with 400 validation)
 - [x] Commit 3: styling (gold CSS tokens + Kanban card state-exclusive border + contract-detail Promote button/pill/top-accent) + codebase-wide Tailwind alpha-token fix
 - [x] Commit 4: /inbox inline ★ Promote button + `removeFromInbox` closure-based helper
-- [ ] Commit 5: /chosen page (flat list sorted by promotedAt DESC, Load more 50/page, empty/error/loaded states, Demote per card) + sidebar `useNavCounts` (Promise.allSettled) + Chosen nav item with Star + gold badge
-- [ ] Final verification + `/qa` + `/ship` as `feat: Chosen tier — user-driven promotion above AI's GOOD`
+- [x] Commit 5: /chosen page (flat list sorted by promotedAt DESC, Load more 50/page, empty/error/loaded states, Demote per card) + sidebar `useNavCounts` (Promise.allSettled) + Chosen nav item with Star + gold badge
+- [x] `/qa`, `/ship` as PR #2, merged to main
+
+## Phase 8.7: Cron service architecture fix — IN FLIGHT on `fix/cron-service-architecture` (2026-04-21)
+
+Sedgewick shipped with `[[cron]]` blocks that aren't valid Railway schema; Railway silently ignored them and the weekly pipeline had not run since 2026-04-16. Three-service Railway topology replaces the dead config. Full spec: `docs/plans/cron-services.md`.
+
+- [x] Three-service Railway topology: `jcl-govcon-web` (always-on) + `jcl-govcon-weekly-crawl` (Mon 15:00 UTC) + `jcl-govcon-check-batches` (every 30 min). See `docs/deployment-railway.md`.
+- [x] Dockerfile (alpine+curl) + two JSON configs + railway.toml cleanup + deployment doc + reusable infra-review-checklist.
+- [ ] `/review` + `/ship`
+- [ ] Post-merge: provision both cron services in Railway dashboard (`INGEST_SECRET` + `WEB_BASE_URL` as reference vars)
+- [ ] Verify first scheduled fire — smoke-trigger check-batches immediately after provisioning, then wait for Monday 2026-04-27 15:00 UTC weekly-crawl
 
 ## Phase 9: Application Facilitation — NOT STARTED
 
