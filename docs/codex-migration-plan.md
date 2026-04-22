@@ -50,6 +50,32 @@ For project conventions, use:
 3. `CLAUDE.md` for existing project methodology and rules.
 4. Focused docs under `docs/`, especially `docs/infra-review-checklist.md`.
 
+## Verified Codex Compatibility Findings
+
+Sources checked:
+
+- [Codex skills](https://developers.openai.com/codex/skills)
+- [Codex hooks](https://developers.openai.com/codex/hooks)
+- [Codex CLI slash commands](https://developers.openai.com/codex/cli/slash-commands)
+- [Codex app review](https://developers.openai.com/codex/app/review)
+
+Findings:
+
+- Repo-local skills are discovered from `.agents/skills` directories scanned
+  from the current working directory up to `$REPO_ROOT`. Root-level project
+  skills should use `$REPO_ROOT/.agents/skills/<skill-name>/SKILL.md`.
+- User-global skills are discovered from `$HOME/.agents/skills`, not
+  `~/.codex/skills`.
+- Each skill is a directory with a required `SKILL.md`. The `SKILL.md` front
+  matter must include `name` and `description`.
+- Optional Codex metadata belongs inside each skill directory at
+  `agents/openai.yaml`.
+- Do not create a repo-root `.agents/openai.yaml`.
+- Codex hooks are experimental and require a feature flag, so Claude hooks
+  should not be ported in this migration phase.
+- Codex already has built-in `/review`. Claude/G-Stack review behavior should
+  become skills or documented workflows, not custom slash commands.
+
 ## Phase 1: Read-Only Inventory
 
 Status: complete.
@@ -107,23 +133,30 @@ Out of scope:
 
 Status: not approved yet.
 
-Potential target, pending Codex compatibility research:
+Potential targets:
 
-- `.agents/skills/.../SKILL.md`
+- Repo-local project workflows:
+  `.agents/skills/<skill-name>/SKILL.md`.
+- User-global cross-repo workflows:
+  `$HOME/.agents/skills/<skill-name>/SKILL.md`.
+
+Repo-local skill discovery is verified by official Codex docs. Exact skill
+content remains pending and should be designed after reviewing the Claude
+workflow sources.
 
 Precondition:
 
 - Re-check `git check-ignore -v -- .agents .agents/skills <specific-path>`.
 - Complete the later read-only inspection of global Claude setup.
 - Decide which workflows are worth wrapping.
-- Verify whether Codex auto-discovers repo-local skills before relying on this
-  path.
+- Do not create a repo-root `.agents/openai.yaml`. If optional metadata is
+  needed, place it inside each skill as `agents/openai.yaml`.
 
 Likely wrapper candidates:
 
 - Planning review workflow corresponding to `/plan-ceo-review`.
 - Engineering review workflow corresponding to `/plan-eng-review`.
-- Code review workflow corresponding to `/review`.
+- JCL-specific review guidance that complements built-in `/review`.
 - QA workflow corresponding to `/qa`.
 - Shipping / PR workflow corresponding to `/ship`.
 - Handoff workflow corresponding to `/handoff`.
@@ -153,6 +186,10 @@ Rules for that pass:
 
 Research questions:
 
+- Which G-Stack-derived Codex layout claims conflict with official Codex docs?
+  The claimed `~/.codex/skills` path conflicts with the official
+  `$HOME/.agents/skills` user-global location and must not be used for this
+  migration unless future official docs change.
 - Which Claude commands are pure process and can become Codex workflows?
 - Which Claude skills contain reusable project methodology?
 - Which hooks are safety-critical versus convenience automation?
@@ -162,6 +199,12 @@ Research questions:
 ## Non-Portable or High-Risk Items
 
 - Claude Stop hook: auto-stages and auto-commits. Do not port for Codex.
+- Claude/G-Stack hooks: do not port yet. Codex hooks are experimental and
+  behind a feature flag.
+- G-Stack generated Codex layout claims are not source of truth where they
+  conflict with official Codex docs.
+- Do not implement custom slash commands for `/review`; use built-in `/review`
+  or skills/documented workflows.
 - Local settings: may contain machine-specific or sensitive behavior. Summarize
   keys only if inspected later.
 - Unlike `CLAUDE.md`, Codex must not write API keys to `.env` during this
@@ -189,9 +232,17 @@ Approved Phase 2/3 files:
 - `AGENTS.md`
 - `docs/codex-migration-plan.md`
 
-Deferred candidate files, pending compatibility research:
+Deferred candidate files, pending approval:
 
-- `.agents/skills/...`
+- `.agents/skills/jcl-review/SKILL.md`
+- `.agents/skills/jcl-qa/SKILL.md`
+- `.agents/skills/jcl-plan-eng-review/SKILL.md`
+- `.agents/skills/jcl-handoff/SKILL.md`
+- `.agents/skills/jcl-ship-checklist/SKILL.md`
+
+Optional per-skill metadata location:
+
+- `.agents/skills/<skill-name>/agents/openai.yaml`
 
 ## Open Questions
 
