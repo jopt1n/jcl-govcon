@@ -67,6 +67,7 @@ export function KanbanBoard() {
   const [searchInput, setSearchInput] = useState(search);
   const [agencyInput, setAgencyInput] = useState(agencyFilter);
   const [showFilters, setShowFilters] = useState(false);
+  const [archivingIds, setArchivingIds] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     setSearchInput(search);
@@ -99,6 +100,8 @@ export function KanbanBoard() {
         classification: columnId,
         page: String(page),
         limit: String(LIMIT),
+        promoted: "false",
+        watched: "false",
       });
       if (search) params.set("search", search);
       if (agencyFilter) params.set("agency", agencyFilter);
@@ -146,6 +149,44 @@ export function KanbanBoard() {
   useEffect(() => {
     COLUMNS.forEach((col) => fetchColumn(col.id, 1, false));
   }, [fetchColumn]);
+
+  async function archiveContract(contractId: string) {
+    setArchivingIds((prev) => new Set(prev).add(contractId));
+    setColumns((prev) => {
+      const next = { ...prev };
+      for (const columnId of Object.keys(prev) as ColumnId[]) {
+        const hasContract = prev[columnId].contracts.some(
+          (contract) => contract.id === contractId,
+        );
+        if (!hasContract) continue;
+        next[columnId] = {
+          ...prev[columnId],
+          contracts: prev[columnId].contracts.filter(
+            (contract) => contract.id !== contractId,
+          ),
+          total: Math.max(0, prev[columnId].total - 1),
+        };
+      }
+      return next;
+    });
+
+    try {
+      const res = await fetch(`/api/contracts/${contractId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ archived: true }),
+      });
+      if (!res.ok) throw new Error(`PATCH failed: ${res.status}`);
+    } catch {
+      await Promise.all(COLUMNS.map((col) => fetchColumn(col.id, 1, false)));
+    } finally {
+      setArchivingIds((prev) => {
+        const next = new Set(prev);
+        next.delete(contractId);
+        return next;
+      });
+    }
+  }
 
   function handleSearch(e: React.FormEvent) {
     e.preventDefault();
@@ -265,6 +306,8 @@ export function KanbanBoard() {
               loading={state.loading}
               hasMore={state.contracts.length < state.total}
               onLoadMore={() => fetchColumn(col.id, state.page + 1, true)}
+              onArchive={archiveContract}
+              archivingIds={archivingIds}
             />
           );
         })}

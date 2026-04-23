@@ -5,6 +5,7 @@ import { eq, sql } from "drizzle-orm";
 import { generateActionPlan } from "@/lib/ai/classifier";
 import { downloadDocuments } from "@/lib/sam-gov/documents";
 import { extractAllDocumentTexts } from "@/lib/document-text";
+import { getContractWatchMetadata } from "@/lib/watch/service";
 
 /**
  * GET /api/contracts/[id]
@@ -16,11 +17,10 @@ export async function GET(
   { params }: { params: { id: string } },
 ) {
   try {
-    const [contract] = await db
-      .select()
-      .from(contracts)
-      .where(eq(contracts.id, params.id))
-      .limit(1);
+    const [[contract], watchMetadata] = await Promise.all([
+      db.select().from(contracts).where(eq(contracts.id, params.id)).limit(1),
+      getContractWatchMetadata(params.id),
+    ]);
 
     if (!contract) {
       return NextResponse.json(
@@ -29,7 +29,14 @@ export async function GET(
       );
     }
 
-    return NextResponse.json(contract);
+    return NextResponse.json({
+      ...contract,
+      watched: watchMetadata.watched,
+      watchTargetId: watchMetadata.watchTargetId,
+      watchStatus: watchMetadata.watchStatus,
+      watchLastCheckedAt: watchMetadata.watchLastCheckedAt,
+      watchLastAlertedAt: watchMetadata.watchLastAlertedAt,
+    });
   } catch (err) {
     console.error("[api/contracts/id] GET Error:", err);
     return NextResponse.json(
@@ -45,7 +52,8 @@ export async function GET(
 /**
  * PATCH /api/contracts/[id]
  *
- * Update contract: classification, status, notes, userOverride
+ * Update contract: classification, status, notes, userOverride, promoted,
+ * archived
  */
 export async function PATCH(
   req: NextRequest,
@@ -130,6 +138,31 @@ export async function PATCH(
           { error: "Invalid reviewedAt" },
           { status: 400 },
         );
+      }
+    }
+
+    // Manual archive is intentionally orthogonal to classification and
+    // promotion. Store it as a durable tag so weekly SAM.gov metadata refreshes
+    // do not overwrite the user's "skip this" decision.
+    if (body.archived !== undefined) {
+      if (typeof body.archived !== "boolean") {
+        return NextResponse.json(
+          { error: "Invalid archived" },
+          { status: 400 },
+        );
+      }
+
+      if (body.archived) {
+        updates.tags = sql`CASE
+          WHEN COALESCE(${contracts.tags}, '[]'::jsonb) @> '["ARCHIVED"]'::jsonb
+          THEN COALESCE(${contracts.tags}, '[]'::jsonb)
+          ELSE COALESCE(${contracts.tags}, '[]'::jsonb) || '["ARCHIVED"]'::jsonb
+        END`;
+        if (body.reviewedAt === undefined) {
+          updates.reviewedAt = sql`COALESCE(${contracts.reviewedAt}, now())`;
+        }
+      } else {
+        updates.tags = sql`COALESCE(${contracts.tags}, '[]'::jsonb) - 'ARCHIVED'`;
       }
     }
 

@@ -55,7 +55,7 @@ export default async function CrawlRunsPage() {
 
       {rows.length === 0 ? (
         <div className="rounded-lg border border-[var(--border)] bg-[var(--surface)] p-8 text-center text-[var(--text-muted)]">
-          No crawl runs yet. The first weekly run will appear Sunday 03:00 UTC.
+          No crawl runs yet. The first weekly run will appear Friday 15:00 UTC.
         </div>
       ) : (
         <div className="overflow-x-auto rounded-lg border border-[var(--border)] bg-[var(--surface)]">

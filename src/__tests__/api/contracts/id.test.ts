@@ -34,6 +34,7 @@ vi.mock("@/lib/db/schema", () => ({
     reviewedAt: "reviewed_at",
     promoted: "promoted",
     promotedAt: "promoted_at",
+    tags: "tags",
     createdAt: "created_at",
     updatedAt: "updated_at",
   },
@@ -122,6 +123,16 @@ vi.mock("@/lib/db", () => {
     },
   };
 });
+
+vi.mock("@/lib/watch/service", () => ({
+  getContractWatchMetadata: vi.fn().mockResolvedValue({
+    watched: false,
+    watchTargetId: null,
+    watchStatus: null,
+    watchLastCheckedAt: null,
+    watchLastAlertedAt: null,
+  }),
+}));
 
 import { GET, PATCH } from "@/app/api/contracts/[id]/route";
 
@@ -266,6 +277,47 @@ describe("PATCH /api/contracts/[id]", () => {
     const res = await PATCH(req, { params: { id: "test-uuid" } });
 
     expect(res.status).toBe(200);
+  });
+
+  it("returns 400 when archived is not a boolean", async () => {
+    const req = new NextRequest("http://localhost/api/contracts/test-uuid", {
+      method: "PATCH",
+      body: JSON.stringify({ archived: "yes" }),
+      headers: { "Content-Type": "application/json" },
+    });
+    const res = await PATCH(req, { params: { id: "test-uuid" } });
+
+    expect(res.status).toBe(400);
+    const data = await res.json();
+    expect(data.error).toBe("Invalid archived");
+  });
+
+  it("accepts archived:true as a manual archive update", async () => {
+    mockUpdateResult = [{ id: "test-uuid", tags: ["ARCHIVED"] }];
+
+    const req = new NextRequest("http://localhost/api/contracts/test-uuid", {
+      method: "PATCH",
+      body: JSON.stringify({ archived: true }),
+      headers: { "Content-Type": "application/json" },
+    });
+    const res = await PATCH(req, { params: { id: "test-uuid" } });
+
+    expect(res.status).toBe(200);
+    expect(mockTxUpdateCalled).toBe(false);
+  });
+
+  it("accepts archived:false as a manual unarchive update", async () => {
+    mockUpdateResult = [{ id: "test-uuid", tags: [] }];
+
+    const req = new NextRequest("http://localhost/api/contracts/test-uuid", {
+      method: "PATCH",
+      body: JSON.stringify({ archived: false }),
+      headers: { "Content-Type": "application/json" },
+    });
+    const res = await PATCH(req, { params: { id: "test-uuid" } });
+
+    expect(res.status).toBe(200);
+    expect(mockTxUpdateCalled).toBe(false);
   });
 
   // ── CHOSEN tier: promoted field ─────────────────────────────────────

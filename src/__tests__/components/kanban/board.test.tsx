@@ -18,6 +18,7 @@ vi.mock("lucide-react", () => {
     DollarSign: icon,
     Clock: icon,
     Brain: icon,
+    Archive: icon,
     Search: icon,
     Filter: icon,
     X: icon,
@@ -30,6 +31,7 @@ vi.mock("lucide-react", () => {
     Loader2: icon,
     RefreshCw: icon,
     Inbox: icon,
+    Star: icon,
   };
 });
 
@@ -124,6 +126,24 @@ describe("KanbanBoard", () => {
     );
   });
 
+  it("excludes promoted and watched contracts from every main-board column fetch", async () => {
+    render(<KanbanBoard />);
+
+    await waitFor(() => {
+      expect(global.fetch).toHaveBeenCalledTimes(4);
+    });
+
+    const byClass = lastFetchUrlsByClassification();
+    expect(byClass["DEADLINES"]).toContain("promoted=false");
+    expect(byClass["GOOD"]).toContain("promoted=false");
+    expect(byClass["MAYBE"]).toContain("promoted=false");
+    expect(byClass["DISCARD"]).toContain("promoted=false");
+    expect(byClass["DEADLINES"]).toContain("watched=false");
+    expect(byClass["GOOD"]).toContain("watched=false");
+    expect(byClass["MAYBE"]).toContain("watched=false");
+    expect(byClass["DISCARD"]).toContain("watched=false");
+  });
+
   it("shows search input", async () => {
     render(<KanbanBoard />);
     expect(screen.getByPlaceholderText("Search contracts...")).toBeDefined();
@@ -161,6 +181,8 @@ describe("KanbanBoard", () => {
           noticeType: null,
           classification: "GOOD",
           aiReasoning: null,
+          summary: "Alpha summary",
+          actionPlan: null,
           status: "IDENTIFIED",
         },
       ],
@@ -172,6 +194,71 @@ describe("KanbanBoard", () => {
 
     await waitFor(() => {
       expect(screen.getByText("Alpha Contract")).toBeDefined();
+    });
+  });
+
+  it("archives a contract from the dashboard and removes it from every loaded column", async () => {
+    const patchCalls: Array<{ url: string; body: unknown }> = [];
+    const contractData = {
+      data: [
+        {
+          id: "c1",
+          title: "Alpha Contract",
+          agency: "DOD",
+          awardCeiling: "100000",
+          responseDeadline: "2026-05-10T00:00:00.000Z",
+          noticeType: "Solicitation",
+          classification: "GOOD",
+          aiReasoning: null,
+          summary: "Alpha summary",
+          actionPlan: null,
+          status: "IDENTIFIED",
+        },
+      ],
+      pagination: { page: 1, limit: 50, total: 1, totalPages: 1 },
+    };
+
+    global.fetch = vi.fn().mockImplementation((url: string, init?: RequestInit) => {
+      const method = init?.method ?? "GET";
+      if (method === "PATCH") {
+        patchCalls.push({
+          url,
+          body: JSON.parse(init?.body as string),
+        });
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({ id: "c1", tags: ["ARCHIVED"] }),
+        });
+      }
+
+      const classification = new URL(url, "http://localhost").searchParams.get(
+        "classification",
+      );
+      const body =
+        classification === "GOOD" || classification === "DEADLINES"
+          ? contractData
+          : emptyResponse;
+      return Promise.resolve({
+        ok: true,
+        json: () => Promise.resolve(body),
+      });
+    });
+
+    render(<KanbanBoard />);
+
+    await waitFor(() => {
+      expect(screen.getAllByTestId("kanban-card-archive-c1")).toHaveLength(2);
+    });
+
+    const user = userEvent.setup();
+    await user.click(screen.getAllByTestId("kanban-card-archive-c1")[0]);
+
+    await waitFor(() => {
+      expect(patchCalls).toEqual([
+        { url: "/api/contracts/c1", body: { archived: true } },
+      ]);
+      expect(screen.queryAllByTestId("kanban-card-archive-c1")).toHaveLength(0);
+      expect(screen.queryAllByText("Alpha Contract")).toHaveLength(0);
     });
   });
 

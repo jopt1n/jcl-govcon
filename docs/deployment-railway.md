@@ -7,7 +7,7 @@ JCL GovCon runs as three Railway services in a single project, all backed by the
 | Service                    | Role                                                                          | Build                                       | Runtime          | Schedule                      |
 | -------------------------- | ----------------------------------------------------------------------------- | ------------------------------------------- | ---------------- | ----------------------------- |
 | `jcl-govcon-web`           | Always-on Next.js webapp (dashboard, API routes, cron route handlers)         | nixpacks via `railway.toml`                 | persistent       | n/a                           |
-| `jcl-govcon-weekly-crawl`  | Triggers the weekly SAM.gov crawl + xAI batch submission                      | `dockerfiles/cron.Dockerfile` (alpine+curl) | runs once, exits | `0 15 * * 1` (Mon 15:00 UTC)  |
+| `jcl-govcon-weekly-crawl`  | Triggers the weekly SAM.gov crawl + xAI batch submission                      | `dockerfiles/cron.Dockerfile` (alpine+curl) | runs once, exits | `0 15 * * 5` (Fri 15:00 UTC)  |
 | `jcl-govcon-check-batches` | Polls in-flight xAI batches, imports on completion, fires the Telegram digest | `dockerfiles/cron.Dockerfile` (alpine+curl) | runs once, exits | `*/30 * * * *` (every 30 min) |
 
 Postgres lives alongside as the fourth Railway service; all three app services read `DATABASE_URL` from its reference variable.
@@ -24,7 +24,7 @@ sequenceDiagram
     participant SAM as SAM.gov
     participant X as xAI Batch
 
-    R->>C: Mon 15:00 UTC — start container
+    R->>C: Fri 15:00 UTC — start container
     C->>W: POST /api/cron/weekly-crawl<br/>Authorization: Bearer $INGEST_SECRET
     W->>W: authorize() + requireTelegramConfig()
     W->>DB: INSERT crawl_runs (kind=weekly, status=running)
@@ -72,9 +72,9 @@ After the PR landing these files merges to `main`, the two cron services still n
 psql "$DATABASE_URL" -c "SELECT kind, status, created_at FROM crawl_runs ORDER BY created_at DESC LIMIT 5;"
 ```
 
-Expect a new `kind='weekly'` row every Monday 15:00 UTC. `check-batches` only writes when it has work — expect a row only when a batch completed that cycle.
+Expect a new `kind='weekly'` row every Friday 15:00 UTC. `check-batches` only writes when it has work — expect a row only when a batch completed that cycle.
 
-**Manual trigger (for smoke-testing).** Cron service → Deployments → ... menu → "Trigger". Railway runs the `startCommand` immediately outside the cron schedule. Useful before waiting for Monday.
+**Manual trigger (for smoke-testing).** Cron service → Deployments → ... menu → "Trigger". Railway runs the `startCommand` immediately outside the cron schedule. Useful before waiting for Friday.
 
 ## 5. Postmortem
 

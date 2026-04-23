@@ -13,6 +13,8 @@ interface ColumnProps {
   loading: boolean;
   onLoadMore: () => void;
   hasMore: boolean;
+  onArchive?: (contractId: string) => void;
+  archivingIds?: Set<string>;
 }
 
 const colorMap: Record<string, { accent: string; badge: string }> = {
@@ -47,6 +49,8 @@ export function KanbanColumn({
   loading,
   onLoadMore,
   hasMore,
+  onArchive,
+  archivingIds,
 }: ColumnProps) {
   const colors = colorMap[color] ?? colorMap.gray;
 
@@ -80,6 +84,8 @@ export function KanbanColumn({
             key={contract.id}
             contract={contract}
             showClassification={id === "DEADLINES"}
+            onArchive={onArchive}
+            archiveBusy={archivingIds?.has(contract.id) ?? false}
           />
         ))}
 

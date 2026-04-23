@@ -5,7 +5,7 @@
     "dockerfilePath": "dockerfiles/cron.Dockerfile"
   },
   "deploy": {
-    "startCommand": "curl --fail-with-body -sSi -X POST -H \"Authorization: Bearer $INGEST_SECRET\" \"$WEB_BASE_URL/api/cron/check-batches\"",
+    "startCommand": "sh -c 'curl --fail-with-body -sSi -X POST -H \"Authorization: Bearer $INGEST_SECRET\" \"$WEB_BASE_URL/api/cron/check-batches\"'",
     "cronSchedule": "*/30 * * * *",
     "restartPolicyType": "NEVER"
   }

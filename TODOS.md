@@ -6,6 +6,40 @@ Deferred work surfaced during the `/review` pass on `fix/batch-import-hang` (202
 
 ## P1
 
+### GoHighLevel pipeline experiment for watched / chosen contracts
+
+**Files:** TBD — likely a new `src/lib/gohighlevel/` integration layer plus updates to `src/app/pipeline/page.tsx`, contract/watch mutation flows, and any new sync routes or actions that move records into the pipeline.
+**Why:** The app now has three distinct triage states that matter operationally — main dashboard, `/watch`, and `/chosen` — but there is still no defined external sales/application pipeline. Before writing integration code, we need to decide what should actually enter GoHighLevel, when it should enter, and which system owns downstream stage changes so we do not create two competing sources of truth.
+**First slice:** keep this narrow and prove the workflow before building a big sync surface.
+
+- Decide the entry rule:
+  - only `promoted` / Chosen contracts enter GoHighLevel
+  - watched contracts also enter GoHighLevel
+  - or watch stays internal and only Chosen becomes a GoHighLevel opportunity
+- Define source-of-truth boundaries:
+  - does this app own triage and GoHighLevel own pursuit stages
+  - or do stage updates need to flow back into this app
+- Map the first pipeline stages into a GoHighLevel-friendly model:
+  - Watched / Monitoring
+  - Chosen / Qualified
+  - Pursuing
+  - Bid Submitted
+  - Won / Lost
+- Build the smallest viable implementation:
+  - start with one-way creation/update from this app into GoHighLevel
+  - avoid bidirectional sync until the stage ownership question is settled
+  - use manual or explicitly triggered sync first if that keeps failure modes obvious
+- Define what data gets pushed:
+  - contract id
+  - title
+  - agency
+  - deadline
+  - SAM URL
+  - analyst notes / summary
+  - current internal status flags (`promoted`, watch state, archive state if relevant)
+
+**Priority:** P1. This is the next product thread and should be the first TODO tackled in the next implementation chat.
+
 ### CSV export endpoint has no auth
 
 **File:** `src/app/api/contracts/export/route.ts`

@@ -53,6 +53,7 @@ vi.mock("@/lib/db/schema", () => ({
     classification: "classification",
     userOverride: "user_override",
     createdAt: "created_at",
+    tags: "tags",
   },
 }));
 

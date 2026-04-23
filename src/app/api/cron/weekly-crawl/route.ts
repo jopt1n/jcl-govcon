@@ -1,8 +1,9 @@
 /**
  * POST /api/cron/weekly-crawl
  *
- * Fires every Sunday 03:00 UTC via Railway cron. Non-blocking: crawls the
- * last 7 days from SAM.gov, submits an xAI batch, returns immediately.
+ * Fires every Friday 15:00 UTC via Railway cron (8:00 AM Pacific during
+ * daylight saving time). Non-blocking: crawls the last 7 days from SAM.gov,
+ * submits an xAI batch, returns immediately.
  * xAI batches take 30 minutes to 24 hours to complete, so the actual
  * import + digest happens in /api/cron/check-batches which runs every 30
  * minutes.
@@ -257,10 +258,10 @@ async function runWeeklyCrawl(
   // Scoped to createdAt >= sevenDaysAgo so the ~332 pre-existing stuck
   // PENDING rows don't defeat the fast-path skip. The WHERE clause here
   // MUST be an exact structural match for submitBatchClassify's WHERE
-  // below (userOverride=false, classification='PENDING', createdAt >=
-  // sevenDaysAgo) — if they drift, the skip/throw paths become
-  // nondeterministic. Same captured Date is passed to both queries to
-  // eliminate any timestamp drift between calls.
+  // below (userOverride=false, excluding WATCH_IMPORT rows,
+  // classification='PENDING', createdAt >= sevenDaysAgo) — if they drift,
+  // the skip/throw paths become nondeterministic. Same captured Date is
+  // passed to both queries to eliminate any timestamp drift between calls.
   const pendingRows = await db
     .select({ id: contracts.id })
     .from(contracts)
@@ -268,6 +269,7 @@ async function runWeeklyCrawl(
       and(
         eq(contracts.classification, "PENDING"),
         eq(contracts.userOverride, false),
+        sql`NOT (COALESCE(${contracts.tags}, '[]'::jsonb) @> '["WATCH_IMPORT"]'::jsonb)`,
         gte(contracts.createdAt, sevenDaysAgo),
       ),
     )

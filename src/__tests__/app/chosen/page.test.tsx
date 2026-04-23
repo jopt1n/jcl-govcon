@@ -18,6 +18,7 @@ vi.mock("lucide-react", () => {
     DollarSign: icon,
     Clock: icon,
     Brain: icon,
+    FileText: icon,
     RefreshCw: icon,
     Star: icon,
   };
@@ -52,6 +53,8 @@ function makeCard(
     noticeType: "Solicitation",
     classification: "GOOD",
     aiReasoning: null,
+    summary: "Chosen contract summary",
+    actionPlan: null,
     status: "IDENTIFIED",
     promoted: true,
     ...overrides,
@@ -211,6 +214,26 @@ describe("ChosenPage (Commit 5)", () => {
       "chosen-demote-middle",
       "chosen-demote-oldest",
     ]);
+  });
+
+  it("surfaces analyst summary notes on chosen cards", async () => {
+    installMockFetch({
+      pages: {
+        1: [
+          makeCard("summary", "Summarized contract", {
+            notes:
+              "Real RFQ for on-site media destruction. Confirm missing SOW before bid.",
+          }),
+        ],
+      },
+    });
+    render(<ChosenPage />);
+
+    await waitFor(() => {
+      expect(screen.getByTestId("card-notes-preview")).toBeDefined();
+    });
+
+    expect(screen.getByText(/Real RFQ for on-site media destruction/i)).toBeDefined();
   });
 
   it("Load more fetches the next page and appends (URL contains page=2)", async () => {

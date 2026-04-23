@@ -84,6 +84,7 @@ export default function PipelinePage() {
       const params = new URLSearchParams({
         limit: "500",
         includeUnreviewed: "true",
+        includeExpired: "true",
       });
       const res = await fetch(`/api/contracts?${params}`);
       const json = await res.json();

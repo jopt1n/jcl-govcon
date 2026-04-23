@@ -8,7 +8,7 @@
  * reviewedAt to now() and optimistically removes the card from the list.
  * Once reviewed, contracts flow into the main Kanban at /.
  *
- * Mobile-first: you check this on your phone Sunday morning.
+ * Mobile-first: you check this on your phone after the Friday crawl.
  */
 
 import { useState, useEffect, useCallback } from "react";
@@ -238,7 +238,7 @@ export default function InboxPage() {
             All caught up
           </div>
           <p className="text-sm text-[var(--text-secondary)] mt-1">
-            No un-triaged contracts. Next weekly run: Sunday 03:00 UTC.
+            No un-triaged contracts. Next weekly run: Friday 15:00 UTC.
           </p>
         </div>
       )}
