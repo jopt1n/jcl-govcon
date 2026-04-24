@@ -31,6 +31,15 @@ type ContractFamilyRow = {
   resourceLinks: string[] | null;
 };
 
+// Any drizzle query-builder: the top-level `db` OR a `tx` passed into a
+// `db.transaction(async (tx) => ...)` callback. Both expose the same
+// select/insert/update/delete surface used below. Callers that want
+// atomicity thread their own `tx` through; callers that don't care can
+// omit the argument and the helper runs its own transaction.
+type DbExecutor =
+  | typeof db
+  | Parameters<Parameters<typeof db.transaction>[0]>[0];
+
 type WatchTargetRow = typeof watchTargets.$inferSelect;
 type WatchTargetLinkRow = typeof watchTargetLinks.$inferSelect;
 type WatchEventRow = typeof watchEvents.$inferSelect;
@@ -119,7 +128,9 @@ const contractFamilySelect = {
   resourceLinks: contracts.resourceLinks,
 };
 
-function serializeSnapshot(snapshot: WatchSnapshot | null): WatchSnapshot | null {
+function serializeSnapshot(
+  snapshot: WatchSnapshot | null,
+): WatchSnapshot | null {
   if (!snapshot) return null;
   return {
     ...snapshot,
@@ -145,7 +156,13 @@ function serializeEvent(event: WatchEventRow): WatchEventView {
   };
 }
 
-async function fetchContractsByIds(ids: string[]): Promise<ContractFamilyRow[]> {
+function hasArchivedTag(tags: string[] | null | undefined): boolean {
+  return (tags ?? []).includes("ARCHIVED");
+}
+
+async function fetchContractsByIds(
+  ids: string[],
+): Promise<ContractFamilyRow[]> {
   if (ids.length === 0) return [];
   return db
     .select(contractFamilySelect)
@@ -199,7 +216,8 @@ function buildLinkedContracts(
       confidence: null,
     };
     current.roles.add(link.linkType);
-    current.confidence = current.confidence ?? (link.confidence as string | null);
+    current.confidence =
+      current.confidence ?? (link.confidence as string | null);
     grouped.set(contract.id, current);
   }
 
@@ -236,8 +254,9 @@ function buildWatchTargetDetail(
 ): WatchTargetDetail {
   const linkedContracts = buildLinkedContracts(target, linkRows, contractRows);
   const primaryContract =
-    linkedContracts.find((contract) => contract.id === target.primaryContractId) ??
-    null;
+    linkedContracts.find(
+      (contract) => contract.id === target.primaryContractId,
+    ) ?? null;
 
   return {
     id: target.id,
@@ -279,7 +298,10 @@ export async function getContractWatchMetadata(
       linkType: watchTargetLinks.linkType,
     })
     .from(watchTargetLinks)
-    .innerJoin(watchTargets, eq(watchTargets.id, watchTargetLinks.watchTargetId))
+    .innerJoin(
+      watchTargets,
+      eq(watchTargets.id, watchTargetLinks.watchTargetId),
+    )
     .where(
       and(
         eq(watchTargetLinks.contractId, contractId),
@@ -319,8 +341,15 @@ export async function listWatchTargets(
   options: ListWatchTargetOptions = {},
 ): Promise<{
   data: WatchTargetSummary[];
-  pagination: { page: number; limit: number; total: number; totalPages: number };
+  pagination: {
+    page: number;
+    limit: number;
+    total: number;
+    totalPages: number;
+  };
 }> {
+  await deactivateWatchTargetsWithoutLiveLinks();
+
   const page = Math.max(1, options.page ?? 1);
   const limit = Math.min(100, Math.max(1, options.limit ?? 50));
   const offset = (page - 1) * limit;
@@ -366,20 +395,20 @@ export async function listWatchTargets(
   return {
     data: targets.map((target) => {
       const currentSnapshot = serializeSnapshot(target.currentSnapshot);
-    const recentEvent = recentEventByTargetId.get(target.id);
-    const recentSummary = recentEvent
-      ? summarizeWatchEvent({
-          eventType: recentEvent.eventType,
-          beforeJson: (recentEvent.beforeJson ?? null) as Record<
-            string,
-            unknown
-          > | null,
-          afterJson: (recentEvent.afterJson ?? null) as Record<
-            string,
-            unknown
-          > | null,
-        })
-      : null;
+      const recentEvent = recentEventByTargetId.get(target.id);
+      const recentSummary = recentEvent
+        ? summarizeWatchEvent({
+            eventType: recentEvent.eventType,
+            beforeJson: (recentEvent.beforeJson ?? null) as Record<
+              string,
+              unknown
+            > | null,
+            afterJson: (recentEvent.afterJson ?? null) as Record<
+              string,
+              unknown
+            > | null,
+          })
+        : null;
       return {
         id: target.id,
         sourceContractId: target.sourceContractId,
@@ -563,31 +592,12 @@ export async function updateWatchTarget(
 
   if (input.active === false) {
     await db.transaction(async (tx) => {
-      await tx
-        .delete(watchTargetLinks)
-        .where(
-          and(
-            eq(watchTargetLinks.watchTargetId, id),
-            eq(watchTargetLinks.linkType, "primary"),
-          ),
-        );
-
-      await tx
-        .update(watchTargets)
-        .set({
-          active: false,
-          status: "INACTIVE",
-          primaryContractId: null,
-          unwatchedAt: now,
-          updatedAt: now,
-        })
-        .where(eq(watchTargets.id, id));
-
-      await tx.insert(auditLog).values({
-        contractId: target.sourceContractId,
-        action: "unwatch",
-        metadata: { watchTargetId: id },
-      });
+      await deactivateWatchTargetInExecutor(
+        tx,
+        id,
+        target.sourceContractId,
+        now,
+      );
     });
   } else if (input.attachContractId) {
     const contractRows = await db
@@ -700,4 +710,175 @@ export async function updateWatchTarget(
     throw new Error("Failed to load updated watch target");
   }
   return detail;
+}
+
+// Core deactivation: delete the primary link, flip the target inactive, and
+// write the `unwatch` audit row. All three statements run on the provided
+// executor (db or tx). Callers decide the atomicity boundary — `updateWatchTarget`
+// wraps it in its own transaction; `deactivateWatchTargetByContractId` can be
+// invoked inside another route's transaction so archive + unwatch are atomic.
+async function deactivateWatchTargetInExecutor(
+  executor: DbExecutor,
+  watchTargetId: string,
+  sourceContractId: string | null,
+  now: Date,
+  reason?: string,
+): Promise<void> {
+  await executor
+    .delete(watchTargetLinks)
+    .where(
+      and(
+        eq(watchTargetLinks.watchTargetId, watchTargetId),
+        eq(watchTargetLinks.linkType, "primary"),
+      ),
+    );
+
+  await executor
+    .update(watchTargets)
+    .set({
+      active: false,
+      status: "INACTIVE",
+      primaryContractId: null,
+      unwatchedAt: now,
+      updatedAt: now,
+    })
+    .where(eq(watchTargets.id, watchTargetId));
+
+  const metadata: Record<string, unknown> = { watchTargetId };
+  if (reason !== undefined) metadata.reason = reason;
+
+  await executor.insert(auditLog).values({
+    contractId: sourceContractId,
+    action: "unwatch",
+    metadata,
+  });
+}
+
+// Public entry point keyed by contract id. Looks up the single active watch
+// target whose source is this contract (enforced unique by
+// `watch_targets_source_contract_id_idx`) and deactivates it.
+//
+// If the caller passes an `executor` (a tx), the lookup + mutations run on
+// that tx — atomic with whatever surrounding work the caller is doing
+// (e.g. archiving the contract). If no executor is passed, the helper runs
+// its own transaction so the three writes can't tear.
+//
+// Returns the deactivated watch target id, or null if there was no active
+// watch target sourced from this contract (a cheap no-op for plain rows).
+export async function deactivateWatchTargetByContractId(
+  contractId: string,
+  reason?: string,
+  executor?: DbExecutor,
+): Promise<{ watchTargetId: string } | null> {
+  const run = async (
+    exec: DbExecutor,
+  ): Promise<{ watchTargetId: string } | null> => {
+    const rows = await exec
+      .select({
+        id: watchTargets.id,
+        sourceContractId: watchTargets.sourceContractId,
+      })
+      .from(watchTargets)
+      .where(
+        and(
+          eq(watchTargets.sourceContractId, contractId),
+          eq(watchTargets.active, true),
+        ),
+      )
+      .limit(1);
+
+    if (rows.length === 0) return null;
+
+    const { id: watchTargetId, sourceContractId } = rows[0];
+    await deactivateWatchTargetInExecutor(
+      exec,
+      watchTargetId,
+      sourceContractId,
+      new Date(),
+      reason,
+    );
+    return { watchTargetId };
+  };
+
+  if (executor) return run(executor);
+  return db.transaction(run);
+}
+
+export async function deactivateWatchTargetsWithoutLiveLinks(
+  targetIds?: string[],
+  executor?: DbExecutor,
+): Promise<string[]> {
+  const dedupedTargetIds = targetIds
+    ? Array.from(new Set(targetIds.filter(Boolean)))
+    : [];
+
+  const run = async (executor: DbExecutor): Promise<string[]> => {
+    const targetWhere = targetIds
+      ? dedupedTargetIds.length > 0
+        ? and(
+            eq(watchTargets.active, true),
+            inArray(watchTargets.id, dedupedTargetIds),
+          )
+        : null
+      : eq(watchTargets.active, true);
+
+    if (targetWhere === null) {
+      return [];
+    }
+
+    const activeTargets = await executor
+      .select({
+        id: watchTargets.id,
+        sourceContractId: watchTargets.sourceContractId,
+      })
+      .from(watchTargets)
+      .where(targetWhere);
+
+    if (activeTargets.length === 0) {
+      return [];
+    }
+
+    const activeTargetIds = activeTargets.map((target) => target.id);
+    const linkRows = await executor
+      .select({
+        watchTargetId: watchTargetLinks.watchTargetId,
+        tags: contracts.tags,
+      })
+      .from(watchTargetLinks)
+      .innerJoin(contracts, eq(contracts.id, watchTargetLinks.contractId))
+      .where(inArray(watchTargetLinks.watchTargetId, activeTargetIds));
+
+    const hasLiveLink = new Map<string, boolean>();
+    for (const row of linkRows) {
+      if (!hasArchivedTag(row.tags)) {
+        hasLiveLink.set(row.watchTargetId, true);
+      } else if (!hasLiveLink.has(row.watchTargetId)) {
+        hasLiveLink.set(row.watchTargetId, false);
+      }
+    }
+
+    const targetsToDeactivate = activeTargets.filter(
+      (target) => hasLiveLink.get(target.id) !== true,
+    );
+
+    if (targetsToDeactivate.length === 0) {
+      return [];
+    }
+
+    const now = new Date();
+    for (const target of targetsToDeactivate) {
+      await deactivateWatchTargetInExecutor(
+        executor,
+        target.id,
+        target.sourceContractId,
+        now,
+        "all_linked_contracts_archived",
+      );
+    }
+
+    return targetsToDeactivate.map((target) => target.id);
+  };
+
+  if (executor) return run(executor);
+  return db.transaction(run);
 }

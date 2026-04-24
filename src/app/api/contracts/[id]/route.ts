@@ -5,7 +5,10 @@ import { eq, sql } from "drizzle-orm";
 import { generateActionPlan } from "@/lib/ai/classifier";
 import { downloadDocuments } from "@/lib/sam-gov/documents";
 import { extractAllDocumentTexts } from "@/lib/document-text";
-import { getContractWatchMetadata } from "@/lib/watch/service";
+import {
+  deactivateWatchTargetsWithoutLiveLinks,
+  getContractWatchMetadata,
+} from "@/lib/watch/service";
 
 /**
  * GET /api/contracts/[id]
@@ -62,6 +65,19 @@ export async function PATCH(
   try {
     const body = await req.json();
     const updates: Record<string, unknown> = {};
+
+    // Archive is terminal — it strips all qualities (demotes + unwatches). A
+    // request that tries to archive and promote in the same PATCH is incoherent;
+    // reject it up front rather than silently letting one win.
+    if (body.archived === true && body.promoted === true) {
+      return NextResponse.json(
+        {
+          error:
+            "Cannot set archived=true and promoted=true in the same request",
+        },
+        { status: 400 },
+      );
+    }
 
     if (body.classification !== undefined) {
       if (
@@ -158,6 +174,14 @@ export async function PATCH(
           THEN COALESCE(${contracts.tags}, '[]'::jsonb)
           ELSE COALESCE(${contracts.tags}, '[]'::jsonb) || '["ARCHIVED"]'::jsonb
         END`;
+        // Archive is terminal: strip the user-promotion quality from the row
+        // itself. The promoted block below runs after this one; for the only
+        // compatible combined case ({ archived: true, promoted: false }) both
+        // assign the same values so ordering is safe. The incompatible case
+        // ({ archived: true, promoted: true }) is rejected at the top of the
+        // handler.
+        updates.promoted = false;
+        updates.promotedAt = null;
         if (body.reviewedAt === undefined) {
           updates.reviewedAt = sql`COALESCE(${contracts.reviewedAt}, now())`;
         }
@@ -201,28 +225,65 @@ export async function PATCH(
 
     updates.updatedAt = new Date();
 
-    // Atomic transaction when promoted is touched: UPDATE and audit_log
-    // INSERT must both persist or both fail. Either operation raising
-    // rolls back the other. IMPORTANT: both calls inside the callback
-    // use the `tx` argument, NOT the outer `db` — using `db` silently
-    // breaks atomicity (the INSERT runs on its own connection).
+    // Atomic transaction when promoted is touched OR archived=true (archive is
+    // terminal and also deactivates any source watch target). IMPORTANT: every
+    // call inside the callback uses the `tx` argument, NOT the outer `db` —
+    // using `db` silently breaks atomicity (the INSERT runs on its own
+    // connection).
     let updated: typeof contracts.$inferSelect | undefined;
-    if (body.promoted !== undefined) {
+    const usesTransaction =
+      body.promoted !== undefined || body.archived === true;
+
+    if (usesTransaction) {
       updated = await db.transaction(async (tx) => {
+        // When archiving, pre-read the pre-update promoted flag inside the tx
+        // so the demote audit row fires exactly when the archive actually
+        // removes a promotion. A SELECT-then-UPDATE is noisier than RETURNING,
+        // but RETURNING only exposes post-update values.
+        let previousPromoted = false;
+        if (body.archived === true) {
+          const [existing] = await tx
+            .select({ promoted: contracts.promoted })
+            .from(contracts)
+            .where(eq(contracts.id, params.id))
+            .limit(1);
+          if (existing) previousPromoted = existing.promoted;
+        }
+
         const [row] = await tx
           .update(contracts)
           .set(updates)
           .where(eq(contracts.id, params.id))
           .returning();
-        if (row) {
-          // Use strict === true so a future relaxation of the typeof guard
-          // above (e.g. accepting truthy values) doesn't silently log
-          // "demote" for 0 / "" / null / undefined payloads.
+        if (!row) return row;
+
+        // Explicit promote/demote audit row — only when archive isn't driving
+        // the change. For { archived: true, promoted: false } the archive
+        // branch below owns the audit row so we don't write two for one action.
+        // Use strict === true so a future relaxation of the typeof guard
+        // doesn't silently log "demote" for 0 / "" / null / undefined payloads.
+        if (body.promoted !== undefined && body.archived !== true) {
           await tx.insert(auditLog).values({
             contractId: params.id,
             action: body.promoted === true ? "promote" : "demote",
           });
         }
+
+        // Archive side effects: record the implicit demote (if we actually
+        // stripped a promotion) and retire any watch family that no longer has
+        // a live linked contract underneath it. This covers the simple
+        // source-contract case and the "last remaining linked contract" case.
+        if (body.archived === true) {
+          if (previousPromoted) {
+            await tx.insert(auditLog).values({
+              contractId: params.id,
+              action: "demote",
+              metadata: { reason: "archive" },
+            });
+          }
+          await deactivateWatchTargetsWithoutLiveLinks(undefined, tx);
+        }
+
         return row;
       });
     } else {

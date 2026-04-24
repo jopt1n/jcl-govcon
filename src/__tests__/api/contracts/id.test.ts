@@ -1,6 +1,10 @@
 import { vi } from "vitest";
 import { NextRequest } from "next/server";
 
+const { mockDeactivateWatchTargetByContractId } = vi.hoisted(() => ({
+  mockDeactivateWatchTargetByContractId: vi.fn().mockResolvedValue(null),
+}));
+
 vi.mock("drizzle-orm", () => ({
   eq: vi.fn(),
   sql: vi.fn((_strings, ..._values) => ({ __sql: true })),
@@ -61,6 +65,11 @@ let mockTxUpdateCalled = false;
 // exact shape of the updates object (e.g., that reviewedAt is a Date vs a
 // COALESCE SQL fragment, when the client sent an explicit reviewedAt).
 let mockTxUpdateSetArg: Record<string, unknown> | null = null;
+// Pre-update SELECT inside the transaction — populated by archive tests that
+// need to assert the handler wrote a `demote` audit row only when the row was
+// previously promoted. Defaults to a non-promoted row so plain archive tests
+// don't leak demote rows.
+const mockTxPreSelectResult: unknown[] = [{ promoted: false }];
 
 vi.mock("@/lib/db", () => {
   const createChain = (resolveValue: unknown) => {
@@ -92,11 +101,15 @@ vi.mock("@/lib/db", () => {
 
   const transactionImpl = async (
     cb: (tx: {
+      select: (...args: unknown[]) => unknown;
       update: (...args: unknown[]) => unknown;
       insert: (...args: unknown[]) => unknown;
     }) => unknown,
   ) => {
     const tx = {
+      select: vi
+        .fn()
+        .mockImplementation(() => createChain(mockTxPreSelectResult)),
       update: vi.fn().mockImplementation(() => {
         mockTxUpdateCalled = true;
         return buildUpdateChainWithSetCapture();
@@ -125,6 +138,7 @@ vi.mock("@/lib/db", () => {
 });
 
 vi.mock("@/lib/watch/service", () => ({
+  deactivateWatchTargetByContractId: mockDeactivateWatchTargetByContractId,
   getContractWatchMetadata: vi.fn().mockResolvedValue({
     watched: false,
     watchTargetId: null,
@@ -143,6 +157,8 @@ beforeEach(() => {
   mockAuditInsertShouldFail = false;
   mockTxUpdateCalled = false;
   mockTxUpdateSetArg = null;
+  mockDeactivateWatchTargetByContractId.mockReset();
+  mockDeactivateWatchTargetByContractId.mockResolvedValue(null);
 });
 
 describe("GET /api/contracts/[id]", () => {
@@ -303,7 +319,12 @@ describe("PATCH /api/contracts/[id]", () => {
     const res = await PATCH(req, { params: { id: "test-uuid" } });
 
     expect(res.status).toBe(200);
-    expect(mockTxUpdateCalled).toBe(false);
+    expect(mockTxUpdateCalled).toBe(true);
+    expect(mockDeactivateWatchTargetByContractId).toHaveBeenCalledTimes(1);
+    expect(mockDeactivateWatchTargetByContractId).toHaveBeenCalledWith(
+      undefined,
+      expect.any(Object),
+    );
   });
 
   it("accepts archived:false as a manual unarchive update", async () => {
