@@ -1,8 +1,8 @@
 import { vi } from "vitest";
 import { NextRequest } from "next/server";
 
-const { mockDeactivateWatchTargetsWithoutLiveLinks } = vi.hoisted(() => ({
-  mockDeactivateWatchTargetsWithoutLiveLinks: vi.fn().mockResolvedValue([]),
+const { mockDeactivateWatchTargetByContractId } = vi.hoisted(() => ({
+  mockDeactivateWatchTargetByContractId: vi.fn().mockResolvedValue(null),
 }));
 
 vi.mock("drizzle-orm", () => ({
@@ -138,8 +138,7 @@ vi.mock("@/lib/db", () => {
 });
 
 vi.mock("@/lib/watch/service", () => ({
-  deactivateWatchTargetsWithoutLiveLinks:
-    mockDeactivateWatchTargetsWithoutLiveLinks,
+  deactivateWatchTargetByContractId: mockDeactivateWatchTargetByContractId,
   getContractWatchMetadata: vi.fn().mockResolvedValue({
     watched: false,
     watchTargetId: null,
@@ -158,8 +157,11 @@ beforeEach(() => {
   mockAuditInsertShouldFail = false;
   mockTxUpdateCalled = false;
   mockTxUpdateSetArg = null;
-  mockDeactivateWatchTargetsWithoutLiveLinks.mockReset();
-  mockDeactivateWatchTargetsWithoutLiveLinks.mockResolvedValue([]);
+  mockDeactivateWatchTargetByContractId.mockReset();
+  mockDeactivateWatchTargetByContractId.mockResolvedValue(null);
+  mockTxPreSelectResult.splice(0, mockTxPreSelectResult.length, {
+    promoted: false,
+  });
 });
 
 describe("GET /api/contracts/[id]", () => {
@@ -310,6 +312,11 @@ describe("PATCH /api/contracts/[id]", () => {
   });
 
   it("accepts archived:true as a manual archive update", async () => {
+    // Archive is now terminal: takes the transaction path so it can atomically
+    // demote + unwatch alongside the tag append. Plain (non-promoted, non-watched)
+    // archive still yields exactly zero audit rows — the demote audit fires
+    // only when the pre-update row was promoted, and the mocked helper returns
+    // null (no watch target found).
     mockUpdateResult = [{ id: "test-uuid", tags: ["ARCHIVED"] }];
 
     const req = new NextRequest("http://localhost/api/contracts/test-uuid", {
@@ -321,14 +328,19 @@ describe("PATCH /api/contracts/[id]", () => {
 
     expect(res.status).toBe(200);
     expect(mockTxUpdateCalled).toBe(true);
-    expect(mockDeactivateWatchTargetsWithoutLiveLinks).toHaveBeenCalledTimes(1);
-    expect(mockDeactivateWatchTargetsWithoutLiveLinks).toHaveBeenCalledWith(
-      undefined,
+    expect(mockAuditInsertCalls).toHaveLength(0);
+    expect(mockDeactivateWatchTargetByContractId).toHaveBeenCalledTimes(1);
+    expect(mockDeactivateWatchTargetByContractId).toHaveBeenCalledWith(
+      "test-uuid",
+      "archive",
       expect.any(Object),
     );
   });
 
   it("accepts archived:false as a manual unarchive update", async () => {
+    // Un-archive is a pure tag removal: no demote, no watch resurrection, no
+    // transaction. Operator must explicitly re-promote / re-watch to restore
+    // those qualities — that's the invariant "archive stripped all qualities."
     mockUpdateResult = [{ id: "test-uuid", tags: [] }];
 
     const req = new NextRequest("http://localhost/api/contracts/test-uuid", {
@@ -340,6 +352,108 @@ describe("PATCH /api/contracts/[id]", () => {
 
     expect(res.status).toBe(200);
     expect(mockTxUpdateCalled).toBe(false);
+    expect(mockDeactivateWatchTargetByContractId).not.toHaveBeenCalled();
+  });
+
+  it("archived:true writes a demote audit row when the row was previously promoted", async () => {
+    // Pre-update read sees promoted=true → archive strips promotion and writes
+    // a single demote audit row tagged with reason:"archive" so retros can
+    // distinguish implicit (archive-driven) from explicit demotes.
+    mockTxPreSelectResult.splice(0, mockTxPreSelectResult.length, {
+      promoted: true,
+    });
+    mockUpdateResult = [
+      { id: "test-uuid", tags: ["ARCHIVED"], promoted: false },
+    ];
+
+    const req = new NextRequest("http://localhost/api/contracts/test-uuid", {
+      method: "PATCH",
+      body: JSON.stringify({ archived: true }),
+      headers: { "Content-Type": "application/json" },
+    });
+    const res = await PATCH(req, { params: { id: "test-uuid" } });
+
+    expect(res.status).toBe(200);
+    expect(mockAuditInsertCalls).toHaveLength(1);
+    expect(mockAuditInsertCalls[0]).toMatchObject({
+      contractId: "test-uuid",
+      action: "demote",
+      metadata: { reason: "archive" },
+    });
+  });
+
+  it("archived:true + promoted:false writes exactly one demote row (archive owns it)", async () => {
+    // Combined payload is allowed but archive drives the audit. The explicit
+    // promote/demote branch is gated on `body.archived !== true`, so we don't
+    // double-log one user action. Reason tag distinguishes the source.
+    mockTxPreSelectResult.splice(0, mockTxPreSelectResult.length, {
+      promoted: true,
+    });
+    mockUpdateResult = [
+      { id: "test-uuid", tags: ["ARCHIVED"], promoted: false },
+    ];
+
+    const req = new NextRequest("http://localhost/api/contracts/test-uuid", {
+      method: "PATCH",
+      body: JSON.stringify({ archived: true, promoted: false }),
+      headers: { "Content-Type": "application/json" },
+    });
+    const res = await PATCH(req, { params: { id: "test-uuid" } });
+
+    expect(res.status).toBe(200);
+    expect(mockAuditInsertCalls).toHaveLength(1);
+    expect(mockAuditInsertCalls[0]).toMatchObject({
+      action: "demote",
+      metadata: { reason: "archive" },
+    });
+  });
+
+  it("rejects { archived:true, promoted:true } as incoherent with 400", async () => {
+    // Archive is terminal (strips promotion). Promote is the opposite action.
+    // Accepting both in one PATCH would require picking a winner silently;
+    // reject up front and let the client decide.
+    const req = new NextRequest("http://localhost/api/contracts/test-uuid", {
+      method: "PATCH",
+      body: JSON.stringify({ archived: true, promoted: true }),
+      headers: { "Content-Type": "application/json" },
+    });
+    const res = await PATCH(req, { params: { id: "test-uuid" } });
+
+    expect(res.status).toBe(400);
+    const data = await res.json();
+    expect(data.error).toBe(
+      "Cannot set archived=true and promoted=true in the same request",
+    );
+    // Nothing else fired: no DB write, no audit row, no watch deactivation.
+    expect(mockTxUpdateCalled).toBe(false);
+    expect(mockAuditInsertCalls).toHaveLength(0);
+    expect(mockDeactivateWatchTargetByContractId).not.toHaveBeenCalled();
+  });
+
+  it("archived:true deactivates the source watch target via the helper", async () => {
+    // The handler's job is to call `deactivateWatchTargetByContractId` inside
+    // the same transaction that writes the ARCHIVED tag. The helper itself
+    // handles the "no active target exists" case (returns null) — mocked here.
+    mockUpdateResult = [
+      { id: "test-uuid", tags: ["ARCHIVED"], promoted: false },
+    ];
+    mockDeactivateWatchTargetByContractId.mockResolvedValue({
+      watchTargetId: "watch-1",
+    });
+
+    const req = new NextRequest("http://localhost/api/contracts/test-uuid", {
+      method: "PATCH",
+      body: JSON.stringify({ archived: true }),
+      headers: { "Content-Type": "application/json" },
+    });
+    const res = await PATCH(req, { params: { id: "test-uuid" } });
+
+    expect(res.status).toBe(200);
+    expect(mockDeactivateWatchTargetByContractId).toHaveBeenCalledWith(
+      "test-uuid",
+      "archive",
+      expect.any(Object),
+    );
   });
 
   // ── CHOSEN tier: promoted field ─────────────────────────────────────

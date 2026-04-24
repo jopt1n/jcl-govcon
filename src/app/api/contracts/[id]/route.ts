@@ -6,7 +6,7 @@ import { generateActionPlan } from "@/lib/ai/classifier";
 import { downloadDocuments } from "@/lib/sam-gov/documents";
 import { extractAllDocumentTexts } from "@/lib/document-text";
 import {
-  deactivateWatchTargetsWithoutLiveLinks,
+  deactivateWatchTargetByContractId,
   getContractWatchMetadata,
 } from "@/lib/watch/service";
 
@@ -270,9 +270,9 @@ export async function PATCH(
         }
 
         // Archive side effects: record the implicit demote (if we actually
-        // stripped a promotion) and retire any watch family that no longer has
-        // a live linked contract underneath it. This covers the simple
-        // source-contract case and the "last remaining linked contract" case.
+        // stripped a promotion) and deactivate the watch target sourced from
+        // this contract. Both are tagged with `reason: "archive"` so retros
+        // can distinguish them from user-initiated demote/unwatch.
         if (body.archived === true) {
           if (previousPromoted) {
             await tx.insert(auditLog).values({
@@ -281,7 +281,7 @@ export async function PATCH(
               metadata: { reason: "archive" },
             });
           }
-          await deactivateWatchTargetsWithoutLiveLinks(undefined, tx);
+          await deactivateWatchTargetByContractId(params.id, "archive", tx);
         }
 
         return row;
