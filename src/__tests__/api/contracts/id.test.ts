@@ -1,8 +1,8 @@
 import { vi } from "vitest";
 import { NextRequest } from "next/server";
 
-const { mockDeactivateWatchTargetByContractId } = vi.hoisted(() => ({
-  mockDeactivateWatchTargetByContractId: vi.fn().mockResolvedValue(null),
+const { mockDeactivateWatchTargetsWithoutLiveLinks } = vi.hoisted(() => ({
+  mockDeactivateWatchTargetsWithoutLiveLinks: vi.fn().mockResolvedValue([]),
 }));
 
 vi.mock("drizzle-orm", () => ({
@@ -138,7 +138,8 @@ vi.mock("@/lib/db", () => {
 });
 
 vi.mock("@/lib/watch/service", () => ({
-  deactivateWatchTargetByContractId: mockDeactivateWatchTargetByContractId,
+  deactivateWatchTargetsWithoutLiveLinks:
+    mockDeactivateWatchTargetsWithoutLiveLinks,
   getContractWatchMetadata: vi.fn().mockResolvedValue({
     watched: false,
     watchTargetId: null,
@@ -157,8 +158,8 @@ beforeEach(() => {
   mockAuditInsertShouldFail = false;
   mockTxUpdateCalled = false;
   mockTxUpdateSetArg = null;
-  mockDeactivateWatchTargetByContractId.mockReset();
-  mockDeactivateWatchTargetByContractId.mockResolvedValue(null);
+  mockDeactivateWatchTargetsWithoutLiveLinks.mockReset();
+  mockDeactivateWatchTargetsWithoutLiveLinks.mockResolvedValue([]);
 });
 
 describe("GET /api/contracts/[id]", () => {
@@ -320,8 +321,8 @@ describe("PATCH /api/contracts/[id]", () => {
 
     expect(res.status).toBe(200);
     expect(mockTxUpdateCalled).toBe(true);
-    expect(mockDeactivateWatchTargetByContractId).toHaveBeenCalledTimes(1);
-    expect(mockDeactivateWatchTargetByContractId).toHaveBeenCalledWith(
+    expect(mockDeactivateWatchTargetsWithoutLiveLinks).toHaveBeenCalledTimes(1);
+    expect(mockDeactivateWatchTargetsWithoutLiveLinks).toHaveBeenCalledWith(
       undefined,
       expect.any(Object),
     );
