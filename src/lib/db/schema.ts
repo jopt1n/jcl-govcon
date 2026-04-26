@@ -71,6 +71,28 @@ export const watchLinkTypeEnum = pgEnum("watch_link_type", [
   "primary",
 ]);
 
+export const familyDecisionEnum = pgEnum("family_decision", [
+  "UNREVIEWED",
+  "PROMOTE",
+  "ARCHIVE",
+]);
+
+export const familyMatchStrategyEnum = pgEnum("family_match_strategy", [
+  "solicitation_number",
+  "title_agency",
+  "attachment_overlap",
+  "manual",
+]);
+
+export const familyMemberRoleEnum = pgEnum("family_member_role", [
+  "current",
+  "older_version",
+  "superseded",
+  "duplicate",
+  "possible_match",
+  "manual_match",
+]);
+
 // ── Tables ─────────────────────────────────────────────────────────────────
 
 export const contracts = pgTable(
@@ -167,6 +189,109 @@ export const contracts = pgTable(
     promotedIdx: index("contracts_promoted_idx")
       .on(table.promotedAt)
       .where(sql`${table.promoted} = true`),
+  }),
+);
+
+export const contractFamilies = pgTable(
+  "contract_families",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    title: text("title").notNull(),
+    solicitationNumber: text("solicitation_number"),
+    agency: text("agency"),
+    currentContractId: uuid("current_contract_id").references(
+      () => contracts.id,
+      { onDelete: "set null" },
+    ),
+    decision: familyDecisionEnum("decision").notNull().default("UNREVIEWED"),
+    needsReview: boolean("needs_review").notNull().default(false),
+    matchStrategy: familyMatchStrategyEnum("match_strategy")
+      .notNull()
+      .default("solicitation_number"),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => ({
+    solicitationNumberIdx: index("contract_families_solicitation_idx").on(
+      table.solicitationNumber,
+    ),
+    currentContractIdx: index("contract_families_current_contract_idx").on(
+      table.currentContractId,
+    ),
+    decisionIdx: index("contract_families_decision_idx").on(
+      table.decision,
+      table.updatedAt,
+    ),
+    needsReviewIdx: index("contract_families_needs_review_idx").on(
+      table.needsReview,
+      table.updatedAt,
+    ),
+  }),
+);
+
+export const contractFamilyMembers = pgTable(
+  "contract_family_members",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    familyId: uuid("family_id")
+      .notNull()
+      .references(() => contractFamilies.id, { onDelete: "cascade" }),
+    contractId: uuid("contract_id")
+      .notNull()
+      .references(() => contracts.id, { onDelete: "cascade" }),
+    memberRole: familyMemberRoleEnum("member_role")
+      .notNull()
+      .default("older_version"),
+    matchConfidence: numeric("match_confidence").notNull().default("1"),
+    matchReason: text("match_reason"),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => ({
+    familyIdx: index("contract_family_members_family_idx").on(
+      table.familyId,
+      table.memberRole,
+    ),
+    uniqueContractIdx: uniqueIndex(
+      "contract_family_members_contract_unique_idx",
+    ).on(table.contractId),
+  }),
+);
+
+export const contractFamilyEvents = pgTable(
+  "contract_family_events",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    familyId: uuid("family_id")
+      .notNull()
+      .references(() => contractFamilies.id, { onDelete: "cascade" }),
+    contractId: uuid("contract_id").references(() => contracts.id, {
+      onDelete: "set null",
+    }),
+    eventType: text("event_type").notNull(),
+    beforeJson: jsonb("before_json"),
+    afterJson: jsonb("after_json"),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => ({
+    familyIdx: index("contract_family_events_family_idx").on(
+      table.familyId,
+      table.createdAt,
+    ),
+    eventTypeIdx: index("contract_family_events_type_idx").on(
+      table.eventType,
+      table.createdAt,
+    ),
   }),
 );
 
