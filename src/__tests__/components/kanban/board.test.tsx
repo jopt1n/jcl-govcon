@@ -126,7 +126,7 @@ describe("KanbanBoard", () => {
     );
   });
 
-  it("excludes promoted and watched contracts from every main-board column fetch", async () => {
+  it("excludes promoted contracts from every main-board column fetch", async () => {
     render(<KanbanBoard />);
 
     await waitFor(() => {
@@ -138,10 +138,10 @@ describe("KanbanBoard", () => {
     expect(byClass["GOOD"]).toContain("promoted=false");
     expect(byClass["MAYBE"]).toContain("promoted=false");
     expect(byClass["DISCARD"]).toContain("promoted=false");
-    expect(byClass["DEADLINES"]).toContain("watched=false");
-    expect(byClass["GOOD"]).toContain("watched=false");
-    expect(byClass["MAYBE"]).toContain("watched=false");
-    expect(byClass["DISCARD"]).toContain("watched=false");
+    expect(byClass["DEADLINES"]).not.toContain("watched=");
+    expect(byClass["GOOD"]).not.toContain("watched=");
+    expect(byClass["MAYBE"]).not.toContain("watched=");
+    expect(byClass["DISCARD"]).not.toContain("watched=");
   });
 
   it("shows search input", async () => {

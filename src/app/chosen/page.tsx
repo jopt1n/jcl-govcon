@@ -1,15 +1,11 @@
 "use client";
 
 /**
- * /chosen — user-driven CHOSEN tier.
+ * /chosen - user-driven promoted opportunity families.
  *
- * Flat list of contracts the user has promoted above AI's classification.
- * Server-sorted by promotedAt DESC. Paginates 50/page with Load more.
- *
- * Three render states, handled explicitly (never conflate empty with error):
- *   - error + retry   → fetch failed; banner with retry button
- *   - empty           → fetch succeeded, zero rows
- *   - loaded          → list of KanbanCard + Demote button per card
+ * Chosen is one card per promoted family, not one card per promoted notice row.
+ * The API preserves the legacy promoted-row fallback while persisted families
+ * exist, so the UI can stay family-shaped without duplicating family members.
  */
 
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -20,8 +16,64 @@ import { cn } from "@/lib/utils";
 
 const PAGE_SIZE = 50;
 
+type PromotedFamilySummary = {
+  familyId: string;
+  decision: "PROMOTE";
+  totalNotices: number;
+  needsReview: boolean;
+  latestEventType: string | null;
+  latestEventAt: string | null;
+  current: ContractCard & {
+    postedDate?: string | Date;
+    reviewedAt?: string | Date | null;
+    promotedAt?: string | Date | null;
+    tags?: string[] | null;
+    createdAt?: string | Date;
+  };
+};
+
+function asCard(family: PromotedFamilySummary): ContractCard {
+  return {
+    ...family.current,
+    responseDeadline: family.current.responseDeadline
+      ? String(family.current.responseDeadline)
+      : null,
+    promoted: true,
+  };
+}
+
+function familyBadge(family: PromotedFamilySummary): string | null {
+  const tags = family.current.tags ?? [];
+  if (
+    family.needsReview ||
+    tags.includes("PROMOTED_FAMILY_REVIEW_NEEDED")
+  ) {
+    return "Needs review";
+  }
+  if (tags.includes("PROMOTED_FAMILY_UPDATE")) {
+    return "Family update";
+  }
+
+  switch (family.latestEventType) {
+    case "new_notice_added":
+      return "New notice";
+    case "notice_progression":
+      return "Progressed";
+    case "deadline_changed":
+      return "Deadline changed";
+    case "documents_added":
+      return "Documents added";
+    default:
+      return null;
+  }
+}
+
+function noticeCountText(count: number): string {
+  return `${count} notice${count === 1 ? "" : "s"}`;
+}
+
 export default function ChosenPage() {
-  const [contracts, setContracts] = useState<ContractCard[]>([]);
+  const [families, setFamilies] = useState<PromotedFamilySummary[]>([]);
   const [total, setTotal] = useState<number | null>(null);
   const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(true);
@@ -29,9 +81,8 @@ export default function ChosenPage() {
   const [error, setError] = useState(false);
   const [demoting, setDemoting] = useState<Set<string>>(new Set());
 
-  // Single in-flight fetch at a time. inFlight ref is the authoritative guard —
-  // state flags are only for UI. A ref avoids the "guard on stale state" bug
-  // where two rapid clicks both read loading===false before either setter runs.
+  // Single in-flight fetch at a time. inFlight ref is the authoritative guard;
+  // state flags are only for UI.
   const inFlight = useRef(false);
 
   const fetchPage = useCallback(
@@ -43,18 +94,17 @@ export default function ChosenPage() {
       setError(false);
       try {
         const params = new URLSearchParams({
-          promoted: "true",
-          includeUnreviewed: "true",
+          decision: "PROMOTE",
           limit: String(PAGE_SIZE),
           page: String(pageNum),
         });
-        const res = await fetch(`/api/contracts?${params}`, {
+        const res = await fetch(`/api/opportunity-families?${params}`, {
           signal: AbortSignal.timeout(15_000),
         });
         const json = await res.json();
         if (!res.ok) throw new Error(json.error ?? "fetch failed");
-        const rows: ContractCard[] = json.data ?? [];
-        setContracts((prev) => (append ? [...prev, ...rows] : rows));
+        const rows: PromotedFamilySummary[] = json.data ?? [];
+        setFamilies((prev) => (append ? [...prev, ...rows] : rows));
         setTotal(json.pagination?.total ?? rows.length);
         setPage(pageNum);
       } catch {
@@ -72,51 +122,40 @@ export default function ChosenPage() {
     fetchPage(1, { append: false });
   }, [fetchPage]);
 
-  // Optimistic demote, refetch-on-failure. Mirrors /inbox's revert pattern
-  // (fetchGroup from the catch block) — snapshot-capture reverts lose data
-  // when two demotes race and both PATCHes fail, because the second's
-  // captured `prev` is already-filtered state from the first. Refetching
-  // resyncs to server truth and avoids the whole class of races.
-  const demote = async (id: string) => {
-    setDemoting((prev) => new Set(prev).add(id));
-    setContracts((cs) => cs.filter((c) => c.id !== id));
+  const demote = async (family: PromotedFamilySummary) => {
+    setDemoting((prev) => new Set(prev).add(family.familyId));
+    setFamilies((rows) => rows.filter((row) => row.familyId !== family.familyId));
     setTotal((t) => (t === null ? t : Math.max(0, t - 1)));
     try {
-      const res = await fetch(`/api/contracts/${id}`, {
+      const res = await fetch(`/api/contracts/${family.current.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ promoted: false }),
       });
       if (!res.ok) throw new Error(`PATCH failed: ${res.status}`);
     } catch {
-      // Resync to server truth. fetchPage guards against overlapping calls
-      // via inFlight — if a refresh is already running, the revert is a no-op
-      // and the in-flight refresh will catch the server state anyway.
       await fetchPage(page, { append: false });
     } finally {
       setDemoting((d) => {
         const next = new Set(d);
-        next.delete(id);
+        next.delete(family.familyId);
         return next;
       });
     }
   };
 
   const isFetching = loading || loadingMore;
-  const hasMore = total !== null && contracts.length < total;
+  const hasMore = total !== null && families.length < total;
 
-  // Client-side sub-count of visible contracts with deadlines in the next
-  // 7 days. Uses only fetched rows — accurate for the loaded page, not a
-  // cross-page aggregate. Good enough for an at-a-glance header stat.
-  const deadlineCount = contracts.reduce((n, c) => {
-    if (!c.responseDeadline) return n;
-    const days = differenceInDays(parseISO(c.responseDeadline), new Date());
+  const deadlineCount = families.reduce((n, family) => {
+    const deadline = family.current.responseDeadline;
+    if (!deadline) return n;
+    const days = differenceInDays(parseISO(String(deadline)), new Date());
     return days >= 0 && days < 7 ? n + 1 : n;
   }, 0);
 
   return (
     <div className="p-4 md:p-6 pt-14 md:pt-6 space-y-4 max-w-6xl mx-auto">
-      {/* Header */}
       <div className="flex items-start justify-between gap-3">
         <div className="flex-1">
           <h1 className="text-2xl font-bold text-[var(--text-primary)] flex items-center gap-2">
@@ -127,13 +166,12 @@ export default function ChosenPage() {
             Chosen
           </h1>
           <p className="text-sm text-[var(--text-secondary)] mt-1">
-            Contracts you&rsquo;ve personally elevated above AI&rsquo;s
-            classification.
+            Promoted opportunity families with the current notice shown.
           </p>
           {total !== null && total > 0 && (
             <p className="text-xs text-[var(--text-muted)] mt-1">
               <strong className="text-[var(--text-primary)]">{total}</strong>{" "}
-              chosen
+              promoted {total === 1 ? "family" : "families"}
               {deadlineCount > 0 && (
                 <>
                   {" "}
@@ -158,7 +196,6 @@ export default function ChosenPage() {
         </button>
       </div>
 
-      {/* Error state — explicit, distinct from empty. Retry re-fetches page 1. */}
       {error && !loading && (
         <div
           data-testid="chosen-error"
@@ -166,7 +203,7 @@ export default function ChosenPage() {
         >
           <AlertTriangle className="w-8 h-8 mx-auto text-[var(--urgent)] mb-2" />
           <div className="text-base font-semibold text-[var(--text-primary)]">
-            Couldn&rsquo;t load chosen contracts
+            Couldn&rsquo;t load chosen families
           </div>
           <p className="text-sm text-[var(--text-secondary)] mt-1">
             Check your connection and try again.
@@ -181,7 +218,6 @@ export default function ChosenPage() {
         </div>
       )}
 
-      {/* Loading state (initial only; Load more has its own spinner) */}
       {loading && !error && (
         <div
           data-testid="chosen-loading"
@@ -191,9 +227,7 @@ export default function ChosenPage() {
         </div>
       )}
 
-      {/* Empty state — distinct from error. Only renders when fetch succeeded
-          and returned zero rows. */}
-      {!loading && !error && contracts.length === 0 && (
+      {!loading && !error && families.length === 0 && (
         <div
           data-testid="chosen-empty"
           className="rounded-lg border border-[var(--border)] bg-[var(--surface)] p-8 text-center"
@@ -212,33 +246,52 @@ export default function ChosenPage() {
         </div>
       )}
 
-      {/* Loaded state — grid of cards */}
-      {!loading && !error && contracts.length > 0 && (
+      {!loading && !error && families.length > 0 && (
         <>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-            {contracts.map((c) => (
-              <div key={c.id} className="relative">
-                <KanbanCard
-                  contract={c}
-                  showClassification={true}
-                  showNotesPreview={true}
-                />
-                <div className="mt-2 flex gap-2">
-                  <button
-                    data-testid={`chosen-demote-${c.id}`}
-                    onClick={(e) => {
-                      e.preventDefault();
-                      demote(c.id);
-                    }}
-                    disabled={demoting.has(c.id)}
-                    className="flex-1 flex items-center justify-center gap-1.5 text-xs font-medium px-3 py-2 rounded-md border border-[var(--border)] bg-[var(--surface-alt)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--surface)] disabled:opacity-50"
-                  >
-                    <Star className="w-3.5 h-3.5" />
-                    {demoting.has(c.id) ? "Demoting…" : "Demote"}
-                  </button>
+            {families.map((family) => {
+              const badge = familyBadge(family);
+              return (
+                <div
+                  key={family.familyId}
+                  data-testid={`chosen-family-${family.familyId}`}
+                  className="relative"
+                >
+                  <KanbanCard
+                    contract={asCard(family)}
+                    showClassification={true}
+                    showNotesPreview={true}
+                  />
+                  <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-[var(--text-muted)]">
+                    <span data-testid={`chosen-family-count-${family.familyId}`}>
+                      {noticeCountText(family.totalNotices)}
+                    </span>
+                    {badge && (
+                      <span
+                        data-testid={`chosen-family-badge-${family.familyId}`}
+                        className="rounded-full border border-[var(--chosen-border)] bg-[var(--chosen-bg)] px-2 py-0.5 font-semibold text-[var(--chosen)]"
+                      >
+                        {badge}
+                      </span>
+                    )}
+                  </div>
+                  <div className="mt-2 flex gap-2">
+                    <button
+                      data-testid={`chosen-demote-${family.current.id}`}
+                      onClick={(e) => {
+                        e.preventDefault();
+                        demote(family);
+                      }}
+                      disabled={demoting.has(family.familyId)}
+                      className="flex-1 flex items-center justify-center gap-1.5 text-xs font-medium px-3 py-2 rounded-md border border-[var(--border)] bg-[var(--surface-alt)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--surface)] disabled:opacity-50"
+                    >
+                      <Star className="w-3.5 h-3.5" />
+                      {demoting.has(family.familyId) ? "Demoting..." : "Demote"}
+                    </button>
+                  </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
 
           {hasMore && (
@@ -249,7 +302,7 @@ export default function ChosenPage() {
                 disabled={isFetching}
                 className="inline-flex items-center gap-1.5 text-sm font-medium px-4 py-2 rounded-md border border-[var(--border)] bg-[var(--surface-alt)] text-[var(--text-primary)] hover:bg-[var(--surface)] disabled:opacity-50"
               >
-                {loadingMore ? "Loading…" : "Load more"}
+                {loadingMore ? "Loading..." : "Load more"}
               </button>
             </div>
           )}

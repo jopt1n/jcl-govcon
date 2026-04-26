@@ -41,14 +41,6 @@ vi.mock("@/lib/db/schema", () => ({
     tags: "tags",
     createdAt: "created_at",
   },
-  watchTargets: {
-    id: "watch_target_id",
-    active: "watch_active",
-  },
-  watchTargetLinks: {
-    watchTargetId: "watch_target_link_watch_target_id",
-    contractId: "watch_contract_id",
-  },
 }));
 
 // Track select call count so first resolves to rows, second to count
@@ -383,35 +375,15 @@ describe("GET /api/contracts", () => {
     expect(res.status).toBe(400);
   });
 
-  it("filters by ?watched=false using an active-watch exclusion subquery", async () => {
+  it("ignores removed ?watched filters without adding watch-table subqueries", async () => {
     const req = new NextRequest("http://localhost/api/contracts?watched=false");
     const res = await GET(req);
 
     expect(res.status).toBe(200);
     const calls = sqlCallText();
-    expect(calls).toContain("NOT EXISTS");
-    expect(calls).toContain("watch_contract_id");
-    expect(calls).toContain("watch_active");
-  });
-
-  it("filters by ?watched=true using an active-watch inclusion subquery", async () => {
-    const req = new NextRequest("http://localhost/api/contracts?watched=true");
-    const res = await GET(req);
-
-    expect(res.status).toBe(200);
-    const calls = sqlCallText();
-    expect(calls).toContain("EXISTS");
-    expect(calls).toContain("watch_contract_id");
-    expect(calls).toContain("watch_active");
-  });
-
-  it("returns 400 for ?watched=1 (not 'true' or 'false')", async () => {
-    const req = new NextRequest("http://localhost/api/contracts?watched=1");
-    const res = await GET(req);
-
-    expect(res.status).toBe(400);
-    const data = await res.json();
-    expect(data.error).toBe("Invalid watched");
+    expect(calls).not.toContain("NOT EXISTS");
+    expect(calls).not.toContain("EXISTS");
+    expect(calls).not.toContain("watch_");
   });
 
   it("?promoted=true sorts rows by promotedAt DESC", async () => {

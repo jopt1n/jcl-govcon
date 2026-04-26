@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { contracts, watchTargetLinks, watchTargets } from "@/lib/db/schema";
+import { contracts } from "@/lib/db/schema";
 import { RESTRICTED_SET_ASIDE_PREFIXES } from "@/lib/sam-gov/set-aside-filter";
 import {
   eq,
@@ -24,7 +24,7 @@ import {
  * List contracts with filters, pagination, search.
  * Query params: classification, search, page, limit, agency, noticeType,
  *               postedAfter, setAsideQualifying, unreviewed, includeUnreviewed,
- *               expired, includeExpired, archived, includeArchived, watched
+ *               expired, includeExpired, archived, includeArchived, promoted
  *
  * noticeType accepts a single value or comma-separated list:
  *   ?noticeType=Solicitation,Presolicitation
@@ -102,10 +102,6 @@ export async function GET(req: NextRequest) {
     // ?promoted=true|false — filter by user-driven promotion. Anything other
     // than those two literal strings is rejected below with 400.
     const promotedParam = searchParams.get("promoted");
-    // ?watched=true|false — filter by whether this contract is linked to an
-    // active watch target. Watch is an orthogonal workflow flag, not a stored
-    // field on contracts, so this compiles down to an EXISTS subquery below.
-    const watchedParam = searchParams.get("watched");
     const offset = (page - 1) * limit;
 
     if (
@@ -115,14 +111,6 @@ export async function GET(req: NextRequest) {
     ) {
       return NextResponse.json({ error: "Invalid promoted" }, { status: 400 });
     }
-    if (
-      watchedParam !== null &&
-      watchedParam !== "true" &&
-      watchedParam !== "false"
-    ) {
-      return NextResponse.json({ error: "Invalid watched" }, { status: 400 });
-    }
-
     const isDeadlines = classification === "DEADLINES";
 
     const conditions: SQL[] = [];
@@ -211,26 +199,6 @@ export async function GET(req: NextRequest) {
       conditions.push(eq(contracts.promoted, true));
     } else if (promotedParam === "false") {
       conditions.push(eq(contracts.promoted, false));
-    }
-
-    if (watchedParam === "true") {
-      conditions.push(sql`EXISTS (
-        SELECT 1
-        FROM ${watchTargetLinks}
-        INNER JOIN ${watchTargets}
-          ON ${watchTargets.id} = ${watchTargetLinks.watchTargetId}
-        WHERE ${watchTargetLinks.contractId} = ${contracts.id}
-          AND ${watchTargets.active} = true
-      )`);
-    } else if (watchedParam === "false") {
-      conditions.push(sql`NOT EXISTS (
-        SELECT 1
-        FROM ${watchTargetLinks}
-        INNER JOIN ${watchTargets}
-          ON ${watchTargets.id} = ${watchTargetLinks.watchTargetId}
-        WHERE ${watchTargetLinks.contractId} = ${contracts.id}
-          AND ${watchTargets.active} = true
-      )`);
     }
 
     const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
