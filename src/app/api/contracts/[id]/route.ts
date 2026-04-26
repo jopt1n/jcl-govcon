@@ -271,9 +271,9 @@ export async function PATCH(
           });
         }
 
-        // Family decision side effects. Member-level promoted state remains on
-        // older notices unless this PATCH directly updated that row; the
-        // family decision is the source of truth for /chosen.
+        // Family decision side effects. The family decision remains the source
+        // of truth, while contracts.promoted is synchronized as a dashboard
+        // filter projection for every family member.
         if (
           runFamilySideEffects &&
           body.promoted === true &&

@@ -3,6 +3,17 @@ import { vi } from "vitest";
 const { mockState } = vi.hoisted(() => ({
   mockState: {
     selectResults: [] as Array<unknown[] | Error>,
+    insertResults: [] as Array<unknown[] | Error>,
+    updateCalls: [] as Array<{
+      table: unknown;
+      set?: Record<string, unknown>;
+      where?: unknown;
+    }>,
+    insertCalls: [] as Array<{
+      table: unknown;
+      values?: unknown;
+      returning?: unknown;
+    }>,
   },
 }));
 
@@ -81,14 +92,23 @@ vi.mock("@/lib/db/schema", () => ({
 type ResolveValue = unknown[];
 
 vi.mock("@/lib/db", () => {
-  const createChain = (resolveValue: ResolveValue) => {
+  const createChain = (
+    resolveValue: ResolveValue,
+    record?: Record<string, unknown>,
+  ) => {
     const handler: ProxyHandler<object> = {
       get(_target, prop) {
         if (prop === "then") {
           return (resolve: (value: ResolveValue) => void) =>
             Promise.resolve(resolveValue).then(resolve);
         }
-        return vi.fn().mockReturnValue(new Proxy({}, handler));
+        return vi.fn().mockImplementation((value: unknown) => {
+          if (prop === "set" && record) record.set = value;
+          if (prop === "where" && record) record.where = value;
+          if (prop === "values" && record) record.values = value;
+          if (prop === "returning" && record) record.returning = value;
+          return new Proxy({}, handler);
+        });
       },
     };
     return new Proxy({}, handler);
@@ -101,13 +121,30 @@ vi.mock("@/lib/db", () => {
         if (value instanceof Error) throw value;
         return createChain(value);
       }),
+      update: vi.fn().mockImplementation((table: unknown) => {
+        const record = { table };
+        mockState.updateCalls.push(record);
+        return createChain([], record);
+      }),
+      insert: vi.fn().mockImplementation((table: unknown) => {
+        const value = mockState.insertResults.shift() ?? [];
+        if (value instanceof Error) throw value;
+        const record = { table };
+        mockState.insertCalls.push(record);
+        return createChain(value, record);
+      }),
     },
   };
 });
 
 import {
   getOpportunityFamilyForContract,
+  linkContractsToPromotedFamilies,
   listPromotedOpportunityFamilies,
+  promoteContractFamily,
+  demoteContractFamily,
+  PROMOTED_FAMILY_REVIEW_NEEDED_TAG,
+  PROMOTED_FAMILY_UPDATE_TAG,
 } from "@/lib/opportunity-family/service";
 import * as drizzle from "drizzle-orm";
 
@@ -158,6 +195,48 @@ function makePromotedContract(
   };
 }
 
+function familyRow(overrides: Record<string, unknown> = {}) {
+  return {
+    id: "family-1",
+    title: "Family title",
+    solicitationNumber: "SOL 001",
+    agency: "Department of Defense",
+    currentContractId: "source",
+    decision: "PROMOTE",
+    needsReview: false,
+    matchStrategy: "solicitation_number",
+    updatedAt: new Date("2026-04-25T12:00:00Z"),
+    ...overrides,
+  };
+}
+
+function memberRow(
+  contract: Record<string, unknown>,
+  overrides: Record<string, unknown> = {},
+) {
+  return {
+    memberRole: "current",
+    matchConfidence: "1",
+    matchReason: "same solicitation number",
+    contract,
+    ...overrides,
+  };
+}
+
+function contractProjectionUpdates(promoted: boolean) {
+  return mockState.updateCalls.filter(
+    (call) =>
+      (call.set as { promoted?: boolean } | undefined)?.promoted === promoted,
+  );
+}
+
+function tagUpdateTexts() {
+  return mockState.updateCalls
+    .map((call) => (call.set as { tags?: unknown } | undefined)?.tags)
+    .filter(Boolean)
+    .map((tags) => JSON.stringify(tags));
+}
+
 function undefinedTableError(tableName = "contract_family_members") {
   return Object.assign(
     new Error(`relation "${tableName}" does not exist`),
@@ -178,6 +257,9 @@ describe("opportunity-family service", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockState.selectResults = [];
+    mockState.insertResults = [];
+    mockState.updateCalls = [];
+    mockState.insertCalls = [];
   });
 
   it("uses canonical solicitation matching when fetching inferred candidates", async () => {
@@ -415,5 +497,197 @@ describe("opportunity-family service", () => {
     expect(result.data[0].familyId).toBe("family-1");
     expect(result.data[0].current.id).toBe("promoted-member");
     expect(result.pagination.total).toBe(1);
+  });
+
+  it("syncs all family member rows to promoted=true when promoting a family", async () => {
+    const otherMember = {
+      ...baseContract,
+      id: "other",
+      noticeId: "notice-other",
+      title: "Other family member",
+      postedDate: new Date("2026-04-01T00:00:00Z"),
+    };
+
+    mockState.selectResults = [
+      [baseContract],
+      [{ familyId: "family-1" }],
+      [familyRow({ decision: "UNREVIEWED" })],
+      [
+        memberRow(baseContract),
+        memberRow(otherMember, { memberRole: "older_version" }),
+      ],
+    ];
+
+    const result = await promoteContractFamily("source");
+
+    expect(result.familyId).toBe("family-1");
+    const [projection] = contractProjectionUpdates(true);
+    expect(projection).toBeDefined();
+    expect(projection.where).toMatchObject({
+      kind: "inArray",
+      left: "contracts.id",
+      right: ["source", "other"],
+    });
+  });
+
+  it("syncs all family member rows to promoted=false when demoting a family", async () => {
+    const promotedSource = makePromotedContract("source");
+    const promotedOther = makePromotedContract("other", {
+      title: "Other family member",
+    });
+
+    mockState.selectResults = [
+      [{ familyId: "family-1" }],
+      [familyRow({ decision: "PROMOTE" })],
+      [
+        memberRow(promotedSource),
+        memberRow(promotedOther, { memberRole: "current" }),
+      ],
+    ];
+
+    const result = await demoteContractFamily("source");
+
+    expect(result.familyId).toBe("family-1");
+    const [projection] = contractProjectionUpdates(false);
+    expect(projection).toBeDefined();
+    expect(projection.set).toMatchObject({
+      promoted: false,
+      promotedAt: null,
+    });
+    expect(projection.where).toMatchObject({
+      kind: "inArray",
+      left: "contracts.id",
+      right: ["source", "other"],
+    });
+  });
+
+  it("syncs a newly linked promoted-family notice to promoted=true", async () => {
+    const existing = makePromotedContract("existing", {
+      title: "Cloud migration support",
+      solicitationNumber: "SOL-001",
+      noticeType: "Presolicitation",
+      postedDate: new Date("2026-03-01T00:00:00Z"),
+    });
+    const linked = {
+      ...baseContract,
+      id: "linked",
+      noticeId: "notice-linked",
+      title: "Cloud migration support",
+      solicitationNumber: "SOL-001",
+      noticeType: "Solicitation",
+      postedDate: new Date("2026-04-01T00:00:00Z"),
+      samUrl: "https://sam.gov/opp/linked",
+    };
+
+    mockState.selectResults = [
+      [linked],
+      [existing],
+      [
+        {
+          familyId: "family-1",
+          currentContractId: "existing",
+          needsReview: false,
+          contract: existing,
+        },
+      ],
+      [familyRow({ currentContractId: "existing" })],
+      [memberRow(existing)],
+      [],
+      [familyRow({ currentContractId: "existing" })],
+      [memberRow(existing)],
+      [familyRow({ currentContractId: "linked" })],
+      [
+        memberRow(linked),
+        memberRow(existing, { memberRole: "superseded" }),
+      ],
+    ];
+
+    const result = await linkContractsToPromotedFamilies(["linked"]);
+
+    expect(result).toMatchObject({ linked: 1, needsReview: 0, skipped: 0 });
+    const projection = contractProjectionUpdates(true).find((call) =>
+      JSON.stringify(call.where).includes("linked"),
+    );
+    expect(projection).toBeDefined();
+    expect(projection?.where).toMatchObject({
+      kind: "inArray",
+      left: "contracts.id",
+      right: ["linked", "existing"],
+    });
+    expect(tagUpdateTexts().some((text) => text.includes(PROMOTED_FAMILY_UPDATE_TAG))).toBe(
+      true,
+    );
+  });
+
+  it("marks ambiguous promoted-family matches for review without update tagging", async () => {
+    const candidate = {
+      ...baseContract,
+      id: "candidate",
+      noticeId: "notice-candidate",
+      title: "Cloud migration support",
+      solicitationNumber: "SOL-001",
+      postedDate: new Date("2026-04-01T00:00:00Z"),
+    };
+    const matchOne = makePromotedContract("match-one", {
+      title: "Cloud migration support",
+      solicitationNumber: "SOL-001",
+    });
+    const matchTwo = makePromotedContract("match-two", {
+      title: "Cloud migration support",
+      solicitationNumber: "SOL-001",
+    });
+
+    mockState.selectResults = [
+      [candidate],
+      [matchOne, matchTwo],
+      [
+        {
+          familyId: "family-1",
+          currentContractId: "match-one",
+          needsReview: false,
+          contract: matchOne,
+        },
+        {
+          familyId: "family-2",
+          currentContractId: "match-two",
+          needsReview: false,
+          contract: matchTwo,
+        },
+      ],
+    ];
+
+    const result = await linkContractsToPromotedFamilies(["candidate"]);
+
+    expect(result).toMatchObject({ linked: 0, needsReview: 1, skipped: 0 });
+
+    const reviewUpdates = mockState.updateCalls.filter(
+      (call) => (call.set as { needsReview?: boolean } | undefined)?.needsReview,
+    );
+    expect(reviewUpdates).toHaveLength(2);
+    expect(tagUpdateTexts().some((text) => text.includes(PROMOTED_FAMILY_REVIEW_NEEDED_TAG))).toBe(
+      true,
+    );
+    expect(tagUpdateTexts().some((text) => text.includes(PROMOTED_FAMILY_UPDATE_TAG))).toBe(
+      false,
+    );
+
+    const reviewEvents = mockState.insertCalls.filter(
+      (call) =>
+        (call.values as { eventType?: string } | undefined)?.eventType ===
+        "possible_match_needs_review",
+    );
+    expect(reviewEvents).toHaveLength(2);
+    for (const event of reviewEvents) {
+      expect(event.values).toMatchObject({
+        contractId: "candidate",
+        eventType: "possible_match_needs_review",
+        afterJson: {
+          candidateContractId: "candidate",
+          candidateNoticeId: "notice-candidate",
+          competingFamilyIds: ["family-1", "family-2"],
+          needsReview: true,
+        },
+      });
+    }
   });
 });

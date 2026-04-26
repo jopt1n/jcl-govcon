@@ -33,6 +33,8 @@ import {
 } from "./core";
 
 export const PROMOTED_FAMILY_UPDATE_TAG = "PROMOTED_FAMILY_UPDATE";
+export const PROMOTED_FAMILY_REVIEW_NEEDED_TAG =
+  "PROMOTED_FAMILY_REVIEW_NEEDED";
 
 type DbExecutor = Pick<typeof db, "insert" | "select" | "update">;
 
@@ -591,6 +593,33 @@ async function addFamilyEvent(
   });
 }
 
+async function syncFamilyPromotedProjection(
+  familyId: string,
+  promoted: boolean,
+  executor: DbExecutor = db,
+  contractIds?: string[],
+) {
+  const ids =
+    contractIds ??
+    (
+      await executor
+        .select({ contractId: contractFamilyMembers.contractId })
+        .from(contractFamilyMembers)
+        .where(eq(contractFamilyMembers.familyId, familyId))
+    ).map((row) => String(row.contractId));
+
+  if (ids.length === 0) return;
+
+  await executor
+    .update(contracts)
+    .set({
+      promoted,
+      promotedAt: promoted ? sql`COALESCE(${contracts.promotedAt}, now())` : null,
+      updatedAt: new Date(),
+    })
+    .where(inArray(contracts.id, ids));
+}
+
 async function createFamilyFromMatches(
   source: ContractRow,
   matches: Array<{ contract: ContractRow; match: FamilyMatchResult }>,
@@ -638,6 +667,15 @@ async function createFamilyFromMatches(
       updatedAt: now,
     })),
   );
+
+  if (decision === "PROMOTE") {
+    await syncFamilyPromotedProjection(
+      familyId,
+      true,
+      executor,
+      matches.map(({ contract }) => contract.id),
+    );
+  }
 
   await addFamilyEvent(
     familyId,
@@ -772,13 +810,28 @@ async function tagPromotedFamilyUpdate(
   contractId: string,
   executor: DbExecutor = db,
 ) {
+  await tagContract(contractId, PROMOTED_FAMILY_UPDATE_TAG, executor);
+}
+
+async function tagPromotedFamilyReviewNeeded(
+  contractId: string,
+  executor: DbExecutor = db,
+) {
+  await tagContract(contractId, PROMOTED_FAMILY_REVIEW_NEEDED_TAG, executor);
+}
+
+async function tagContract(
+  contractId: string,
+  tag: string,
+  executor: DbExecutor = db,
+) {
   await executor
     .update(contracts)
     .set({
       tags: sql`CASE
-        WHEN COALESCE(${contracts.tags}, '[]'::jsonb) @> ${JSON.stringify([PROMOTED_FAMILY_UPDATE_TAG])}::jsonb
+        WHEN COALESCE(${contracts.tags}, '[]'::jsonb) @> ${JSON.stringify([tag])}::jsonb
         THEN COALESCE(${contracts.tags}, '[]'::jsonb)
-        ELSE COALESCE(${contracts.tags}, '[]'::jsonb) || ${JSON.stringify([PROMOTED_FAMILY_UPDATE_TAG])}::jsonb
+        ELSE COALESCE(${contracts.tags}, '[]'::jsonb) || ${JSON.stringify([tag])}::jsonb
       END`,
       updatedAt: new Date(),
     })
@@ -846,6 +899,12 @@ export async function promoteContractFamily(
       { decision: "PROMOTE", sourceContractId: contractId },
       executor,
     );
+    await syncFamilyPromotedProjection(
+      persisted.family.id,
+      true,
+      executor,
+      persisted.members.map((member) => member.contract.id),
+    );
     return {
       familyId: persisted.family.id,
       currentContractId: current?.id ?? persisted.family.currentContractId,
@@ -876,6 +935,12 @@ export async function promoteContractFamily(
       executor,
     );
     const refreshed = await refreshFamilyCurrent(target.familyId, executor);
+    await syncFamilyPromotedProjection(
+      target.familyId,
+      true,
+      executor,
+      refreshed.members.map((member) => member.contract.id),
+    );
     return {
       familyId: target.familyId,
       currentContractId: refreshed.current?.id ?? target.currentContractId,
@@ -916,6 +981,12 @@ export async function demoteContractFamily(
     { decision: "UNREVIEWED", sourceContractId: contractId },
     executor,
   );
+  await syncFamilyPromotedProjection(
+    persisted.family.id,
+    false,
+    executor,
+    persisted.members.map((member) => member.contract.id),
+  );
 
   return { familyId: persisted.family.id };
 }
@@ -941,6 +1012,12 @@ export async function archiveContractFamily(
     { decision: persisted.family.decision },
     { decision: "ARCHIVE", sourceContractId: contractId },
     executor,
+  );
+  await syncFamilyPromotedProjection(
+    persisted.family.id,
+    false,
+    executor,
+    persisted.members.map((member) => member.contract.id),
   );
 
   return { familyId: persisted.family.id };
@@ -990,17 +1067,30 @@ export async function linkContractsToPromotedFamilies(
     const safeMatches = matches.filter((match) => !match.match.requiresReview);
     if (safeMatches.length !== 1) {
       needsReview++;
+      await tagPromotedFamilyReviewNeeded(contract.id);
+      const competingFamilyIds = matches.map((match) => match.familyId);
       for (const match of matches) {
+        await db
+          .update(contractFamilies)
+          .set({
+            needsReview: true,
+            updatedAt: new Date(),
+          })
+          .where(eq(contractFamilies.id, match.familyId));
         await addFamilyEvent(
           match.familyId,
           contract.id,
           "possible_match_needs_review",
-          null,
+          { needsReview: match.needsReview },
           {
-            contractId: contract.id,
+            candidateContractId: contract.id,
+            candidateNoticeId: contract.noticeId,
             matchedContractId: match.matchedContract.id,
+            matchedNoticeId: match.matchedContract.noticeId,
             reason: match.match.reason,
             confidence: match.match.confidence,
+            competingFamilyIds,
+            needsReview: true,
           },
         );
       }
@@ -1027,6 +1117,12 @@ export async function linkContractsToPromotedFamilies(
 
     await tagPromotedFamilyUpdate(contract.id);
     const refreshed = await refreshFamilyCurrent(target.familyId);
+    await syncFamilyPromotedProjection(
+      target.familyId,
+      true,
+      db,
+      refreshed.members.map((member) => member.contract.id),
+    );
     const eventTypes = familyEventTypesForNewNotice(
       previousCurrent,
       refreshed.current,
