@@ -77,7 +77,7 @@ export function CrawlStatus() {
   const [loading, setLoading] = useState(true);
   const [runningAction, setRunningAction] = useState<PipelineAction | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [collapsed, setCollapsed] = useState(false);
+  const [collapsed, setCollapsed] = useState(true);
 
   const fetchStatus = useCallback(async () => {
     try {

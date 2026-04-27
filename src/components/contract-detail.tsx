@@ -19,6 +19,7 @@ import {
   RefreshCw,
   Shield,
   AlertTriangle,
+  Archive,
   Target,
   Zap,
   X,
@@ -27,6 +28,7 @@ import {
 import { cn } from "@/lib/utils";
 import { naicsDescription, pscDescription } from "@/lib/code-descriptions";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 
 interface ActionPlan {
   description: string;
@@ -71,8 +73,14 @@ interface Contract {
   samUrl: string;
   resourceLinks: string[] | null;
   documentsAnalyzed: boolean;
+  tags: string[] | null;
   promoted: boolean;
   promotedAt: string | null;
+  watched: boolean;
+  watchTargetId: string | null;
+  watchStatus: string | null;
+  watchLastCheckedAt: string | null;
+  watchLastAlertedAt: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -92,7 +100,26 @@ const classificationColors: Record<string, string> = {
   PENDING: "bg-blue-500/10 text-blue-500 border-blue-500/30",
 };
 
+function formatWatchStatusLabel(status: string | null): string {
+  switch (status) {
+    case "MATCHED":
+      return "Matched";
+    case "NEEDS_REVIEW":
+      return "Needs Review";
+    case "INACTIVE":
+      return "Inactive";
+    default:
+      return "Monitoring";
+  }
+}
+
+function formatWatchTimestamp(value: string | null): string | null {
+  if (!value) return null;
+  return format(parseISO(value), "MMM d, yyyy 'at' h:mm a");
+}
+
 export function ContractDetail({ contractId }: { contractId: string }) {
+  const router = useRouter();
   const [contract, setContract] = useState<Contract | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -254,7 +281,41 @@ export function ContractDetail({ contractId }: { contractId: string }) {
       if (res.ok) {
         const updated = await res.json();
         setContract(updated);
+        return updated;
       }
+      return null;
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function handleArchiveToggle(isArchived: boolean) {
+    const nextArchived = !isArchived;
+    const updated = await updateField({ archived: nextArchived });
+    if (updated && nextArchived) {
+      router.push("/");
+    }
+  }
+
+  async function handleWatchToggle() {
+    if (!contract) return;
+
+    setSaving(true);
+    try {
+      if (contract.watched && contract.watchTargetId) {
+        await fetch(`/api/watch-targets/${contract.watchTargetId}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ active: false }),
+        });
+      } else {
+        await fetch("/api/watch-targets", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ contractId }),
+        });
+      }
+      await fetchContract();
     } finally {
       setSaving(false);
     }
@@ -319,6 +380,8 @@ export function ContractDetail({ contractId }: { contractId: string }) {
     );
   }
 
+  const isArchived = contract.tags?.includes("ARCHIVED") ?? false;
+
   return (
     <>
       <div className="max-w-5xl mx-auto space-y-6">
@@ -357,6 +420,24 @@ export function ContractDetail({ contractId }: { contractId: string }) {
                   CHOSEN
                 </span>
               )}
+              {isArchived && (
+                <span
+                  data-testid="archive-pill"
+                  className="px-2.5 py-1 text-xs font-semibold rounded-full border bg-slate-500/10 text-slate-400 border-slate-500/30 flex items-center gap-1"
+                >
+                  <Archive className="w-3 h-3" />
+                  ARCHIVED
+                </span>
+              )}
+              {contract.watched && (
+                <span
+                  data-testid="watch-pill"
+                  className="px-2.5 py-1 text-xs font-semibold rounded-full border bg-[var(--accent-10)] text-[var(--accent)] border-[var(--accent-30)] flex items-center gap-1"
+                >
+                  <Eye className="w-3 h-3" />
+                  WATCHING
+                </span>
+              )}
               <span
                 className={cn(
                   "px-2.5 py-1 text-xs font-semibold rounded-full border",
@@ -370,6 +451,46 @@ export function ContractDetail({ contractId }: { contractId: string }) {
             </div>
           </div>
         </div>
+
+        {contract.watched && contract.watchTargetId && (
+          <div
+            data-testid="watch-status-card"
+            className="bg-[var(--surface)] border border-[var(--border)] rounded-lg p-4"
+          >
+            <div className="flex items-start justify-between gap-3 flex-wrap">
+              <div>
+                <div className="text-xs font-semibold uppercase tracking-wide text-[var(--accent)]">
+                  Watch Status
+                </div>
+                <div className="text-sm text-[var(--text-primary)] mt-1">
+                  {formatWatchStatusLabel(contract.watchStatus)}
+                </div>
+                <div className="text-xs text-[var(--text-muted)] mt-2 space-y-1">
+                  {contract.watchLastCheckedAt && (
+                    <div>
+                      Last checked:{" "}
+                      {formatWatchTimestamp(contract.watchLastCheckedAt)}
+                    </div>
+                  )}
+                  {contract.watchLastAlertedAt && (
+                    <div>
+                      Last alert:{" "}
+                      {formatWatchTimestamp(contract.watchLastAlertedAt)}
+                    </div>
+                  )}
+                </div>
+              </div>
+              <Link
+                data-testid="watch-family-link"
+                href={`/watch/${contract.watchTargetId}`}
+                className="inline-flex items-center gap-1.5 text-sm text-[var(--accent)] hover:text-[var(--accent-hover)]"
+              >
+                <Eye className="w-4 h-4" />
+                Open watch family
+              </Link>
+            </div>
+          </div>
+        )}
 
         {/* AI Reasoning + Classify */}
         <div className="bg-[var(--accent-5)] border border-[var(--accent-20)] rounded-lg p-4">
@@ -544,6 +665,27 @@ export function ContractDetail({ contractId }: { contractId: string }) {
                   label stays visible in the badge beside it. */}
               <div>
                 <label className="block text-xs font-medium text-[var(--text-muted)] mb-1">
+                  Watch
+                </label>
+                <button
+                  data-testid="watch-toggle"
+                  onClick={handleWatchToggle}
+                  disabled={saving}
+                  className={cn(
+                    "px-3 py-1.5 text-xs font-medium rounded-lg border transition-all flex items-center gap-1 disabled:opacity-50",
+                    contract.watched
+                      ? "bg-[var(--accent)] text-white border-[var(--accent)] hover:opacity-90"
+                      : "bg-[var(--surface)] border-[var(--accent-30)] text-[var(--accent)] hover:bg-[var(--accent-10)]",
+                  )}
+                  aria-pressed={contract.watched}
+                >
+                  <Eye className="w-3 h-3" />
+                  {contract.watched ? "Unwatch" : "Watch"}
+                </button>
+              </div>
+
+              <div>
+                <label className="block text-xs font-medium text-[var(--text-muted)] mb-1">
                   Chosen
                 </label>
                 <button
@@ -562,6 +704,27 @@ export function ContractDetail({ contractId }: { contractId: string }) {
                     className={cn("w-3 h-3", contract.promoted && "fill-white")}
                   />
                   {contract.promoted ? "Demote" : "Promote"}
+                </button>
+              </div>
+
+              <div>
+                <label className="block text-xs font-medium text-[var(--text-muted)] mb-1">
+                  Archive
+                </label>
+                <button
+                  data-testid="archive-toggle"
+                  onClick={() => handleArchiveToggle(isArchived)}
+                  disabled={saving}
+                  className={cn(
+                    "px-3 py-1.5 text-xs font-medium rounded-lg border transition-all flex items-center gap-1 disabled:opacity-50",
+                    isArchived
+                      ? "bg-slate-500/15 text-slate-300 border-slate-500/30 hover:bg-slate-500/20"
+                      : "bg-[var(--surface)] border-[var(--border)] text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--surface-alt)]",
+                  )}
+                  aria-pressed={isArchived}
+                >
+                  <Archive className="w-3 h-3" />
+                  {isArchived ? "Unarchive" : "Archive"}
                 </button>
               </div>
 

@@ -29,6 +29,8 @@ vi.mock("@/lib/db/schema", () => ({
     responseDeadline: "response_deadline",
     noticeType: "notice_type",
     aiReasoning: "ai_reasoning",
+    summary: "summary",
+    actionPlan: "action_plan",
     status: "status",
     postedDate: "posted_date",
     userOverride: "user_override",
@@ -36,7 +38,16 @@ vi.mock("@/lib/db/schema", () => ({
     reviewedAt: "reviewed_at",
     promoted: "promoted",
     promotedAt: "promoted_at",
+    tags: "tags",
     createdAt: "created_at",
+  },
+  watchTargets: {
+    id: "watch_target_id",
+    active: "watch_active",
+  },
+  watchTargetLinks: {
+    watchTargetId: "watch_target_link_watch_target_id",
+    contractId: "watch_contract_id",
   },
 }));
 
@@ -92,9 +103,17 @@ beforeEach(() => {
   vi.mocked(drizzleOrm.inArray).mockClear();
   vi.mocked(drizzleOrm.gte).mockClear();
   vi.mocked(drizzleOrm.eq).mockClear();
+  vi.mocked(drizzleOrm.sql).mockClear();
 });
 
 describe("GET /api/contracts", () => {
+  function sqlCallText() {
+    return vi
+      .mocked(drizzleOrm.sql)
+      .mock.calls.map((call) => call.map((part) => String(part)).join(" "))
+      .join("\n");
+  }
+
   it("returns default pagination (page=1, limit=50)", async () => {
     const req = new NextRequest("http://localhost/api/contracts");
     const res = await GET(req);
@@ -103,6 +122,76 @@ describe("GET /api/contracts", () => {
     expect(res.status).toBe(200);
     expect(data.pagination.page).toBe(1);
     expect(data.pagination.limit).toBe(50);
+  });
+
+  it("excludes expired contracts by default using a computed deadline filter", async () => {
+    const req = new NextRequest("http://localhost/api/contracts");
+    const res = await GET(req);
+
+    expect(res.status).toBe(200);
+    const calls = sqlCallText();
+    expect(calls).toContain("response_deadline");
+    expect(calls).toContain("IS NULL");
+    expect(calls).toContain(">= NOW()");
+  });
+
+  it("excludes manually archived contracts by default using the ARCHIVED tag", async () => {
+    const req = new NextRequest("http://localhost/api/contracts");
+    const res = await GET(req);
+
+    expect(res.status).toBe(200);
+    const calls = sqlCallText();
+    expect(calls).toContain("ARCHIVED");
+    expect(calls).toContain("tags");
+  });
+
+  it("filters to archive view with ?archived=true using manual tag or expired deadline", async () => {
+    const req = new NextRequest("http://localhost/api/contracts?archived=true");
+    const res = await GET(req);
+
+    expect(res.status).toBe(200);
+    const calls = sqlCallText();
+    expect(calls).toContain("ARCHIVED");
+    expect(calls).toContain("response_deadline");
+    expect(calls).toContain("< NOW()");
+  });
+
+  it("does not apply archive filters with ?includeArchived=true", async () => {
+    const req = new NextRequest(
+      "http://localhost/api/contracts?includeArchived=true",
+    );
+    const res = await GET(req);
+
+    expect(res.status).toBe(200);
+    const calls = sqlCallText();
+    expect(calls).not.toContain("ARCHIVED");
+    expect(calls).not.toContain("response_deadline");
+  });
+
+  it("filters to only expired contracts with ?expired=true", async () => {
+    const req = new NextRequest("http://localhost/api/contracts?expired=true");
+    const res = await GET(req);
+
+    expect(res.status).toBe(200);
+    const calls = sqlCallText();
+    expect(calls).toContain("response_deadline");
+    expect(calls).toContain("IS NOT NULL");
+    expect(calls).toContain("< NOW()");
+  });
+
+  it("does not apply the computed deadline filter with ?includeExpired=true", async () => {
+    const req = new NextRequest(
+      "http://localhost/api/contracts?includeExpired=true",
+    );
+    const res = await GET(req);
+
+    expect(res.status).toBe(200);
+    const deadlineSqlCalls = vi
+      .mocked(drizzleOrm.sql)
+      .mock.calls.filter((call) =>
+        call.map((part) => String(part)).join(" ").includes("response_deadline"),
+      );
+    expect(deadlineSqlCalls).toHaveLength(0);
   });
 
   it("filters by classification", async () => {
@@ -292,6 +381,37 @@ describe("GET /api/contracts", () => {
     const res = await GET(req);
 
     expect(res.status).toBe(400);
+  });
+
+  it("filters by ?watched=false using an active-watch exclusion subquery", async () => {
+    const req = new NextRequest("http://localhost/api/contracts?watched=false");
+    const res = await GET(req);
+
+    expect(res.status).toBe(200);
+    const calls = sqlCallText();
+    expect(calls).toContain("NOT EXISTS");
+    expect(calls).toContain("watch_contract_id");
+    expect(calls).toContain("watch_active");
+  });
+
+  it("filters by ?watched=true using an active-watch inclusion subquery", async () => {
+    const req = new NextRequest("http://localhost/api/contracts?watched=true");
+    const res = await GET(req);
+
+    expect(res.status).toBe(200);
+    const calls = sqlCallText();
+    expect(calls).toContain("EXISTS");
+    expect(calls).toContain("watch_contract_id");
+    expect(calls).toContain("watch_active");
+  });
+
+  it("returns 400 for ?watched=1 (not 'true' or 'false')", async () => {
+    const req = new NextRequest("http://localhost/api/contracts?watched=1");
+    const res = await GET(req);
+
+    expect(res.status).toBe(400);
+    const data = await res.json();
+    expect(data.error).toBe("Invalid watched");
   });
 
   it("?promoted=true sorts rows by promotedAt DESC", async () => {

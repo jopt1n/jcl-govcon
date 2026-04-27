@@ -218,7 +218,11 @@ export default function ChosenPage() {
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
             {contracts.map((c) => (
               <div key={c.id} className="relative">
-                <KanbanCard contract={c} showClassification={true} />
+                <KanbanCard
+                  contract={c}
+                  showClassification={true}
+                  showNotesPreview={true}
+                />
                 <div className="mt-2 flex gap-2">
                   <button
                     data-testid={`chosen-demote-${c.id}`}

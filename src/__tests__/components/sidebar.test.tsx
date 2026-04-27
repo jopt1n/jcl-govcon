@@ -28,6 +28,8 @@ vi.mock("lucide-react", () => {
     GitBranch: icon,
     Activity: icon,
     Star: icon,
+    Archive: icon,
+    Eye: icon,
     Sun: icon,
     Moon: icon,
   };
@@ -43,9 +45,11 @@ import { Sidebar } from "@/components/sidebar";
 // ──────────────────────────────────────────────────────────────────
 // Fetch scaffolding
 //
-// useNavCounts hits two endpoints in parallel via Promise.allSettled:
+// useNavCounts hits three endpoints in parallel via Promise.allSettled:
 //   GET /api/contracts?unreviewed=true&limit=1&page=1    → inbox badge
+//   GET /api/watch-targets?limit=1&page=1                → watch badge
 //   GET /api/contracts?promoted=true&limit=1&page=1      → chosen badge
+//   GET /api/contracts?archived=true&...                 → archive badge
 //
 // Each fetch is allowed to fail independently. A rejected promise must
 // NOT blank out the other badge. On initial load, a rejected fetch
@@ -66,7 +70,9 @@ function fakeReject() {
 
 function fakeFetch(
   inboxResult: number | "reject",
+  watchResult: number | "reject",
   chosenResult: number | "reject",
+  archiveResult: number | "reject" = 0,
 ) {
   return vi.fn().mockImplementation((url: string) => {
     if (url.includes("unreviewed=true")) {
@@ -74,10 +80,20 @@ function fakeFetch(
         ? fakeReject()
         : Promise.resolve(makeResponse(inboxResult));
     }
+    if (url.includes("/api/watch-targets")) {
+      return watchResult === "reject"
+        ? fakeReject()
+        : Promise.resolve(makeResponse(watchResult));
+    }
     if (url.includes("promoted=true")) {
       return chosenResult === "reject"
         ? fakeReject()
         : Promise.resolve(makeResponse(chosenResult));
+    }
+    if (url.includes("archived=true")) {
+      return archiveResult === "reject"
+        ? fakeReject()
+        : Promise.resolve(makeResponse(archiveResult));
     }
     return Promise.resolve({ ok: false, json: async () => ({}) });
   });
@@ -90,7 +106,7 @@ describe("Sidebar useNavCounts (Commit 5)", () => {
   });
 
   it("renders both badges when both endpoints return totals", async () => {
-    global.fetch = fakeFetch(7, 3) as unknown as typeof global.fetch;
+    global.fetch = fakeFetch(7, 4, 3) as unknown as typeof global.fetch;
     render(<Sidebar />);
 
     // Both badges should show their counts. The mobile nav is hidden (md:hidden
@@ -98,12 +114,26 @@ describe("Sidebar useNavCounts (Commit 5)", () => {
     // assert via visible text inside the desktop <aside>.
     await waitFor(() => {
       expect(screen.getAllByText("7").length).toBeGreaterThan(0);
+      expect(screen.getAllByText("4").length).toBeGreaterThan(0);
       expect(screen.getAllByText("3").length).toBeGreaterThan(0);
     });
   });
 
+  it("renders the archive badge when expired contracts exist", async () => {
+    global.fetch = fakeFetch(0, 0, 0, 12) as unknown as typeof global.fetch;
+    render(<Sidebar />);
+
+    await waitFor(() => {
+      expect(
+        screen.getAllByTestId("nav-badge-desktop-archive").length,
+      ).toBeGreaterThan(0);
+    });
+    expect(screen.getAllByText("12").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Archive").length).toBeGreaterThan(0);
+  });
+
   it("does not render the chosen badge on initial-load fetch rejection (no last-known value yet)", async () => {
-    global.fetch = fakeFetch(5, "reject") as unknown as typeof global.fetch;
+    global.fetch = fakeFetch(5, 2, "reject") as unknown as typeof global.fetch;
     render(<Sidebar />);
 
     // Inbox still renders with its count
@@ -122,7 +152,7 @@ describe("Sidebar useNavCounts (Commit 5)", () => {
   });
 
   it("does not render the inbox badge on initial-load fetch rejection while chosen succeeds", async () => {
-    global.fetch = fakeFetch("reject", 9) as unknown as typeof global.fetch;
+    global.fetch = fakeFetch("reject", 1, 9) as unknown as typeof global.fetch;
     render(<Sidebar />);
 
     await waitFor(() => {
@@ -137,7 +167,7 @@ describe("Sidebar useNavCounts (Commit 5)", () => {
     // This test asserts the inline `color` style is applied to the badge —
     // if someone drops the prop or reverts to text-white, the contrast bug
     // comes back silently and this test catches it.
-    global.fetch = fakeFetch(2, 3) as unknown as typeof global.fetch;
+    global.fetch = fakeFetch(2, 1, 3) as unknown as typeof global.fetch;
     render(<Sidebar />);
 
     // Mobile nav only mounts when the hamburger is clicked, so only the
@@ -186,7 +216,7 @@ describe("Sidebar useNavCounts (Commit 5)", () => {
     vi.useFakeTimers({ toFake: ["setInterval", "clearInterval"] });
 
     // First poll (initial mount): both succeed. inbox=4, chosen=2.
-    global.fetch = fakeFetch(4, 2) as unknown as typeof global.fetch;
+    global.fetch = fakeFetch(4, 1, 2) as unknown as typeof global.fetch;
     render(<Sidebar />);
 
     await waitFor(() => {
@@ -196,7 +226,7 @@ describe("Sidebar useNavCounts (Commit 5)", () => {
 
     // Second poll: inbox succeeds with a new value, chosen rejects.
     // Chosen badge must still show the last-known 2 (not disappear, not 0).
-    global.fetch = fakeFetch(6, "reject") as unknown as typeof global.fetch;
+    global.fetch = fakeFetch(6, 1, "reject") as unknown as typeof global.fetch;
 
     await act(async () => {
       await vi.advanceTimersByTimeAsync(30_000);
@@ -206,5 +236,18 @@ describe("Sidebar useNavCounts (Commit 5)", () => {
       expect(screen.getAllByText("6").length).toBeGreaterThan(0);
     });
     expect(screen.getAllByText("2").length).toBeGreaterThan(0);
+  });
+
+  it("renders the watch badge when active watch targets exist", async () => {
+    global.fetch = fakeFetch(0, 5, 0, 0) as unknown as typeof global.fetch;
+    render(<Sidebar />);
+
+    await waitFor(() => {
+      expect(
+        screen.getAllByTestId("nav-badge-desktop-watch").length,
+      ).toBeGreaterThan(0);
+    });
+    expect(screen.getAllByText("Watch").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("5").length).toBeGreaterThan(0);
   });
 });

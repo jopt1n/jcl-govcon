@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { vi } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 
 vi.mock("next/link", () => ({
   default: ({ children, href, ...props }: any) => (
@@ -19,18 +19,19 @@ vi.mock("lucide-react", () => {
     DollarSign: icon,
     Clock: icon,
     Brain: icon,
+    FileText: icon,
     Search: icon,
     Filter: icon,
     X: icon,
     ArrowLeft: icon,
     Calendar: icon,
     ExternalLink: icon,
-    FileText: icon,
     Tag: icon,
     Hash: icon,
     Loader2: icon,
     RefreshCw: icon,
     Star: icon,
+    Archive: icon,
   };
 });
 
@@ -61,6 +62,7 @@ function makeContract(overrides: Partial<ContractCard> = {}): ContractCard {
     noticeType: "Solicitation",
     classification: "GOOD",
     aiReasoning: "This is a great opportunity for AI work",
+    summary: "One-sentence summary of what this contract is asking for.",
     status: "IDENTIFIED",
     ...overrides,
   };
@@ -109,18 +111,85 @@ describe("KanbanCard", () => {
     expect(screen.getByText("Solicitation")).toBeDefined();
   });
 
-  it("shows AI reasoning when provided", () => {
+  it("shows the full 'what this contract is' description from actionPlan", () => {
+    const description =
+      "This contract is for enterprise software modernization across multiple legacy systems, including migration planning, delivery, and training for the agency teams.";
+    render(
+      <KanbanCard
+        contract={makeContract({
+          actionPlan: JSON.stringify({ description }),
+          summary: "Short fallback summary",
+        })}
+      />,
+    );
+
+    expect(screen.getByTestId("card-what-this-is")).toBeDefined();
+    expect(
+      screen.getByText(description),
+    ).toBeDefined();
+    expect(screen.queryByText("Short fallback summary")).toBeNull();
+  });
+
+  it("falls back to summary when actionPlan.description is unavailable", () => {
     render(<KanbanCard contract={makeContract()} />);
     expect(
-      screen.getByText("This is a great opportunity for AI work"),
+      screen.getByText("One-sentence summary of what this contract is asking for."),
     ).toBeDefined();
   });
 
-  it("hides AI reasoning when null", () => {
-    render(<KanbanCard contract={makeContract({ aiReasoning: null })} />);
+  it("does not fall back to aiReasoning when summary and actionPlan are missing", () => {
+    render(
+      <KanbanCard
+        contract={makeContract({
+          summary: null,
+          actionPlan: null,
+        })}
+      />,
+    );
+    expect(screen.queryByTestId("card-what-this-is")).toBeNull();
     expect(
       screen.queryByText("This is a great opportunity for AI work"),
     ).toBeNull();
+  });
+
+  it("renders notes preview only when enabled", () => {
+    render(
+      <KanbanCard
+        contract={makeContract({ notes: "Prime with a compliant mobile sub." })}
+        showNotesPreview={true}
+      />,
+    );
+
+    expect(screen.getByTestId("card-notes-preview")).toBeDefined();
+    expect(
+      screen.getByText("Prime with a compliant mobile sub."),
+    ).toBeDefined();
+  });
+
+  it("does not render notes preview when disabled", () => {
+    render(
+      <KanbanCard
+        contract={makeContract({ notes: "Stored note" })}
+        showNotesPreview={false}
+      />,
+    );
+
+    expect(screen.queryByTestId("card-notes-preview")).toBeNull();
+    expect(screen.queryByText("Stored note")).toBeNull();
+  });
+
+  it("does not render archive action by default", () => {
+    render(<KanbanCard contract={makeContract()} />);
+    expect(screen.queryByTestId("kanban-card-archive-test-uuid-123")).toBeNull();
+  });
+
+  it("renders archive action when provided and calls the handler", () => {
+    const onArchive = vi.fn();
+    render(<KanbanCard contract={makeContract()} onArchive={onArchive} />);
+
+    fireEvent.click(screen.getByTestId("kanban-card-archive-test-uuid-123"));
+
+    expect(onArchive).toHaveBeenCalledWith("test-uuid-123");
   });
 
   // ── CHOSEN tier rendering (Commit 3) ────────────────────────────────
@@ -139,16 +208,16 @@ describe("KanbanCard", () => {
     expect(screen.getByTestId("chosen-star")).toBeDefined();
 
     // Gold border classes present
-    const link = screen.getByText("Test Contract Title").closest("a")!;
-    expect(link.className).toContain("border-l-[4px]");
-    expect(link.className).toContain("border-l-[var(--chosen)]");
+    const card = screen.getByTestId("kanban-card");
+    expect(card.className).toContain("border-l-[4px]");
+    expect(card.className).toContain("border-l-[var(--chosen)]");
 
     // Default border classes NOT present — this is the specificity guard.
     // If both sets leaked through, Tailwind would arbitrate by CSS order
     // and the behavior would depend on stylesheet layout. State-exclusive
     // rendering avoids that entirely.
-    expect(link.className).not.toContain("border-l-[3px]");
-    expect(link.className).not.toContain("border-l-[var(--good)]");
+    expect(card.className).not.toContain("border-l-[3px]");
+    expect(card.className).not.toContain("border-l-[var(--good)]");
   });
 
   it("renders default 3px classification border when promoted is falsy", () => {
@@ -157,13 +226,13 @@ describe("KanbanCard", () => {
 
     expect(screen.queryByTestId("chosen-star")).toBeNull();
 
-    const link = screen.getByText("Test Contract Title").closest("a")!;
-    expect(link.className).toContain("border-l-[3px]");
-    expect(link.className).toContain("border-l-[var(--good)]");
+    const card = screen.getByTestId("kanban-card");
+    expect(card.className).toContain("border-l-[3px]");
+    expect(card.className).toContain("border-l-[var(--good)]");
 
     // Gold override classes NOT present on non-promoted cards
-    expect(link.className).not.toContain("border-l-[4px]");
-    expect(link.className).not.toContain("border-l-[var(--chosen)]");
+    expect(card.className).not.toContain("border-l-[4px]");
+    expect(card.className).not.toContain("border-l-[var(--chosen)]");
   });
 
   it("gold border wins on promoted MAYBE and DISCARD cards too", () => {
@@ -175,10 +244,10 @@ describe("KanbanCard", () => {
           contract={makeContract({ classification, promoted: true })}
         />,
       );
-      const link = container.querySelector("a")!;
-      expect(link.className).toContain("border-l-[var(--chosen)]");
-      expect(link.className).not.toContain("border-l-[var(--maybe)]");
-      expect(link.className).not.toContain("border-l-[var(--discard)]");
+      const card = container.querySelector('[data-testid="kanban-card"]')!;
+      expect(card.className).toContain("border-l-[var(--chosen)]");
+      expect(card.className).not.toContain("border-l-[var(--maybe)]");
+      expect(card.className).not.toContain("border-l-[var(--discard)]");
       unmount();
     }
   });

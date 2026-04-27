@@ -176,6 +176,9 @@ export async function submitBatchClassify(
   log("[batch-lib] Querying contracts for unified classification...");
 
   const baseClauses = [eq(contracts.userOverride, false)];
+  baseClauses.push(
+    sql`NOT (COALESCE(${contracts.tags}, '[]'::jsonb) @> '["WATCH_IMPORT"]'::jsonb)`,
+  );
   if (pendingOnly) {
     baseClauses.push(eq(contracts.classification, "PENDING"));
   }

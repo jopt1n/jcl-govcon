@@ -2,12 +2,20 @@
 import { vi } from "vitest";
 import { render, screen, waitFor, fireEvent } from "@testing-library/react";
 
+const { mockPush } = vi.hoisted(() => ({
+  mockPush: vi.fn(),
+}));
+
 vi.mock("next/link", () => ({
   default: ({ children, href, ...props }: any) => (
     <a href={href} {...props}>
       {children}
     </a>
   ),
+}));
+
+vi.mock("next/navigation", () => ({
+  useRouter: () => ({ push: mockPush }),
 }));
 
 vi.mock("lucide-react", () => {
@@ -33,6 +41,7 @@ vi.mock("lucide-react", () => {
     RefreshCw: icon,
     Shield: icon,
     AlertTriangle: icon,
+    Archive: icon,
     Target: icon,
     Zap: icon,
     Star: icon,
@@ -64,7 +73,13 @@ const mockContract = {
   samUrl: "https://sam.gov/opp/123",
   resourceLinks: ["https://example.com/doc.pdf"],
   documentsAnalyzed: true,
+  tags: [] as string[],
   promoted: false,
+  watched: false,
+  watchTargetId: null as string | null,
+  watchStatus: null as string | null,
+  watchLastCheckedAt: null as string | null,
+  watchLastAlertedAt: null as string | null,
   // Typed as `string | null` so overrides in CHOSEN tests can supply an ISO
   // timestamp without TS narrowing the base type to literal null.
   promotedAt: null as string | null,
@@ -89,6 +104,7 @@ function mockFetchNotFound() {
 describe("ContractDetail", () => {
   afterEach(() => {
     vi.restoreAllMocks();
+    mockPush.mockReset();
   });
 
   it("shows loading state initially", () => {
@@ -218,6 +234,62 @@ describe("ContractDetail", () => {
       }) as typeof global.fetch;
   }
 
+  function mockFetchContractWithWatchApis(initial: typeof mockContract) {
+    let current = initial;
+    global.fetch = vi
+      .fn()
+      .mockImplementation((url: string, init?: RequestInit) => {
+        const method = init?.method ?? "GET";
+
+        if (url.startsWith("/api/watch-targets") && method === "POST") {
+          current = {
+            ...current,
+            watched: true,
+            watchTargetId: "watch-1",
+            watchStatus: "MONITORING",
+          };
+          return Promise.resolve({
+            ok: true,
+            json: () => Promise.resolve({ id: "watch-1" }),
+          });
+        }
+
+        if (url === "/api/watch-targets/watch-1" && method === "PATCH") {
+          current = {
+            ...current,
+            watched: false,
+            watchTargetId: null,
+            watchStatus: null,
+          };
+          return Promise.resolve({
+            ok: true,
+            json: () => Promise.resolve({ id: "watch-1", active: false }),
+          });
+        }
+
+        if (url === `/api/contracts/${current.id}` && method === "GET") {
+          return Promise.resolve({
+            ok: true,
+            json: () => Promise.resolve(current),
+          });
+        }
+
+        if (init?.method === "PATCH") {
+          const body = JSON.parse(init.body as string);
+          current = { ...current, ...body };
+          return Promise.resolve({
+            ok: true,
+            json: () => Promise.resolve(current),
+          });
+        }
+
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve(current),
+        });
+      }) as typeof global.fetch;
+  }
+
   it("shows Promote button (not Demote) when promoted=false", async () => {
     mockFetchContract({ ...mockContract, promoted: false });
     render(<ContractDetail contractId="test-uuid" />);
@@ -316,5 +388,207 @@ describe("ContractDetail", () => {
       const body = JSON.parse((patchCall![1] as RequestInit).body as string);
       expect(body).toEqual({ promoted: false });
     });
+  });
+
+  it("shows Archive button when the contract is not manually archived", async () => {
+    mockFetchContract({ ...mockContract, tags: [] });
+    render(<ContractDetail contractId="test-uuid" />);
+    await waitFor(() => {
+      expect(screen.getByTestId("archive-toggle")).toBeDefined();
+    });
+
+    const btn = screen.getByTestId("archive-toggle");
+    expect(btn.textContent).toContain("Archive");
+    expect(btn.textContent).not.toContain("Unarchive");
+    expect(btn.getAttribute("aria-pressed")).toBe("false");
+    expect(screen.queryByTestId("archive-pill")).toBeNull();
+  });
+
+  it("shows Unarchive button and ARCHIVED pill when ARCHIVED tag is present", async () => {
+    mockFetchContract({ ...mockContract, tags: ["SBA", "ARCHIVED"] });
+    render(<ContractDetail contractId="test-uuid" />);
+    await waitFor(() => {
+      expect(screen.getByTestId("archive-toggle")).toBeDefined();
+    });
+
+    const btn = screen.getByTestId("archive-toggle");
+    expect(btn.textContent).toContain("Unarchive");
+    expect(btn.getAttribute("aria-pressed")).toBe("true");
+    expect(screen.getByTestId("archive-pill").textContent).toContain(
+      "ARCHIVED",
+    );
+  });
+
+  it("shows Watch button when the contract is not being watched", async () => {
+    mockFetchContract({ ...mockContract, watched: false, watchTargetId: null });
+    render(<ContractDetail contractId="test-uuid" />);
+    await waitFor(() => {
+      expect(screen.getByTestId("watch-toggle")).toBeDefined();
+    });
+
+    const btn = screen.getByTestId("watch-toggle");
+    expect(btn.textContent).toContain("Watch");
+    expect(btn.getAttribute("aria-pressed")).toBe("false");
+    expect(screen.queryByTestId("watch-pill")).toBeNull();
+  });
+
+  it("shows WATCHING pill and family link when the contract is watched", async () => {
+    mockFetchContract({
+      ...mockContract,
+      watched: true,
+      watchTargetId: "watch-1",
+      watchStatus: "NEEDS_REVIEW",
+      watchLastCheckedAt: "2026-04-22T09:00:00Z",
+      watchLastAlertedAt: "2026-04-22T10:00:00Z",
+    });
+    render(<ContractDetail contractId="test-uuid" />);
+    await waitFor(() => {
+      expect(screen.getByTestId("watch-pill")).toBeDefined();
+    });
+
+    expect(screen.getByTestId("watch-status-card")).toBeDefined();
+    expect(screen.getByTestId("watch-family-link").closest("a")?.href).toContain(
+      "/watch/watch-1",
+    );
+  });
+
+  it("clicking Watch POSTs to /api/watch-targets with the contract id", async () => {
+    mockFetchContractWithWatchApis({
+      ...mockContract,
+      watched: false,
+      watchTargetId: null,
+    });
+    render(<ContractDetail contractId="test-uuid" />);
+    await waitFor(() => {
+      expect(screen.getByTestId("watch-toggle")).toBeDefined();
+    });
+
+    fireEvent.click(screen.getByTestId("watch-toggle"));
+
+    await waitFor(() => {
+      const postCall = vi
+        .mocked(global.fetch)
+        .mock.calls.find(
+          (args) =>
+            args[0] === "/api/watch-targets" &&
+            (args[1] as RequestInit | undefined)?.method === "POST",
+        );
+      expect(postCall).toBeDefined();
+      const body = JSON.parse((postCall![1] as RequestInit).body as string);
+      expect(body).toEqual({ contractId: "test-uuid" });
+    });
+  });
+
+  it("clicking Unwatch PATCHes active:false to the watch target", async () => {
+    mockFetchContractWithWatchApis({
+      ...mockContract,
+      watched: true,
+      watchTargetId: "watch-1",
+      watchStatus: "MATCHED",
+    });
+    render(<ContractDetail contractId="test-uuid" />);
+    await waitFor(() => {
+      expect(screen.getByTestId("watch-toggle")).toBeDefined();
+    });
+
+    fireEvent.click(screen.getByTestId("watch-toggle"));
+
+    await waitFor(() => {
+      const patchCall = vi
+        .mocked(global.fetch)
+        .mock.calls.find(
+          (args) =>
+            args[0] === "/api/watch-targets/watch-1" &&
+            (args[1] as RequestInit | undefined)?.method === "PATCH",
+        );
+      expect(patchCall).toBeDefined();
+      const body = JSON.parse((patchCall![1] as RequestInit).body as string);
+      expect(body).toEqual({ active: false });
+    });
+  });
+
+  it("clicking Archive PATCHes { archived: true }", async () => {
+    mockFetchContract({ ...mockContract, tags: [] });
+    render(<ContractDetail contractId="test-uuid" />);
+    await waitFor(() => {
+      expect(screen.getByTestId("archive-toggle")).toBeDefined();
+    });
+
+    fireEvent.click(screen.getByTestId("archive-toggle"));
+
+    await waitFor(() => {
+      const patchCall = vi
+        .mocked(global.fetch)
+        .mock.calls.find(
+          (args) =>
+            typeof args[0] === "string" &&
+            args[0].startsWith("/api/contracts/test-uuid") &&
+            (args[1] as RequestInit | undefined)?.method === "PATCH",
+        );
+      expect(patchCall).toBeDefined();
+      const body = JSON.parse((patchCall![1] as RequestInit).body as string);
+      expect(body).toEqual({ archived: true });
+    });
+  });
+
+  it("clicking Archive redirects back to the dashboard", async () => {
+    mockFetchContract({ ...mockContract, tags: [] });
+    render(<ContractDetail contractId="test-uuid" />);
+    await waitFor(() => {
+      expect(screen.getByTestId("archive-toggle")).toBeDefined();
+    });
+
+    fireEvent.click(screen.getByTestId("archive-toggle"));
+
+    await waitFor(() => {
+      expect(mockPush).toHaveBeenCalledWith("/");
+    });
+  });
+
+  it("clicking Unarchive PATCHes { archived: false }", async () => {
+    mockFetchContract({ ...mockContract, tags: ["ARCHIVED"] });
+    render(<ContractDetail contractId="test-uuid" />);
+    await waitFor(() => {
+      expect(screen.getByTestId("archive-toggle")).toBeDefined();
+    });
+
+    fireEvent.click(screen.getByTestId("archive-toggle"));
+
+    await waitFor(() => {
+      const patchCall = vi
+        .mocked(global.fetch)
+        .mock.calls.find(
+          (args) =>
+            typeof args[0] === "string" &&
+            args[0].startsWith("/api/contracts/test-uuid") &&
+            (args[1] as RequestInit | undefined)?.method === "PATCH",
+        );
+      expect(patchCall).toBeDefined();
+      const body = JSON.parse((patchCall![1] as RequestInit).body as string);
+      expect(body).toEqual({ archived: false });
+    });
+  });
+
+  it("clicking Unarchive does not redirect", async () => {
+    mockFetchContract({ ...mockContract, tags: ["ARCHIVED"] });
+    render(<ContractDetail contractId="test-uuid" />);
+    await waitFor(() => {
+      expect(screen.getByTestId("archive-toggle")).toBeDefined();
+    });
+
+    fireEvent.click(screen.getByTestId("archive-toggle"));
+
+    await waitFor(() => {
+      const patchCall = vi
+        .mocked(global.fetch)
+        .mock.calls.find(
+          (args) =>
+            typeof args[0] === "string" &&
+            args[0].startsWith("/api/contracts/test-uuid") &&
+            (args[1] as RequestInit | undefined)?.method === "PATCH",
+        );
+      expect(patchCall).toBeDefined();
+    });
+    expect(mockPush).not.toHaveBeenCalled();
   });
 });

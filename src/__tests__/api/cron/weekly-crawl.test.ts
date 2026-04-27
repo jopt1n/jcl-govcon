@@ -8,8 +8,8 @@
  *
  * The route is complex (DB insert/update, runBulkCrawl, submitBatchClassify,
  * telegram, advisory lock). Every external dependency is mocked. The DB mock
- * uses a thin chainable proxy plus a configurable `execute` function for the
- * advisory lock SELECTs.
+ * uses a thin chainable proxy plus a configurable reserved postgres connection
+ * for the advisory lock SELECTs.
  */
 
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
@@ -18,7 +18,9 @@ import { NextRequest } from "next/server";
 // ── Mock state (reset in beforeEach) ─────────────────────────────────────
 let insertedRows: Array<Record<string, unknown>> = [];
 let updatedRows: Array<{ setClause: Record<string, unknown> }> = [];
-let executeCalls: string[] = [];
+let reservedSqlCalls: string[] = [];
+let reserveCalls = 0;
+let releaseCalls = 0;
 let lockAcquired = true; // pg_try_advisory_lock outcome
 let selectResult: unknown[] = [{ id: "contract-1" }];
 
@@ -53,6 +55,7 @@ vi.mock("@/lib/db/schema", () => ({
     classification: "classification",
     userOverride: "user_override",
     createdAt: "created_at",
+    tags: "tags",
   },
 }));
 
@@ -77,18 +80,31 @@ vi.mock("@/lib/db", () => ({
       }),
     })),
     select: vi.fn().mockImplementation(() => makeChain(selectResult)),
-    execute: vi.fn().mockImplementation((arg: { __sql?: string }) => {
-      const sqlText = arg?.__sql ?? "";
-      executeCalls.push(sqlText);
-      if (sqlText.includes("pg_try_advisory_lock")) {
-        return Promise.resolve({ rows: [{ locked: lockAcquired }] });
-      }
-      if (sqlText.includes("pg_advisory_unlock")) {
-        return Promise.resolve({ rows: [{ pg_advisory_unlock: true }] });
-      }
-      return Promise.resolve({ rows: [] });
+  },
+  postgresClient: {
+    reserve: vi.fn().mockImplementation(async () => {
+      reserveCalls++;
+      return Object.assign(
+        vi.fn().mockImplementation((strings: TemplateStringsArray) => {
+          const sqlText = strings.join("?");
+          reservedSqlCalls.push(sqlText);
+          if (sqlText.includes("pg_try_advisory_lock")) {
+            return Promise.resolve([{ locked: lockAcquired }]);
+          }
+          if (sqlText.includes("pg_advisory_unlock")) {
+            return Promise.resolve([{ pg_advisory_unlock: true }]);
+          }
+          return Promise.resolve([]);
+        }),
+        {
+          release: vi.fn().mockImplementation(() => {
+            releaseCalls++;
+          }),
+        },
+      );
     }),
   },
+  closeDb: vi.fn().mockResolvedValue(undefined),
 }));
 
 const mockRunBulkCrawl = vi.fn();
@@ -128,7 +144,9 @@ describe("POST /api/cron/weekly-crawl", () => {
     delete process.env.TELEGRAM_CHAT_ID;
     insertedRows = [];
     updatedRows = [];
-    executeCalls = [];
+    reservedSqlCalls = [];
+    reserveCalls = 0;
+    releaseCalls = 0;
     lockAcquired = true;
     selectResult = [];
     mockRunBulkCrawl.mockReset();
@@ -191,6 +209,11 @@ describe("POST /api/cron/weekly-crawl", () => {
       expect(json.skipped).toBe("another weekly-crawl in progress");
       expect(insertedRows).toHaveLength(0);
       expect(mockRunBulkCrawl).not.toHaveBeenCalled();
+      expect(reserveCalls).toBe(1);
+      expect(releaseCalls).toBe(1);
+      expect(
+        reservedSqlCalls.some((s) => s.includes("pg_advisory_unlock")),
+      ).toBe(false);
     });
 
     it("proceeds when lock acquired and releases it in finally", async () => {
@@ -199,14 +222,16 @@ describe("POST /api/cron/weekly-crawl", () => {
       const { POST } = await import("@/app/api/cron/weekly-crawl/route");
 
       await POST(req());
-      const lockedCalls = executeCalls.filter((s) =>
+      const lockedCalls = reservedSqlCalls.filter((s) =>
         s.includes("pg_try_advisory_lock"),
       );
-      const unlockCalls = executeCalls.filter((s) =>
+      const unlockCalls = reservedSqlCalls.filter((s) =>
         s.includes("pg_advisory_unlock"),
       );
       expect(lockedCalls.length).toBe(1);
       expect(unlockCalls.length).toBe(1);
+      expect(reserveCalls).toBe(1);
+      expect(releaseCalls).toBe(1);
     });
 
     it("releases lock even if crawl throws", async () => {
@@ -215,10 +240,11 @@ describe("POST /api/cron/weekly-crawl", () => {
       const { POST } = await import("@/app/api/cron/weekly-crawl/route");
 
       await POST(req());
-      const unlockCalls = executeCalls.filter((s) =>
+      const unlockCalls = reservedSqlCalls.filter((s) =>
         s.includes("pg_advisory_unlock"),
       );
       expect(unlockCalls.length).toBe(1);
+      expect(releaseCalls).toBe(1);
     });
   });
 

@@ -69,7 +69,7 @@ Automated government contract pipeline: SAM.gov → PostgreSQL → Gemini AI cla
 
 ## Phase 7: Test Suite
 
-- [x] 30 test files, 258 tests, all passing (~1.5s)
+- [x] 51 test files, 454 tests, all passing
 - [x] Vitest with proxy-based Drizzle mock pattern
 - [x] Full coverage: API routes, components, lib functions
 
@@ -83,7 +83,7 @@ Automated government contract pipeline: SAM.gov → PostgreSQL → Gemini AI cla
 - [x] Run selective description fetch for GOOD/MAYBE (1,014 fetched)
 - [x] Run re-classification with descriptions
 - [x] Deploy to Railway web service (`jcl-govcon-web`)
-- [x] Configure weekly cron workflow (Mon 15:00 UTC: crawl → batch → digest)
+- [x] Configure weekly cron workflow (initial target Mon 15:00 UTC; current local cron config/docs target Fri 15:00 UTC: crawl → batch → digest)
 - [x] Verify Telegram digest delivery (replaced email digest per user)
 
 ## Phase 8.5: Dashboard UX — COMPLETE (2026-04-17)
@@ -103,18 +103,32 @@ User-driven promotion above AI's GOOD classification. Full spec: `docs/plans/cho
 - [x] Commit 5: /chosen page (flat list sorted by promotedAt DESC, Load more 50/page, empty/error/loaded states, Demote per card) + sidebar `useNavCounts` (Promise.allSettled) + Chosen nav item with Star + gold badge
 - [x] `/qa`, `/ship` as PR #2, merged to main
 
-## Phase 8.7: Cron service architecture fix — IN FLIGHT on `fix/cron-service-architecture` (2026-04-21)
+## Phase 8.7: Cron service architecture fix — CODE MERGED, Railway provisioning pending (2026-04-21)
 
-Sedgewick shipped with `[[cron]]` blocks that aren't valid Railway schema; Railway silently ignored them and the weekly pipeline had not run since 2026-04-16. Three-service Railway topology replaces the dead config. Full spec: `docs/plans/cron-services.md`.
+Sedgewick shipped with `[[cron]]` blocks that aren't valid Railway schema; Railway silently ignored them and the weekly pipeline had not run since 2026-04-16. Three-service Railway topology replaced the dead config in code. Remaining work is Railway dashboard follow-through. Current local cron config/docs point to Friday 15:00 UTC (`0 15 * * 5`), but live Railway state still needs fresh confirmation. Full spec: `docs/plans/cron-services.md`.
 
-- [x] Three-service Railway topology: `jcl-govcon-web` (always-on) + `jcl-govcon-weekly-crawl` (Mon 15:00 UTC) + `jcl-govcon-check-batches` (every 30 min). See `docs/deployment-railway.md`.
+- [x] Three-service Railway topology: `jcl-govcon-web` (always-on) + `jcl-govcon-weekly-crawl` (current local config `0 15 * * 5`, Fri 15:00 UTC) + `jcl-govcon-check-batches` (every 30 min). See `docs/deployment-railway.md`.
 - [x] Dockerfile (alpine+curl) + two JSON configs + railway.toml cleanup + deployment doc + reusable infra-review-checklist.
-- [ ] `/review` + `/ship`
+- [x] `/review` + `/ship` via PR #3 merge (`f42f046`)
+- [ ] Post-merge: connect `jcl-govcon-web` to GitHub in Railway dashboard
 - [ ] Post-merge: provision both cron services in Railway dashboard (`INGEST_SECRET` + `WEB_BASE_URL` as reference vars)
-- [ ] Verify first scheduled fire — smoke-trigger check-batches immediately after provisioning, then wait for Monday 2026-04-27 15:00 UTC weekly-crawl
+- [ ] Verify first scheduled fire — smoke-trigger check-batches immediately after provisioning, then confirm the next live weekly-crawl schedule in Railway (local config/docs currently imply Friday 2026-04-24 15:00 UTC)
 
-## Phase 9: Application Facilitation — NOT STARTED
+## Phase 8.8: Dashboard triage workflow polish — IN PROGRESS on `main` local worktree (2026-04-22)
 
+- [x] `/archive` page + API filters for archived / expired / includeArchived / includeExpired contract views
+- [x] Main dashboard excludes promoted contracts so they live on `/chosen`
+- [x] Main dashboard excludes watched contracts so they live on `/watch`
+- [x] Dashboard Kanban cards support inline Archive action
+- [x] Chosen cards render analyst summary previews from saved notes
+- [x] Dashboard cards show the full "What This Contract Is" description instead of truncated AI reasoning
+
+## Phase 9: Application Facilitation & GoHighLevel Pipeline — NOT STARTED
+
+- [ ] Define the first GoHighLevel pipeline experiment for watched / chosen contracts
+- [ ] Decide source-of-truth boundaries between this app and GoHighLevel
+- [ ] Map contract/application stages into a GoHighLevel-friendly pipeline model
+- [x] Add concrete GoHighLevel implementation tasks to `TODOS.md`
 - [ ] "Good" contract application workflow (status tracking: IDENTIFIED → PURSUING → BID_SUBMITTED → WON/LOST)
 - [ ] Application checklist/requirements per contract
 - [ ] Document preparation assistance (capability statements, past performance)

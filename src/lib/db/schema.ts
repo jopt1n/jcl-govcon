@@ -11,7 +11,20 @@ import {
   integer,
   date,
   index,
+  uniqueIndex,
 } from "drizzle-orm/pg-core";
+
+type WatchSnapshot = {
+  contractId: string | null;
+  noticeId: string | null;
+  solicitationNumber: string | null;
+  title: string | null;
+  agency: string | null;
+  noticeType: string | null;
+  responseDeadline: string | null;
+  setAsideCode: string | null;
+  resourceUrls: string[];
+};
 
 // ── Enums ──────────────────────────────────────────────────────────────────
 
@@ -42,6 +55,20 @@ export const batchJobStatusEnum = pgEnum("batch_job_status", [
   "SUCCEEDED",
   "FAILED",
   "PAUSED",
+]);
+
+export const watchStatusEnum = pgEnum("watch_status", [
+  "MONITORING",
+  "MATCHED",
+  "NEEDS_REVIEW",
+  "INACTIVE",
+]);
+
+export const watchLinkTypeEnum = pgEnum("watch_link_type", [
+  "source",
+  "auto_candidate",
+  "manual_candidate",
+  "primary",
 ]);
 
 // ── Tables ─────────────────────────────────────────────────────────────────
@@ -238,8 +265,9 @@ export const crawlRuns = pgTable(
 
 // ── Audit log ──────────────────────────────────────────────────────────────
 //
-// Records user-driven lifecycle actions on contracts (promote/demote in v1;
-// status transitions in Phase 9). Written-only in v1 — no admin viewer yet.
+// Records user-driven lifecycle actions on contracts (promote/demote/watch/
+// unwatch in v1; status transitions in Phase 9). Written-only in v1 — no
+// admin viewer yet.
 //
 // IMPORTANT: contractId is intentionally nullable + onDelete: 'set null'.
 // The whole point of an audit log is to answer "what did I do?" even when the
@@ -262,6 +290,136 @@ export const auditLog = pgTable(
   (table) => ({
     contractIdIdx: index("audit_log_contract_id_idx").on(
       table.contractId,
+      table.createdAt,
+    ),
+  }),
+);
+
+// ── Watch targets ─────────────────────────────────────────────────────────
+//
+// A watch target is a first-class operator workflow separate from the raw
+// contract rows underneath it. It starts from one source contract snapshot,
+// can later link to multiple candidate contract rows, and tracks the current
+// resolved snapshot for change diffing + alert dedupe.
+export const watchTargets = pgTable(
+  "watch_targets",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    sourceContractId: uuid("source_contract_id").references(() => contracts.id, {
+      onDelete: "set null",
+    }),
+    sourceNoticeId: text("source_notice_id").notNull(),
+    sourceSolicitationNumber: text("source_solicitation_number"),
+    sourceTitle: text("source_title").notNull(),
+    sourceAgency: text("source_agency"),
+    sourceNoticeType: text("source_notice_type"),
+    sourceResponseDeadline: timestamp("source_response_deadline", {
+      withTimezone: true,
+    }),
+    sourceSetAsideCode: text("source_set_aside_code"),
+    sourceResourceUrls: jsonb("source_resource_urls")
+      .$type<string[]>()
+      .notNull()
+      .default([]),
+    currentSnapshot: jsonb("current_snapshot").$type<WatchSnapshot | null>(),
+    status: watchStatusEnum("status").notNull().default("MONITORING"),
+    primaryContractId: uuid("primary_contract_id").references(() => contracts.id, {
+      onDelete: "set null",
+    }),
+    lastCheckedAt: timestamp("last_checked_at", { withTimezone: true }),
+    lastAlertedAt: timestamp("last_alerted_at", { withTimezone: true }),
+    active: boolean("active").notNull().default(true),
+    watchedAt: timestamp("watched_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    unwatchedAt: timestamp("unwatched_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => ({
+    sourceContractIdIdx: uniqueIndex("watch_targets_source_contract_id_idx").on(
+      table.sourceContractId,
+    ),
+    activeStatusIdx: index("watch_targets_active_status_idx").on(
+      table.active,
+      table.status,
+      table.watchedAt,
+    ),
+    primaryContractIdx: index("watch_targets_primary_contract_idx").on(
+      table.primaryContractId,
+    ),
+  }),
+);
+
+export const watchTargetLinks = pgTable(
+  "watch_target_links",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    watchTargetId: uuid("watch_target_id")
+      .notNull()
+      .references(() => watchTargets.id, { onDelete: "cascade" }),
+    contractId: uuid("contract_id")
+      .notNull()
+      .references(() => contracts.id, { onDelete: "cascade" }),
+    linkType: watchLinkTypeEnum("link_type").notNull(),
+    confidence: numeric("confidence"),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => ({
+    uniqueLinkIdx: uniqueIndex("watch_target_links_unique_idx").on(
+      table.watchTargetId,
+      table.contractId,
+      table.linkType,
+    ),
+    watchTargetIdx: index("watch_target_links_watch_target_idx").on(
+      table.watchTargetId,
+      table.createdAt,
+    ),
+    contractIdx: index("watch_target_links_contract_idx").on(table.contractId),
+    onePrimaryIdx: uniqueIndex("watch_target_links_one_primary_idx")
+      .on(table.watchTargetId)
+      .where(sql`${table.linkType} = 'primary'`),
+  }),
+);
+
+export const watchEvents = pgTable(
+  "watch_events",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    watchTargetId: uuid("watch_target_id")
+      .notNull()
+      .references(() => watchTargets.id, { onDelete: "cascade" }),
+    contractId: uuid("contract_id").references(() => contracts.id, {
+      onDelete: "set null",
+    }),
+    eventType: text("event_type").notNull(),
+    fingerprint: text("fingerprint").notNull(),
+    beforeJson: jsonb("before_json"),
+    afterJson: jsonb("after_json"),
+    notifiedAt: timestamp("notified_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => ({
+    fingerprintIdx: uniqueIndex("watch_events_fingerprint_idx").on(
+      table.fingerprint,
+    ),
+    watchTargetIdx: index("watch_events_watch_target_idx").on(
+      table.watchTargetId,
+      table.createdAt,
+    ),
+    pendingNotifyIdx: index("watch_events_pending_notify_idx").on(
+      table.notifiedAt,
       table.createdAt,
     ),
   }),

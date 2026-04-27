@@ -1,6 +1,10 @@
 import { vi } from "vitest";
 import { NextRequest } from "next/server";
 
+const { mockDeactivateWatchTargetsWithoutLiveLinks } = vi.hoisted(() => ({
+  mockDeactivateWatchTargetsWithoutLiveLinks: vi.fn().mockResolvedValue([]),
+}));
+
 vi.mock("drizzle-orm", () => ({
   eq: vi.fn(),
   sql: vi.fn((_strings, ..._values) => ({ __sql: true })),
@@ -34,6 +38,7 @@ vi.mock("@/lib/db/schema", () => ({
     reviewedAt: "reviewed_at",
     promoted: "promoted",
     promotedAt: "promoted_at",
+    tags: "tags",
     createdAt: "created_at",
     updatedAt: "updated_at",
   },
@@ -60,6 +65,11 @@ let mockTxUpdateCalled = false;
 // exact shape of the updates object (e.g., that reviewedAt is a Date vs a
 // COALESCE SQL fragment, when the client sent an explicit reviewedAt).
 let mockTxUpdateSetArg: Record<string, unknown> | null = null;
+// Pre-update SELECT inside the transaction — populated by archive tests that
+// need to assert the handler wrote a `demote` audit row only when the row was
+// previously promoted. Defaults to a non-promoted row so plain archive tests
+// don't leak demote rows.
+const mockTxPreSelectResult: unknown[] = [{ promoted: false }];
 
 vi.mock("@/lib/db", () => {
   const createChain = (resolveValue: unknown) => {
@@ -91,11 +101,15 @@ vi.mock("@/lib/db", () => {
 
   const transactionImpl = async (
     cb: (tx: {
+      select: (...args: unknown[]) => unknown;
       update: (...args: unknown[]) => unknown;
       insert: (...args: unknown[]) => unknown;
     }) => unknown,
   ) => {
     const tx = {
+      select: vi
+        .fn()
+        .mockImplementation(() => createChain(mockTxPreSelectResult)),
       update: vi.fn().mockImplementation(() => {
         mockTxUpdateCalled = true;
         return buildUpdateChainWithSetCapture();
@@ -123,6 +137,18 @@ vi.mock("@/lib/db", () => {
   };
 });
 
+vi.mock("@/lib/watch/service", () => ({
+  deactivateWatchTargetsWithoutLiveLinks:
+    mockDeactivateWatchTargetsWithoutLiveLinks,
+  getContractWatchMetadata: vi.fn().mockResolvedValue({
+    watched: false,
+    watchTargetId: null,
+    watchStatus: null,
+    watchLastCheckedAt: null,
+    watchLastAlertedAt: null,
+  }),
+}));
+
 import { GET, PATCH } from "@/app/api/contracts/[id]/route";
 
 beforeEach(() => {
@@ -132,6 +158,8 @@ beforeEach(() => {
   mockAuditInsertShouldFail = false;
   mockTxUpdateCalled = false;
   mockTxUpdateSetArg = null;
+  mockDeactivateWatchTargetsWithoutLiveLinks.mockReset();
+  mockDeactivateWatchTargetsWithoutLiveLinks.mockResolvedValue([]);
 });
 
 describe("GET /api/contracts/[id]", () => {
@@ -266,6 +294,52 @@ describe("PATCH /api/contracts/[id]", () => {
     const res = await PATCH(req, { params: { id: "test-uuid" } });
 
     expect(res.status).toBe(200);
+  });
+
+  it("returns 400 when archived is not a boolean", async () => {
+    const req = new NextRequest("http://localhost/api/contracts/test-uuid", {
+      method: "PATCH",
+      body: JSON.stringify({ archived: "yes" }),
+      headers: { "Content-Type": "application/json" },
+    });
+    const res = await PATCH(req, { params: { id: "test-uuid" } });
+
+    expect(res.status).toBe(400);
+    const data = await res.json();
+    expect(data.error).toBe("Invalid archived");
+  });
+
+  it("accepts archived:true as a manual archive update", async () => {
+    mockUpdateResult = [{ id: "test-uuid", tags: ["ARCHIVED"] }];
+
+    const req = new NextRequest("http://localhost/api/contracts/test-uuid", {
+      method: "PATCH",
+      body: JSON.stringify({ archived: true }),
+      headers: { "Content-Type": "application/json" },
+    });
+    const res = await PATCH(req, { params: { id: "test-uuid" } });
+
+    expect(res.status).toBe(200);
+    expect(mockTxUpdateCalled).toBe(true);
+    expect(mockDeactivateWatchTargetsWithoutLiveLinks).toHaveBeenCalledTimes(1);
+    expect(mockDeactivateWatchTargetsWithoutLiveLinks).toHaveBeenCalledWith(
+      undefined,
+      expect.any(Object),
+    );
+  });
+
+  it("accepts archived:false as a manual unarchive update", async () => {
+    mockUpdateResult = [{ id: "test-uuid", tags: [] }];
+
+    const req = new NextRequest("http://localhost/api/contracts/test-uuid", {
+      method: "PATCH",
+      body: JSON.stringify({ archived: false }),
+      headers: { "Content-Type": "application/json" },
+    });
+    const res = await PATCH(req, { params: { id: "test-uuid" } });
+
+    expect(res.status).toBe(200);
+    expect(mockTxUpdateCalled).toBe(false);
   });
 
   // ── CHOSEN tier: promoted field ─────────────────────────────────────

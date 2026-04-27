@@ -14,10 +14,10 @@ export default function DashboardPage() {
           details.
         </p>
       </div>
-      <CrawlStatus />
       <Suspense fallback={null}>
         <KanbanBoard />
       </Suspense>
+      <CrawlStatus />
     </div>
   );
 }
