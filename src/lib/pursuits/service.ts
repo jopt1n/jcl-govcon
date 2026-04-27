@@ -357,8 +357,29 @@ export async function backfillPromotedPursuits(): Promise<{
   return { families, legacyContracts };
 }
 
+let listBackfillPromise: Promise<void> | null = null;
+
+async function backfillPromotedPursuitsForListIfNeeded() {
+  if (listBackfillPromise) {
+    return listBackfillPromise;
+  }
+
+  const existing = await db
+    .select({ id: pursuits.id })
+    .from(pursuits)
+    .limit(1);
+  if (existing.length > 0) return;
+
+  listBackfillPromise = backfillPromotedPursuits()
+    .then(() => undefined)
+    .finally(() => {
+      listBackfillPromise = null;
+    });
+  return listBackfillPromise;
+}
+
 export async function listPursuits(filters: PursuitListFilters) {
-  await backfillPromotedPursuits();
+  await backfillPromotedPursuitsForListIfNeeded();
 
   const conditions: SQL[] = [];
   if (filters.stage) conditions.push(eq(pursuits.stage, filters.stage));

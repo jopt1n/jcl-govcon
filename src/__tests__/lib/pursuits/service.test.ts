@@ -9,6 +9,7 @@ const { state } = vi.hoisted(() => ({
     documents: [] as Record<string, any>[],
     stageHistory: [] as Record<string, any>[],
     ids: { pursuit: 0, document: 0, history: 0 },
+    selectTables: [] as string[],
   },
 }));
 
@@ -156,6 +157,10 @@ class SelectBuilder {
     return this;
   }
 
+  offset() {
+    return this;
+  }
+
   then(resolve: (value: unknown[]) => void, reject: (err: unknown) => void) {
     try {
       resolve(this.execute());
@@ -165,6 +170,8 @@ class SelectBuilder {
   }
 
   private execute() {
+    state.selectTables.push(this.fromTable);
+
     if (this.fromTable === "contracts") {
       return state.contracts
         .filter((row) => matches(row, this.condition))
@@ -189,9 +196,11 @@ class SelectBuilder {
         });
     }
     if (this.fromTable === "pursuits") {
-      return state.pursuits
-        .filter((row) => matches(row, this.condition))
-        .map((row) => project(row, this.projection));
+      const rows = state.pursuits.filter((row) => matches(row, this.condition));
+      if (this.projection && "count" in this.projection) {
+        return [{ count: rows.length }];
+      }
+      return rows.map((row) => project(row, this.projection));
     }
     if (this.fromTable === "pursuit_documents") {
       return state.documents
@@ -343,6 +352,7 @@ vi.mock("@/lib/opportunity-family/service", () => ({
 import {
   archivePursuitForContract,
   backfillPromotedPursuits,
+  listPursuits,
 } from "@/lib/pursuits/service";
 
 function seedPromotedFamily() {
@@ -379,6 +389,7 @@ describe("pursuits service backfill", () => {
     state.documents = [];
     state.stageHistory = [];
     state.ids = { pursuit: 0, document: 0, history: 0 };
+    state.selectTables = [];
   });
 
   it("handles concurrent lazy backfills without duplicate pursuits or documents", async () => {
@@ -416,5 +427,30 @@ describe("pursuits service backfill", () => {
       pursuitId: state.pursuits[0].id,
       toOutcome: "ARCHIVED",
     });
+  });
+
+  it("does not repeat the expensive promoted backfill scan once pursuits exist", async () => {
+    state.pursuits.push({
+      id: "pursuit-existing",
+      familyId: null,
+      currentContractId: "contract-existing",
+      title: "Existing pursuit",
+      agency: "GSA",
+      solicitationNumber: "SOL-EXISTING",
+      noticeType: "Solicitation",
+      classification: "GOOD",
+      responseDeadline: null,
+      samUrl: "https://sam.gov/opp/contract-existing",
+      stage: "NEEDS_DEEP_DIVE",
+      outcome: null,
+      nextActionDueAt: null,
+      updatedAt: new Date("2026-04-26T00:00:00Z"),
+    });
+
+    await listPursuits({ page: 1, limit: 50 });
+    await listPursuits({ page: 1, limit: 50 });
+
+    expect(state.selectTables).not.toContain("contract_families");
+    expect(state.selectTables).not.toContain("contracts");
   });
 });
