@@ -24,9 +24,9 @@
   --pending: #3b82f6;
   --urgent: #ef4444;
 
-  /* User-driven promotion (CHOSEN tier). Gold accent sits above the AI's
+  /* User-driven promotion into Pursuits. Gold accent sits above the AI's
      classification palette. --chosen is the border/icon color; --chosen-bg
-     is a soft wash used behind the CHOSEN pill and promote button;
+     is a soft wash used behind the pursuit pill and promote button;
      --chosen-border is --chosen at 40% for soft pill/button outlines;
      --chosen-fg is the foreground color for text rendered ON TOP of the
      solid --chosen gold (badge text, solid-fill labels). Dark zinc passes
@@ -35,6 +35,13 @@
   --chosen-bg: #fef3c7;
   --chosen-border: rgba(234, 179, 8, 0.4);
   --chosen-fg: #18181b;
+
+  /* Pursuits CRM — "premium western ops": brass accent, paper-ledger banding,
+     and stamped-badge treatments without decorative western motifs. */
+  --pursuit-brass: #b7791f;
+  --pursuit-brass-bg: rgba(183, 121, 31, 0.12);
+  --pursuit-brass-border: rgba(183, 121, 31, 0.45);
+  --pursuit-ledger: #f6f1e7;
 
   /* Accent */
   --accent: #3b82f6;
@@ -81,7 +88,7 @@
   --pending: #3b82f6;
   --urgent: #ef4444;
 
-  /* CHOSEN tier — same yellow-500 as light mode. Dark wash is 0.15 alpha
+  /* Pursuits promotion accent — same yellow-500 as light mode. Dark wash is 0.15 alpha
      yellow over the dark surface (#27272a surface-raised). At 0.08 the
      delta against the base surface was ~2% luminance and effectively
      invisible; 0.15 keeps the tint subtle but readable. Verified via
@@ -92,6 +99,11 @@
   --chosen-bg: rgba(234, 179, 8, 0.15);
   --chosen-border: rgba(234, 179, 8, 0.4);
   --chosen-fg: #18181b;
+
+  --pursuit-brass: #d6a44a;
+  --pursuit-brass-bg: rgba(214, 164, 74, 0.14);
+  --pursuit-brass-border: rgba(214, 164, 74, 0.45);
+  --pursuit-ledger: #15110a;
 
   --accent: #3b82f6;
   --accent-hover: #60a5fa;

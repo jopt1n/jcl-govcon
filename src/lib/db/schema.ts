@@ -93,6 +93,51 @@ export const familyMemberRoleEnum = pgEnum("family_member_role", [
   "manual_match",
 ]);
 
+export const pursuitStageEnum = pgEnum("pursuit_stage", [
+  "NEEDS_DEEP_DIVE",
+  "RESEARCH_COMPLETE",
+  "VENDOR_OUTREACH_NEEDED",
+  "OUTREACH_SENT",
+  "RESPONSE_RECEIVED",
+  "BID_DECISION",
+  "PROPOSAL_IN_PROGRESS",
+  "SUBMITTED",
+]);
+
+export const pursuitOutcomeEnum = pgEnum("pursuit_outcome", [
+  "WON",
+  "LOST",
+  "NO_BID",
+  "ARCHIVED",
+]);
+
+export const cashBurdenEnum = pgEnum("cash_burden", [
+  "UNKNOWN",
+  "LOW",
+  "MEDIUM",
+  "HIGH",
+  "OVER_40K",
+]);
+
+export const pursuitContactRoleEnum = pgEnum("pursuit_contact_role", [
+  "GOVERNMENT_POC",
+  "VENDOR",
+  "MANUFACTURER",
+  "RESELLER",
+  "PARTNER",
+]);
+
+export const pursuitInteractionTypeEnum = pgEnum("pursuit_interaction_type", [
+  "EMAIL_SENT",
+  "CALL_MADE",
+  "QUOTE_REQUESTED",
+  "RESPONSE_RECEIVED",
+  "FOLLOW_UP_NEEDED",
+  "NO_BID_DECISION",
+  "NOTE",
+  "STAGE_CHANGED",
+]);
+
 // ── Tables ─────────────────────────────────────────────────────────────────
 
 export const contracts = pgTable(
@@ -416,6 +461,192 @@ export const auditLog = pgTable(
     contractIdIdx: index("audit_log_contract_id_idx").on(
       table.contractId,
       table.createdAt,
+    ),
+  }),
+);
+
+// ── Pursuits CRM ───────────────────────────────────────────────────────────
+//
+// Internal CRM workspace for opportunities JCL promoted for pursuit. This is
+// intentionally separate from the raw SAM.gov contract rows: one pursuit maps
+// to one opportunity family when family tables are available, with legacy
+// fallback for older promoted contract rows.
+export const pursuits = pgTable(
+  "pursuits",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    familyId: uuid("family_id").references(() => contractFamilies.id, {
+      onDelete: "set null",
+    }),
+    currentContractId: uuid("current_contract_id").references(
+      () => contracts.id,
+      { onDelete: "set null" },
+    ),
+    title: text("title").notNull(),
+    agency: text("agency"),
+    solicitationNumber: text("solicitation_number"),
+    noticeType: text("notice_type"),
+    classification: classificationEnum("classification"),
+    responseDeadline: timestamp("response_deadline", { withTimezone: true }),
+    samUrl: text("sam_url"),
+    stage: pursuitStageEnum("stage").notNull().default("NEEDS_DEEP_DIVE"),
+    outcome: pursuitOutcomeEnum("outcome"),
+    nextAction: text("next_action"),
+    nextActionDueAt: timestamp("next_action_due_at", { withTimezone: true }),
+    contractType: text("contract_type").notNull().default("UNKNOWN"),
+    cashBurden: cashBurdenEnum("cash_burden").notNull().default("UNKNOWN"),
+    contactStatus: text("contact_status").notNull().default("UNKNOWN"),
+    internalNotes: text("internal_notes"),
+    promotedAt: timestamp("promoted_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    closedAt: timestamp("closed_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => ({
+    familyUniqueIdx: uniqueIndex("pursuits_family_unique_idx").on(
+      table.familyId,
+    ),
+    currentContractUniqueIdx: uniqueIndex(
+      "pursuits_current_contract_unique_idx",
+    ).on(table.currentContractId),
+    stageOutcomeIdx: index("pursuits_stage_outcome_idx").on(
+      table.stage,
+      table.outcome,
+      table.updatedAt,
+    ),
+    nextActionIdx: index("pursuits_next_action_idx").on(
+      table.nextActionDueAt,
+      table.updatedAt,
+    ),
+    deadlineIdx: index("pursuits_deadline_idx").on(table.responseDeadline),
+  }),
+);
+
+export const pursuitContacts = pgTable(
+  "pursuit_contacts",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    pursuitId: uuid("pursuit_id")
+      .notNull()
+      .references(() => pursuits.id, { onDelete: "cascade" }),
+    role: pursuitContactRoleEnum("role").notNull(),
+    name: text("name"),
+    organization: text("organization"),
+    title: text("title"),
+    email: text("email"),
+    phone: text("phone"),
+    url: text("url"),
+    notes: text("notes"),
+    isPrimary: boolean("is_primary").notNull().default(false),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => ({
+    pursuitIdx: index("pursuit_contacts_pursuit_idx").on(
+      table.pursuitId,
+      table.role,
+      table.createdAt,
+    ),
+  }),
+);
+
+export const pursuitInteractions = pgTable(
+  "pursuit_interactions",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    pursuitId: uuid("pursuit_id")
+      .notNull()
+      .references(() => pursuits.id, { onDelete: "cascade" }),
+    contactId: uuid("contact_id").references(() => pursuitContacts.id, {
+      onDelete: "set null",
+    }),
+    type: pursuitInteractionTypeEnum("type").notNull(),
+    occurredAt: timestamp("occurred_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    subject: text("subject"),
+    body: text("body"),
+    metadata: jsonb("metadata"),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => ({
+    pursuitIdx: index("pursuit_interactions_pursuit_idx").on(
+      table.pursuitId,
+      table.occurredAt,
+    ),
+    contactIdx: index("pursuit_interactions_contact_idx").on(table.contactId),
+  }),
+);
+
+export const pursuitDocuments = pgTable(
+  "pursuit_documents",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    pursuitId: uuid("pursuit_id")
+      .notNull()
+      .references(() => pursuits.id, { onDelete: "cascade" }),
+    contractId: uuid("contract_id").references(() => contracts.id, {
+      onDelete: "set null",
+    }),
+    sourceUrl: text("source_url").notNull(),
+    fileName: text("file_name"),
+    contentType: text("content_type"),
+    sizeBytes: integer("size_bytes"),
+    sha256: text("sha256"),
+    extractedText: text("extracted_text"),
+    objectKey: text("object_key"),
+    storageProvider: text("storage_provider"),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => ({
+    pursuitIdx: index("pursuit_documents_pursuit_idx").on(
+      table.pursuitId,
+      table.createdAt,
+    ),
+    uniqueSourceIdx: uniqueIndex("pursuit_documents_source_unique_idx").on(
+      table.pursuitId,
+      table.sourceUrl,
+    ),
+  }),
+);
+
+export const pursuitStageHistory = pgTable(
+  "pursuit_stage_history",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    pursuitId: uuid("pursuit_id")
+      .notNull()
+      .references(() => pursuits.id, { onDelete: "cascade" }),
+    fromStage: pursuitStageEnum("from_stage"),
+    toStage: pursuitStageEnum("to_stage"),
+    fromOutcome: pursuitOutcomeEnum("from_outcome"),
+    toOutcome: pursuitOutcomeEnum("to_outcome"),
+    note: text("note"),
+    changedAt: timestamp("changed_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => ({
+    pursuitIdx: index("pursuit_stage_history_pursuit_idx").on(
+      table.pursuitId,
+      table.changedAt,
     ),
   }),
 );

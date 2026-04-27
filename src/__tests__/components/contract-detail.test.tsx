@@ -239,12 +239,12 @@ describe("ContractDetail", () => {
     expect(btn.textContent).toContain("Promote");
     expect(btn.textContent).not.toContain("Demote");
     expect(btn.getAttribute("aria-pressed")).toBe("false");
-    // No CHOSEN pill, no top accent
+    // No pursuit pill, no top accent
     expect(screen.queryByTestId("chosen-pill")).toBeNull();
     expect(screen.queryByTestId("chosen-top-accent")).toBeNull();
   });
 
-  it("shows Demote button + CHOSEN pill + top accent when promoted=true", async () => {
+  it("shows Demote button + PURSUIT pill + top accent when promoted=true", async () => {
     mockFetchContract({
       ...mockContract,
       promoted: true,
@@ -259,7 +259,7 @@ describe("ContractDetail", () => {
     expect(btn.getAttribute("aria-pressed")).toBe("true");
     // Header pill + top accent visible
     expect(screen.getByTestId("chosen-pill")).toBeDefined();
-    expect(screen.getByTestId("chosen-pill").textContent).toContain("CHOSEN");
+    expect(screen.getByTestId("chosen-pill").textContent).toContain("PURSUIT");
     expect(screen.getByTestId("chosen-top-accent")).toBeDefined();
   });
 

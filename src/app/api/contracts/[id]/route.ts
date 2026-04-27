@@ -11,6 +11,10 @@ import {
   hasOpportunityFamilyTables,
   promoteContractFamily,
 } from "@/lib/opportunity-family/service";
+import {
+  archivePursuitForContract,
+  ensurePursuitForContract,
+} from "@/lib/pursuits/service";
 
 /**
  * GET /api/contracts/[id]
@@ -280,12 +284,21 @@ export async function PATCH(
           body.archived !== true
         ) {
           await promoteContractFamily(params.id, tx);
+          await ensurePursuitForContract(params.id, {
+            reactivate: true,
+            executor: tx,
+          });
         } else if (
           runFamilySideEffects &&
           body.promoted === false &&
           body.archived !== true
         ) {
           await demoteContractFamily(params.id, tx);
+        } else if (body.promoted === true && body.archived !== true) {
+          await ensurePursuitForContract(params.id, {
+            reactivate: true,
+            executor: tx,
+          });
         }
 
         // Archive side effects: record the implicit demote (if we actually
@@ -303,6 +316,7 @@ export async function PATCH(
           if (runFamilySideEffects) {
             await archiveContractFamily(params.id, tx);
           }
+          await archivePursuitForContract(params.id, tx);
         }
 
         return row;

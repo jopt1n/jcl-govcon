@@ -370,7 +370,7 @@ export function ContractDetail({ contractId }: { contractId: string }) {
                   className="px-2.5 py-1 text-xs font-semibold rounded-full border bg-[var(--chosen-bg)] text-[var(--chosen)] border-[var(--chosen-border)] flex items-center gap-1"
                 >
                   <Star className="w-3 h-3 fill-[var(--chosen)]" />
-                  CHOSEN
+                  PURSUIT
                 </span>
               )}
               {isArchived && (
@@ -563,13 +563,13 @@ export function ContractDetail({ contractId }: { contractId: string }) {
                   </div>
                 )}
 
-              {/* Promote to Chosen (user-driven tier above AI classification).
+              {/* Promote to Pursuits (user-driven tier above AI classification).
                   Renders for ALL classifications including DISCARD — promoting
                   a DISCARD is the user signaling "AI was wrong"; the original
                   label stays visible in the badge beside it. */}
               <div>
                 <label className="block text-xs font-medium text-[var(--text-muted)] mb-1">
-                  Chosen
+                  Pursuit
                 </label>
                 <button
                   data-testid="promote-toggle"

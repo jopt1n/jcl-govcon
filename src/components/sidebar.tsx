@@ -14,13 +14,13 @@ import {
   Inbox,
   GitBranch,
   Activity,
-  Star,
+  SearchCheck,
   Archive,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { ThemeToggle } from "./theme-toggle";
 
-type BadgeKey = "inbox" | "chosen" | "archive";
+type BadgeKey = "inbox" | "pursuits" | "archive";
 
 type NavItem = {
   href: string;
@@ -30,7 +30,7 @@ type NavItem = {
   badgeKey?: BadgeKey;
   /** CSS color for the badge background + collapsed dot. Defaults to --accent. */
   badgeColor?: string;
-  /** CSS color for the badge text. Must pass WCAG AA on the chosen bg.
+  /** CSS color for the badge text. Must pass WCAG AA on the badge bg.
    *  Defaults to white (fine for the blue --accent, insufficient for gold). */
   badgeTextColor?: string;
 };
@@ -39,12 +39,13 @@ const navItems: NavItem[] = [
   { href: "/", label: "Dashboard", icon: LayoutDashboard },
   { href: "/inbox", label: "Inbox", icon: Inbox, badgeKey: "inbox" },
   {
-    href: "/chosen",
-    label: "Chosen",
-    icon: Star,
-    badgeKey: "chosen",
-    badgeColor: "var(--chosen)",
-    // White (~1.95:1) fails WCAG AA on gold; --chosen-fg is dark zinc (~12:1).
+    href: "/pursuits",
+    label: "Pursuits",
+    icon: SearchCheck,
+    badgeKey: "pursuits",
+    badgeColor: "var(--pursuit-brass)",
+    // White fails WCAG AA on brass; --chosen-fg is dark zinc and remains
+    // suitable for solid brass/gold badge backgrounds.
     badgeTextColor: "var(--chosen-fg)",
   },
   { href: "/archive", label: "Archive", icon: Archive, badgeKey: "archive" },
@@ -57,12 +58,12 @@ const navItems: NavItem[] = [
 
 type NavCounts = {
   inbox: number | null;
-  chosen: number | null;
+  pursuits: number | null;
   archive: number | null;
 };
 
 /**
- * Poll inbox + chosen + archive counts every 30s. Each fetch is
+ * Poll inbox + pursuits + archive counts every 30s. Each fetch is
  * independent:
  *   - fulfilled + ok → update that badge
  *   - rejected or !ok → leave previous value untouched (null on first failure,
@@ -74,7 +75,7 @@ type NavCounts = {
  */
 function useNavCounts(): NavCounts {
   const [inbox, setInbox] = useState<number | null>(null);
-  const [chosen, setChosen] = useState<number | null>(null);
+  const [pursuitsCount, setPursuitsCount] = useState<number | null>(null);
   const [archive, setArchive] = useState<number | null>(null);
 
   useEffect(() => {
@@ -85,10 +86,9 @@ function useNavCounts(): NavCounts {
         fetch("/api/contracts?unreviewed=true&limit=1&page=1", {
           signal: AbortSignal.timeout(10_000),
         }),
-        fetch(
-          "/api/opportunity-families?decision=PROMOTE&limit=1&page=1",
-          { signal: AbortSignal.timeout(10_000) },
-        ),
+        fetch("/api/pursuits?limit=1&page=1", {
+          signal: AbortSignal.timeout(10_000),
+        }),
         fetch(
           "/api/contracts?archived=true&includeUnreviewed=true&limit=1&page=1",
           { signal: AbortSignal.timeout(10_000) },
@@ -106,9 +106,9 @@ function useNavCounts(): NavCounts {
       if (settled[1].status === "fulfilled" && settled[1].value.ok) {
         try {
           const json = await settled[1].value.json();
-          if (!cancelled) setChosen(json.pagination?.total ?? 0);
+          if (!cancelled) setPursuitsCount(json.pagination?.total ?? 0);
         } catch {
-          // JSON parse failure → keep last-known chosen value.
+          // JSON parse failure → keep last-known pursuits value.
         }
       }
       if (settled[2].status === "fulfilled" && settled[2].value.ok) {
@@ -129,7 +129,7 @@ function useNavCounts(): NavCounts {
     };
   }, []);
 
-  return { inbox, chosen, archive };
+  return { inbox, pursuits: pursuitsCount, archive };
 }
 
 export function Sidebar() {
@@ -138,7 +138,7 @@ export function Sidebar() {
   const counts = useNavCounts();
   const badgeMap: Record<BadgeKey, number | null> = {
     inbox: counts.inbox,
-    chosen: counts.chosen,
+    pursuits: counts.pursuits,
     archive: counts.archive,
   };
 

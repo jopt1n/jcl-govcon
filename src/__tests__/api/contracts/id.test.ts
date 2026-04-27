@@ -2,13 +2,17 @@ import { vi } from "vitest";
 import { NextRequest } from "next/server";
 
 const {
+  mockArchivePursuitForContract,
   mockArchiveContractFamily,
   mockDemoteContractFamily,
+  mockEnsurePursuitForContract,
   mockHasOpportunityFamilyTables,
   mockPromoteContractFamily,
 } = vi.hoisted(() => ({
+  mockArchivePursuitForContract: vi.fn().mockResolvedValue(null),
   mockArchiveContractFamily: vi.fn().mockResolvedValue({ familyId: null }),
   mockDemoteContractFamily: vi.fn().mockResolvedValue({ familyId: null }),
+  mockEnsurePursuitForContract: vi.fn().mockResolvedValue({ id: "pursuit-1" }),
   mockHasOpportunityFamilyTables: vi.fn().mockResolvedValue(true),
   mockPromoteContractFamily: vi.fn().mockResolvedValue({ familyId: null }),
 }));
@@ -156,6 +160,11 @@ vi.mock("@/lib/opportunity-family/service", () => ({
   promoteContractFamily: mockPromoteContractFamily,
 }));
 
+vi.mock("@/lib/pursuits/service", () => ({
+  archivePursuitForContract: mockArchivePursuitForContract,
+  ensurePursuitForContract: mockEnsurePursuitForContract,
+}));
+
 import { GET, PATCH } from "@/app/api/contracts/[id]/route";
 
 beforeEach(() => {
@@ -167,8 +176,12 @@ beforeEach(() => {
   mockTxUpdateSetArg = null;
   mockArchiveContractFamily.mockReset();
   mockArchiveContractFamily.mockResolvedValue({ familyId: null });
+  mockArchivePursuitForContract.mockReset();
+  mockArchivePursuitForContract.mockResolvedValue(null);
   mockDemoteContractFamily.mockReset();
   mockDemoteContractFamily.mockResolvedValue({ familyId: null });
+  mockEnsurePursuitForContract.mockReset();
+  mockEnsurePursuitForContract.mockResolvedValue({ id: "pursuit-1" });
   mockHasOpportunityFamilyTables.mockReset();
   mockHasOpportunityFamilyTables.mockResolvedValue(true);
   mockPromoteContractFamily.mockReset();
@@ -347,6 +360,10 @@ describe("PATCH /api/contracts/[id]", () => {
       "test-uuid",
       expect.any(Object),
     );
+    expect(mockArchivePursuitForContract).toHaveBeenCalledWith(
+      "test-uuid",
+      expect.any(Object),
+    );
   });
 
   it("accepts archived:false as a manual unarchive update", async () => {
@@ -485,6 +502,10 @@ describe("PATCH /api/contracts/[id]", () => {
     expect(mockTxUpdateCalled).toBe(true);
     expect(mockHasOpportunityFamilyTables).toHaveBeenCalledTimes(1);
     expect(mockArchiveContractFamily).not.toHaveBeenCalled();
+    expect(mockArchivePursuitForContract).toHaveBeenCalledWith(
+      "test-uuid",
+      expect.any(Object),
+    );
     expect(mockAuditInsertCalls).toHaveLength(0);
   });
 
@@ -558,6 +579,10 @@ describe("PATCH /api/contracts/[id]", () => {
       "test-uuid",
       expect.any(Object),
     );
+    expect(mockEnsurePursuitForContract).toHaveBeenCalledWith("test-uuid", {
+      reactivate: true,
+      executor: expect.any(Object),
+    });
     expect(mockTxUpdateSetArg).not.toBeNull();
     expect(mockTxUpdateSetArg!.promoted).toBe(true);
     expect(mockTxUpdateSetArg!.promotedAt).toBeInstanceOf(Date);
@@ -609,6 +634,10 @@ describe("PATCH /api/contracts/[id]", () => {
       action: "promote",
     });
     expect(mockPromoteContractFamily).not.toHaveBeenCalled();
+    expect(mockEnsurePursuitForContract).toHaveBeenCalledWith("test-uuid", {
+      reactivate: true,
+      executor: expect.any(Object),
+    });
   });
 
   it("promoted:false writes an audit_log row with action=demote", async () => {
