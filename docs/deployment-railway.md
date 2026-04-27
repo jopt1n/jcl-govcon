@@ -7,7 +7,7 @@ JCL GovCon runs as three Railway services in a single project, all backed by the
 | Service                    | Role                                                                          | Build                                       | Runtime          | Schedule                      |
 | -------------------------- | ----------------------------------------------------------------------------- | ------------------------------------------- | ---------------- | ----------------------------- |
 | `jcl-govcon-web`           | Always-on Next.js webapp (dashboard, API routes, cron route handlers)         | nixpacks via `railway.toml`                 | persistent       | n/a                           |
-| `jcl-govcon-weekly-crawl`  | Runs the weekly SAM.gov crawl + xAI batch submission                          | Railpack worker runtime                     | runs once, exits | `0 15 * * 5` (Fri 15:00 UTC)  |
+| `jcl-govcon-weekly-crawl`  | Runs the weekly SAM.gov crawl + xAI batch submission                          | Railpack Node worker runtime; explicit no-op build command skips the full Next build | runs once, exits | `0 15 * * 5` (Fri 15:00 UTC)  |
 | `jcl-govcon-check-batches` | Polls in-flight xAI batches, imports on completion, fires the Telegram digest | `dockerfiles/cron.Dockerfile` (alpine+curl) | runs once, exits | `*/30 * * * *` (every 30 min) |
 
 Postgres lives alongside as the fourth Railway service; all three app services read `DATABASE_URL` from its reference variable.
@@ -62,7 +62,7 @@ After the PR landing these files merges to `main`, the two cron services still n
 
 **Did the cron register?** Cron service → Settings → Cron Schedule should display the expected cron expression. If it's blank, the config-as-code file isn't being read; double-check the filename at Settings → Config-as-code.
 
-**Did Railpack build the worker runtime correctly?** Weekly crawl build logs should show Railpack detecting the Node app, installing production dependencies including `tsx`, and honoring `npm run cron:weekly-crawl` as the start command. Treat this as a first-deploy verification item rather than assuming the build plan from the config alone.
+**Did Railpack build the worker runtime correctly?** Weekly crawl build logs should show Railpack detecting the Node app, installing dependencies including `tsx`, honoring the explicit no-op build command, and using `npm run cron:weekly-crawl` as the start command. Treat this as a first-deploy verification item rather than assuming the build plan from the config alone.
 
 **Did the cron fire?** Cron service → Deployments tab. Each scheduled fire appears as a deployment with status `Exit 0` (or `Exit 1` on failure). For weekly crawl, the exit code comes from `scripts/weekly-crawl-worker.ts`; for `check-batches`, the Deploy logs show the curl response including HTTP headers.
 
