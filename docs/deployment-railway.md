@@ -2,12 +2,12 @@
 
 ## 1. Topology
 
-JCL GovCon runs as three Railway services in a single project, all backed by the same GitHub repo (`jcl-govcon`). The web app is always on; the two cron services are ephemeral — they wake on schedule, run a single curl, and exit.
+JCL GovCon runs as three Railway services in a single project, all backed by the same GitHub repo (`jcl-govcon`). The web app is always on; the cron services are ephemeral — they wake on schedule, run one task, and exit.
 
 | Service                    | Role                                                                          | Build                                       | Runtime          | Schedule                      |
 | -------------------------- | ----------------------------------------------------------------------------- | ------------------------------------------- | ---------------- | ----------------------------- |
 | `jcl-govcon-web`           | Always-on Next.js webapp (dashboard, API routes, cron route handlers)         | nixpacks via `railway.toml`                 | persistent       | n/a                           |
-| `jcl-govcon-weekly-crawl`  | Triggers the weekly SAM.gov crawl + xAI batch submission                      | `dockerfiles/cron.Dockerfile` (alpine+curl) | runs once, exits | `0 15 * * 5` (Fri 15:00 UTC)  |
+| `jcl-govcon-weekly-crawl`  | Runs the weekly SAM.gov crawl + xAI batch submission                          | Railpack worker runtime                     | runs once, exits | `0 15 * * 5` (Fri 15:00 UTC)  |
 | `jcl-govcon-check-batches` | Polls in-flight xAI batches, imports on completion, fires the Telegram digest | `dockerfiles/cron.Dockerfile` (alpine+curl) | runs once, exits | `*/30 * * * *` (every 30 min) |
 
 Postgres lives alongside as the fourth Railway service; all three app services read `DATABASE_URL` from its reference variable.
@@ -19,20 +19,20 @@ sequenceDiagram
     autonumber
     participant R as Railway scheduler
     participant C as jcl-govcon-weekly-crawl
-    participant W as jcl-govcon-web
     participant DB as Postgres
     participant SAM as SAM.gov
     participant X as xAI Batch
 
     R->>C: Fri 15:00 UTC — start container
-    C->>W: POST /api/cron/weekly-crawl<br/>Authorization: Bearer $INGEST_SECRET
-    W->>W: authorize() + requireTelegramConfig()
-    W->>DB: INSERT crawl_runs (kind=weekly, status=running)
-    W->>SAM: search + fetch descriptions (7-day window)
-    W->>X: submit batch classify
-    W->>DB: UPDATE crawl_runs SET status=classifying, batchId=...
-    W-->>C: HTTP 200 (response captured via curl -i)
-    C->>C: exit 0
+    C->>C: npm run cron:weekly-crawl
+    C->>DB: pg_try_advisory_lock on reserved connection
+    C->>C: requireTelegramConfig()
+    C->>DB: INSERT crawl_runs (kind=weekly, status=running)
+    C->>SAM: search + fetch descriptions (7-day window)
+    C->>X: submit batch classify
+    C->>DB: UPDATE crawl_runs SET status=classifying, batchId=...
+    C->>DB: pg_advisory_unlock on same reserved connection
+    C->>C: close DB pool, exit 0
 ```
 
 `check-batches` follows the same shape but polls xAI, imports results when ready, fires the weekly digest exactly once per succeeded run (gated by `digest_sent_at`), and atomic-claims rows (`processing_at` + 5-min lease) to prevent double-processing.
@@ -41,9 +41,9 @@ sequenceDiagram
 
 **The Sedgewick failure mode.** The prior `railway.toml` declared crons as `[[cron]]` array-of-tables blocks. That schema is not part of Railway's current config — Railway parsed the TOML without error and silently ignored the blocks. The weekly pipeline ran exactly once (a manual curl on 2026-04-16) and never fired on schedule. The first scheduled Monday after deploy (2026-04-20) passed silently. Root cause was not a Railway bug; it was a schema-validation gap in the PR review.
 
-**Three services not one.** Reusing the Next.js image for crons would couple cron lifecycle to web-build success. If the web build breaks, the cron should still fire and alert; a shared image means a bad web deploy kills the crons too. Alpine+curl builds in seconds and has nothing to break.
+**Three services not one.** Keeping crons as separate Railway services decouples their lifecycle from the always-on web process. The weekly crawl now runs as a Node worker so Railway's cron deployment status reflects the real crawl/batch-submit outcome instead of an HTTP edge response; `check-batches` remains the lightweight alpine+curl trigger.
 
-**Public URL, not private networking.** Each cron service could reach `jcl-govcon-web` via Railway's private network (`jcl-govcon-web.railway.internal`) instead of the public `*.up.railway.app` URL. We chose the public URL deliberately — at <100 fires/week the extra latency is a non-issue, while private networking introduces port-discovery, HTTP-vs-HTTPS handling, and service-to-service auth wrinkles that aren't worth the overhead at this volume. Revisit if the fire frequency grows by an order of magnitude or if we add bandwidth-heavy cron-to-web traffic.
+**Public URL for check-batches.** `check-batches` reaches `jcl-govcon-web` through the public `*.up.railway.app` URL. At <100 fires/week the extra latency is a non-issue, while private networking introduces port-discovery, HTTP-vs-HTTPS handling, and service-to-service auth wrinkles that aren't worth the overhead at this volume. Weekly crawl no longer uses HTTP for the scheduled path.
 
 Railway cron docs: <https://docs.railway.com/reference/cron-jobs>.
 
@@ -53,18 +53,20 @@ After the PR landing these files merges to `main`, the two cron services still n
 
 1. **New Service → Deploy from GitHub Repo → `jcl-govcon`.** Same repo as the web service. Railway offers to deploy the default `railway.toml`; override in the next step.
 2. **Settings → Name.** Set to `jcl-govcon-weekly-crawl` (or `-check-batches`). The name also becomes the default container hostname on the private network.
-3. **Settings → Config-as-code file.** Point at `railway.weekly-crawl.json` (or `railway.check-batches.json`). Railway now uses the JSON config's `build.dockerfilePath` and `deploy.cronSchedule` instead of the root `railway.toml`.
-4. **Variables tab → `INGEST_SECRET`.** Reference variable. Source: `jcl-govcon-web`. Key: `INGEST_SECRET`. Rotating the secret on the web service then propagates to the cron automatically.
-5. **Variables tab → `WEB_BASE_URL`.** Reference expression. Value: `https://${{jcl-govcon-web.RAILWAY_PUBLIC_DOMAIN}}`. Railway resolves this at container start; future domain changes propagate without edits.
-6. **Deploy.** First build takes ~seconds (alpine + curl, not a Node build). The first "cron run" slot may not show up until the next scheduled tick; use the manual trigger in step 4 below to smoke-test before waiting.
+3. **Settings → Config-as-code file.** Point at `railway.weekly-crawl.json` (or `railway.check-batches.json`). Railway now uses the service-specific JSON config instead of the root `railway.toml`.
+4. **Variables tab.** `jcl-govcon-weekly-crawl` needs the same runtime secrets used by the crawl worker: `DATABASE_URL`, `SAM_GOV_API_KEY`, `XAI_API_KEY`, `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID`, `NODE_ENV=production`, plus `SAM_DAILY_LIMIT` / `SAM_DRY_RUN` if those are set on the web service. Use reference variables from `jcl-govcon-web` and Postgres rather than copying secret values.
+5. **Variables tab for `jcl-govcon-check-batches`.** Keep `INGEST_SECRET` as a reference variable from `jcl-govcon-web`, and keep `WEB_BASE_URL` as `https://${{jcl-govcon-web.RAILWAY_PUBLIC_DOMAIN}}`.
+6. **Deploy.** The first "cron run" slot may not show up until the next scheduled tick; use the manual trigger in step 4 below to smoke-test before waiting.
 
 ## 4. Verification
 
 **Did the cron register?** Cron service → Settings → Cron Schedule should display the expected cron expression. If it's blank, the config-as-code file isn't being read; double-check the filename at Settings → Config-as-code.
 
-**Did the cron fire?** Cron service → Deployments tab. Each scheduled fire appears as a deployment with status `Exit 0` (or `Exit 1` on failure). The Deploy logs show the curl response including HTTP headers (because the `startCommand` uses `curl -i`).
+**Did Railpack build the worker runtime correctly?** Weekly crawl build logs should show Railpack detecting the Node app, installing production dependencies including `tsx`, and honoring `npm run cron:weekly-crawl` as the start command. Treat this as a first-deploy verification item rather than assuming the build plan from the config alone.
 
-**Did the web service handle the call?** jcl-govcon-web → Deploy logs, filtered for `kind: weekly-crawl` or `kind: check-batches`. Each fire produces multiple structured JSON log lines (`step: preflight`, `step: crawl`, `step: done`, etc.). Missing log lines mean the curl never reached the web service — check `WEB_BASE_URL` and `INGEST_SECRET`.
+**Did the cron fire?** Cron service → Deployments tab. Each scheduled fire appears as a deployment with status `Exit 0` (or `Exit 1` on failure). For weekly crawl, the exit code comes from `scripts/weekly-crawl-worker.ts`; for `check-batches`, the Deploy logs show the curl response including HTTP headers.
+
+**Did the service handle the work?** Weekly crawl logs live on the `jcl-govcon-weekly-crawl` deployment. `check-batches` route logs live on `jcl-govcon-web`, filtered for `kind: check-batches`. Each fire produces structured JSON log lines (`step: preflight`, `step: crawl`, `step: done`, etc.).
 
 **Did the DB record it?** From a local terminal with `DATABASE_URL` set:
 
