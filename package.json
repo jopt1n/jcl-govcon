@@ -6,6 +6,7 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
+    "cron:weekly-crawl": "tsx scripts/weekly-crawl-worker.ts",
     "lint": "next lint",
     "test": "vitest",
     "test:run": "vitest run",
@@ -30,6 +31,7 @@
     "recharts": "^3.8.0",
     "resend": "^6.9.3",
     "tailwind-merge": "^3.5.0",
+    "tsx": "^4.21.0",
     "xlsx": "^0.18.5",
     "zod": "^4.3.6"
   },
