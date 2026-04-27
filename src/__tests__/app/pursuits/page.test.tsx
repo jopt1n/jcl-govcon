@@ -34,7 +34,7 @@ const pursuit = {
   classification: "GOOD",
   responseDeadline: "2026-05-10T17:00:00.000Z",
   stage: "NEEDS_DEEP_DIVE",
-  outcome: null,
+  outcome: null as null | "WON" | "LOST" | "NO_BID" | "ARCHIVED",
   nextAction: "Read SOW",
   nextActionDueAt: null,
   contractType: "SUPPLIES_RESELLER",
@@ -43,7 +43,8 @@ const pursuit = {
   promotedAt: "2026-04-26T12:00:00.000Z",
 };
 
-function installFetch() {
+function installFetch(pursuitOverride: Partial<typeof pursuit> = {}) {
+  const row = { ...pursuit, ...pursuitOverride };
   const calls: Array<{ url: string; method: string; body?: unknown }> = [];
   global.fetch = vi.fn().mockImplementation(async (url: string, init?: RequestInit) => {
     const method = init?.method ?? "GET";
@@ -57,7 +58,7 @@ function installFetch() {
       return {
         ok: true,
         json: async () => ({
-          data: [pursuit],
+          data: [row],
           pagination: { page: 1, limit: 100, total: 1, totalPages: 1 },
         }),
       };
@@ -67,7 +68,7 @@ function installFetch() {
       return {
         ok: true,
         json: async () => ({
-          pursuit,
+          pursuit: row,
           contacts: [
             {
               id: "contact-1",
@@ -138,10 +139,79 @@ describe("PursuitsWorkspace", () => {
     });
     expect(screen.getAllByText("Printer supplies BPA").length).toBeGreaterThan(0);
     expect(screen.getByTestId("pursuit-detail-drawer")).toBeDefined();
+    expect(screen.getByTestId("pursuit-list-scroll").className).toContain(
+      "overflow-x-auto",
+    );
     await waitFor(() => {
       expect(screen.getByText("Jane Doe")).toBeDefined();
       expect(screen.getByText("sow.pdf")).toBeDefined();
     });
+  });
+
+  it("does not offer direct terminal outcome clearing in the drawer", async () => {
+    installFetch({ outcome: "ARCHIVED" });
+    render(<PursuitsWorkspace />);
+
+    const outcomeSelect = await screen.findByTestId(
+      "pursuit-outcome-select",
+    ) as HTMLSelectElement;
+
+    expect(outcomeSelect.value).toBe("ARCHIVED");
+    expect(outcomeSelect.querySelector('option[value=""]')).toBeNull();
+  });
+
+  it("aborts stale list requests when filters change", async () => {
+    const signals: AbortSignal[] = [];
+    global.fetch = vi.fn().mockImplementation((url: string, init?: RequestInit) => {
+      if (!url.startsWith("/api/pursuits?")) {
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({
+            pursuit,
+            contacts: [],
+            interactions: [],
+            documents: [],
+            stageHistory: [],
+          }),
+        });
+      }
+
+      const signal = init?.signal as AbortSignal;
+      signals.push(signal);
+      return new Promise((resolve, reject) => {
+        const finish = () =>
+          resolve({
+            ok: true,
+            json: async () => ({
+              data: [pursuit],
+              pagination: { page: 1, limit: 100, total: 1, totalPages: 1 },
+            }),
+          });
+        if (signal.aborted) {
+          reject(Object.assign(new Error("aborted"), { name: "AbortError" }));
+          return;
+        }
+        signal.addEventListener(
+          "abort",
+          () => reject(Object.assign(new Error("aborted"), { name: "AbortError" })),
+          { once: true },
+        );
+        setTimeout(finish, 25);
+      });
+    }) as unknown as typeof global.fetch;
+
+    render(<PursuitsWorkspace />);
+    await waitFor(() => {
+      expect(signals).toHaveLength(1);
+    });
+    fireEvent.change(screen.getByPlaceholderText("Title, agency, solicitation"), {
+      target: { value: "printer" },
+    });
+
+    await waitFor(() => {
+      expect(signals).toHaveLength(2);
+    });
+    expect(signals[0].aborted).toBe(true);
   });
 
   it("updates pursuit stage controls through PATCH", async () => {

@@ -241,6 +241,7 @@ export function PursuitDetailDrawer({
                 />
                 <Select
                   label="Outcome"
+                  testId="pursuit-outcome-select"
                   value={draft.outcome}
                   onChange={(outcome) =>
                     setDraft({
@@ -249,7 +250,7 @@ export function PursuitDetailDrawer({
                     })
                   }
                   options={PURSUIT_OUTCOMES}
-                  allowEmpty
+                  allowEmpty={!detail.pursuit.outcome}
                 />
                 <Select
                   label="Cash"

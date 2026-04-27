@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { RefreshCw, SearchCheck } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
@@ -33,6 +33,10 @@ export function PursuitsWorkspace() {
   const [detail, setDetail] = useState<PursuitDetail | null>(null);
   const [loadingDetail, setLoadingDetail] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const rowsRequestId = useRef(0);
+  const detailRequestId = useRef(0);
+  const rowsAbort = useRef<AbortController | null>(null);
+  const detailAbort = useRef<AbortController | null>(null);
 
   const query = useMemo(() => {
     const params = new URLSearchParams({ limit: "100", page: "1" });
@@ -52,14 +56,21 @@ export function PursuitsWorkspace() {
   }, [filters]);
 
   const fetchRows = useCallback(async () => {
+    const requestId = rowsRequestId.current + 1;
+    rowsRequestId.current = requestId;
+    rowsAbort.current?.abort();
+    const controller = new AbortController();
+    rowsAbort.current = controller;
+    const timeout = window.setTimeout(() => controller.abort(), 15_000);
     setLoadingRows(true);
     setError(null);
     try {
       const res = await fetch(`/api/pursuits?${query}`, {
-        signal: AbortSignal.timeout(15_000),
+        signal: controller.signal,
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error ?? "Failed to fetch pursuits");
+      if (requestId !== rowsRequestId.current) return;
       const data = json.data ?? [];
       setRows(data);
       setTotal(json.pagination?.total ?? data.length);
@@ -69,31 +80,48 @@ export function PursuitsWorkspace() {
           : data[0]?.id ?? null,
       );
     } catch (err) {
+      if (requestId !== rowsRequestId.current) return;
       setError(err instanceof Error ? err.message : "Failed to fetch pursuits");
       setRows([]);
       setTotal(0);
     } finally {
-      setLoadingRows(false);
+      window.clearTimeout(timeout);
+      if (requestId === rowsRequestId.current) {
+        setLoadingRows(false);
+      }
     }
   }, [query]);
 
   const fetchDetail = useCallback(async (id: string | null) => {
+    const requestId = detailRequestId.current + 1;
+    detailRequestId.current = requestId;
+    detailAbort.current?.abort();
     if (!id) {
       setDetail(null);
+      setLoadingDetail(false);
       return;
     }
+    const controller = new AbortController();
+    detailAbort.current = controller;
+    const timeout = window.setTimeout(() => controller.abort(), 15_000);
     setLoadingDetail(true);
     try {
       const res = await fetch(`/api/pursuits/${id}`, {
-        signal: AbortSignal.timeout(15_000),
+        signal: controller.signal,
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error ?? "Failed to fetch pursuit");
+      if (requestId !== detailRequestId.current) return;
       setDetail(json);
     } catch {
-      setDetail(null);
+      if (requestId === detailRequestId.current) {
+        setDetail(null);
+      }
     } finally {
-      setLoadingDetail(false);
+      window.clearTimeout(timeout);
+      if (requestId === detailRequestId.current) {
+        setLoadingDetail(false);
+      }
     }
   }, []);
 
@@ -104,6 +132,13 @@ export function PursuitsWorkspace() {
   useEffect(() => {
     fetchDetail(selectedId);
   }, [selectedId, fetchDetail]);
+
+  useEffect(() => {
+    return () => {
+      rowsAbort.current?.abort();
+      detailAbort.current?.abort();
+    };
+  }, []);
 
   async function patchSelected(body: Record<string, unknown>) {
     if (!selectedId) return;

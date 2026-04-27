@@ -88,8 +88,10 @@ describe("PATCH /api/pursuits/[id]", () => {
     expect(mockUpdatePursuit).not.toHaveBeenCalled();
   });
 
-  it("allows clearing final outcome without changing active stage", async () => {
-    mockUpdatePursuit.mockResolvedValue({ pursuit: { id: "pursuit-1" } });
+  it("rejects clearing terminal outcomes directly", async () => {
+    const err = new Error("Terminal outcomes cannot be cleared directly in Phase 1");
+    err.name = "PursuitStateError";
+    mockUpdatePursuit.mockRejectedValue(err);
     const req = new NextRequest("http://localhost/api/pursuits/pursuit-1", {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
@@ -97,9 +99,9 @@ describe("PATCH /api/pursuits/[id]", () => {
     });
     const res = await PATCH(req, { params: { id: "pursuit-1" } });
 
-    expect(res.status).toBe(200);
-    expect(mockUpdatePursuit).toHaveBeenCalledWith("pursuit-1", {
-      outcome: null,
+    expect(res.status).toBe(400);
+    expect(await res.json()).toEqual({
+      error: "Terminal outcomes cannot be cleared directly in Phase 1",
     });
   });
 });

@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import {
   createPursuitInteraction,
   listPursuitInteractions,
+  pursuitContactBelongsToPursuit,
+  pursuitExists,
 } from "@/lib/pursuits/service";
 import { isPursuitInteractionType } from "@/lib/pursuits/types";
 
@@ -10,6 +12,9 @@ export async function GET(
   { params }: { params: { id: string } },
 ) {
   try {
+    if (!(await pursuitExists(params.id))) {
+      return NextResponse.json({ error: "Pursuit not found" }, { status: 404 });
+    }
     const interactions = await listPursuitInteractions(params.id);
     return NextResponse.json({ data: interactions });
   } catch (err) {
@@ -33,6 +38,28 @@ export async function POST(
     if (!isPursuitInteractionType(body.type)) {
       return NextResponse.json({ error: "Invalid type" }, { status: 400 });
     }
+    if (!(await pursuitExists(params.id))) {
+      return NextResponse.json({ error: "Pursuit not found" }, { status: 404 });
+    }
+    let contactId: string | null = null;
+    if (body.contactId !== undefined && body.contactId !== null) {
+      if (typeof body.contactId !== "string" || !body.contactId.trim()) {
+        return NextResponse.json(
+          { error: "Invalid contactId" },
+          { status: 400 },
+        );
+      }
+      const candidateContactId = body.contactId.trim();
+      if (
+        !(await pursuitContactBelongsToPursuit(params.id, candidateContactId))
+      ) {
+        return NextResponse.json(
+          { error: "contactId must belong to this pursuit" },
+          { status: 400 },
+        );
+      }
+      contactId = candidateContactId;
+    }
     let occurredAt: Date | undefined;
     if (body.occurredAt !== undefined) {
       occurredAt = new Date(body.occurredAt);
@@ -46,7 +73,7 @@ export async function POST(
 
     const interaction = await createPursuitInteraction(params.id, {
       type: body.type,
-      contactId: body.contactId,
+      contactId,
       occurredAt,
       subject: body.subject,
       body: body.body,

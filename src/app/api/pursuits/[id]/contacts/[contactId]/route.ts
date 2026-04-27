@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import {
   deletePursuitContact,
+  pursuitExists,
   updatePursuitContact,
 } from "@/lib/pursuits/service";
 import { isPursuitContactRole } from "@/lib/pursuits/types";
@@ -13,6 +14,9 @@ export async function PATCH(
     const body = await req.json();
     if (body.role !== undefined && !isPursuitContactRole(body.role)) {
       return NextResponse.json({ error: "Invalid role" }, { status: 400 });
+    }
+    if (!(await pursuitExists(params.id))) {
+      return NextResponse.json({ error: "Pursuit not found" }, { status: 404 });
     }
 
     const contact = await updatePursuitContact(params.id, params.contactId, {
@@ -50,6 +54,9 @@ export async function DELETE(
   { params }: { params: { id: string; contactId: string } },
 ) {
   try {
+    if (!(await pursuitExists(params.id))) {
+      return NextResponse.json({ error: "Pursuit not found" }, { status: 404 });
+    }
     const deleted = await deletePursuitContact(params.id, params.contactId);
     if (!deleted) {
       return NextResponse.json(

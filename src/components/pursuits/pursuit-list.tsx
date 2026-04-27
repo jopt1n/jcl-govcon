@@ -78,15 +78,18 @@ export function PursuitList({
   }
 
   return (
-    <div className="overflow-hidden border border-[var(--border)] bg-[var(--surface)]">
-      <div className="grid grid-cols-[minmax(280px,1.5fr)_120px_120px_120px_130px] gap-0 border-b border-[var(--border)] bg-[var(--pursuit-ledger)] px-3 py-2 text-[11px] font-semibold uppercase tracking-wider text-[var(--text-muted)]">
+    <div
+      data-testid="pursuit-list-scroll"
+      className="overflow-x-auto border border-[var(--border)] bg-[var(--surface)]"
+    >
+      <div className="grid min-w-[790px] grid-cols-[minmax(280px,1.5fr)_120px_120px_120px_130px] gap-0 border-b border-[var(--border)] bg-[var(--pursuit-ledger)] px-3 py-2 text-[11px] font-semibold uppercase tracking-wider text-[var(--text-muted)]">
         <div>Pursuit</div>
         <div>Stage</div>
         <div>Next</div>
         <div>Cash</div>
         <div>Contact</div>
       </div>
-      <div className="max-h-[calc(100vh-230px)] overflow-y-auto">
+      <div className="max-h-[calc(100vh-230px)] min-w-[790px] overflow-y-auto">
         {pursuits.map((pursuit) => (
           <button
             key={pursuit.id}

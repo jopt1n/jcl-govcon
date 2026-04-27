@@ -5,11 +5,13 @@ const {
   mockCreatePursuitContact,
   mockDeletePursuitContact,
   mockListPursuitContacts,
+  mockPursuitExists,
   mockUpdatePursuitContact,
 } = vi.hoisted(() => ({
   mockCreatePursuitContact: vi.fn(),
   mockDeletePursuitContact: vi.fn(),
   mockListPursuitContacts: vi.fn(),
+  mockPursuitExists: vi.fn(),
   mockUpdatePursuitContact: vi.fn(),
 }));
 
@@ -17,6 +19,7 @@ vi.mock("@/lib/pursuits/service", () => ({
   createPursuitContact: mockCreatePursuitContact,
   deletePursuitContact: mockDeletePursuitContact,
   listPursuitContacts: mockListPursuitContacts,
+  pursuitExists: mockPursuitExists,
   updatePursuitContact: mockUpdatePursuitContact,
 }));
 
@@ -33,6 +36,8 @@ beforeEach(() => {
   mockCreatePursuitContact.mockReset();
   mockDeletePursuitContact.mockReset();
   mockListPursuitContacts.mockReset();
+  mockPursuitExists.mockReset();
+  mockPursuitExists.mockResolvedValue(true);
   mockUpdatePursuitContact.mockReset();
 });
 
@@ -91,6 +96,22 @@ describe("pursuit contact routes", () => {
     const res = await CONTACTS_POST(req, { params: { id: "pursuit-1" } });
 
     expect(res.status).toBe(400);
+    expect(mockCreatePursuitContact).not.toHaveBeenCalled();
+  });
+
+  it("returns 404 instead of relying on FK errors when pursuit is missing", async () => {
+    mockPursuitExists.mockResolvedValue(false);
+    const req = new NextRequest(
+      "http://localhost/api/pursuits/missing/contacts",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ role: "GOVERNMENT_POC" }),
+      },
+    );
+    const res = await CONTACTS_POST(req, { params: { id: "missing" } });
+
+    expect(res.status).toBe(404);
     expect(mockCreatePursuitContact).not.toHaveBeenCalled();
   });
 

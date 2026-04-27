@@ -1,7 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import {
+  contractBelongsToPursuit,
   createPursuitDocument,
   listPursuitDocuments,
+  pursuitExists,
 } from "@/lib/pursuits/service";
 
 export async function GET(
@@ -9,6 +11,9 @@ export async function GET(
   { params }: { params: { id: string } },
 ) {
   try {
+    if (!(await pursuitExists(params.id))) {
+      return NextResponse.json({ error: "Pursuit not found" }, { status: 404 });
+    }
     const documents = await listPursuitDocuments(params.id);
     return NextResponse.json({ data: documents });
   } catch (err) {
@@ -45,9 +50,29 @@ export async function POST(
         { status: 400 },
       );
     }
+    if (!(await pursuitExists(params.id))) {
+      return NextResponse.json({ error: "Pursuit not found" }, { status: 404 });
+    }
+    let contractId: string | null = null;
+    if (body.contractId !== undefined && body.contractId !== null) {
+      if (typeof body.contractId !== "string" || !body.contractId.trim()) {
+        return NextResponse.json(
+          { error: "Invalid contractId" },
+          { status: 400 },
+        );
+      }
+      const candidateContractId = body.contractId.trim();
+      if (!(await contractBelongsToPursuit(params.id, candidateContractId))) {
+        return NextResponse.json(
+          { error: "contractId must belong to this pursuit" },
+          { status: 400 },
+        );
+      }
+      contractId = candidateContractId;
+    }
 
     const document = await createPursuitDocument(params.id, {
-      contractId: body.contractId,
+      contractId,
       sourceUrl: body.sourceUrl,
       fileName: body.fileName,
       contentType: body.contentType,

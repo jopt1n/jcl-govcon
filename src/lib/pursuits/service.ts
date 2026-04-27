@@ -57,6 +57,13 @@ type ContractProjection = {
 
 type PursuitRow = typeof pursuits.$inferSelect;
 
+export class PursuitStateError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "PursuitStateError";
+  }
+}
+
 export type PursuitListFilters = {
   page: number;
   limit: number;
@@ -222,22 +229,17 @@ async function seedPursuitDocuments(
   const links = Array.from(new Set((contract.resourceLinks ?? []).filter(Boolean)));
   if (links.length === 0) return;
 
-  const existing = await executor
-    .select({ sourceUrl: pursuitDocuments.sourceUrl })
-    .from(pursuitDocuments)
-    .where(eq(pursuitDocuments.pursuitId, pursuitId));
-  const existingUrls = new Set(existing.map((row) => row.sourceUrl));
-  const missing = links.filter((link) => !existingUrls.has(link));
-  if (missing.length === 0) return;
-
-  await executor.insert(pursuitDocuments).values(
-    missing.map((sourceUrl) => ({
-      pursuitId,
-      contractId: contract.id,
-      sourceUrl,
-      fileName: filenameFromUrl(sourceUrl),
-    })),
-  );
+  await executor
+    .insert(pursuitDocuments)
+    .values(
+      links.map((sourceUrl) => ({
+        pursuitId,
+        contractId: contract.id,
+        sourceUrl,
+        fileName: filenameFromUrl(sourceUrl),
+      })),
+    )
+    .onConflictDoNothing();
 }
 
 export async function ensurePursuitForContract(
@@ -302,10 +304,16 @@ export async function ensurePursuitForContract(
       samUrl: current.samUrl,
       promotedAt: current.promotedAt ?? new Date(),
     })
+    .onConflictDoNothing()
     .returning();
 
-  await seedPursuitDocuments(created.id, current, executor);
-  return created as PursuitRow;
+  const pursuit =
+    (created as PursuitRow | undefined) ??
+    (await findExistingPursuit(family?.familyId ?? null, current.id, executor));
+  if (!pursuit) return null;
+
+  await seedPursuitDocuments(pursuit.id, current, executor);
+  return pursuit;
 }
 
 export async function backfillPromotedPursuits(): Promise<{
@@ -506,6 +514,11 @@ export async function updatePursuit(
     .where(eq(pursuits.id, pursuitId))
     .limit(1);
   if (!existing) return null;
+  if (input.outcome === null && existing.outcome !== null) {
+    throw new PursuitStateError(
+      "Terminal outcomes cannot be cleared directly in Phase 1",
+    );
+  }
 
   const updates: Partial<typeof pursuits.$inferInsert> = { updatedAt: new Date() };
   if (input.stage !== undefined) updates.stage = input.stage;
@@ -605,7 +618,12 @@ export async function archivePursuitForContract(
       .limit(1)) as PursuitRow[];
   }
 
-  const pursuit = rows[0];
+  const pursuit =
+    rows[0] ??
+    (await ensurePursuitForContract(contractId, {
+      reactivate: false,
+      executor,
+    }));
   if (!pursuit || pursuit.outcome === "ARCHIVED") return pursuit ?? null;
 
   const [updated] = await executor
@@ -636,6 +654,66 @@ export async function listPursuitContacts(pursuitId: string) {
     .from(pursuitContacts)
     .where(eq(pursuitContacts.pursuitId, pursuitId))
     .orderBy(desc(pursuitContacts.isPrimary), asc(pursuitContacts.createdAt));
+}
+
+export async function pursuitExists(pursuitId: string): Promise<boolean> {
+  const rows = await db
+    .select({ id: pursuits.id })
+    .from(pursuits)
+    .where(eq(pursuits.id, pursuitId))
+    .limit(1);
+  return rows.length > 0;
+}
+
+export async function pursuitContactBelongsToPursuit(
+  pursuitId: string,
+  contactId: string,
+): Promise<boolean> {
+  const rows = await db
+    .select({ id: pursuitContacts.id })
+    .from(pursuitContacts)
+    .where(
+      and(
+        eq(pursuitContacts.id, contactId),
+        eq(pursuitContacts.pursuitId, pursuitId),
+      ),
+    )
+    .limit(1);
+  return rows.length > 0;
+}
+
+export async function contractBelongsToPursuit(
+  pursuitId: string,
+  contractId: string,
+): Promise<boolean> {
+  const [pursuit] = await db
+    .select({
+      currentContractId: pursuits.currentContractId,
+      familyId: pursuits.familyId,
+    })
+    .from(pursuits)
+    .where(eq(pursuits.id, pursuitId))
+    .limit(1);
+  if (!pursuit) return false;
+  if (pursuit.currentContractId === contractId) return true;
+  if (!pursuit.familyId) return false;
+
+  try {
+    const rows = await db
+      .select({ contractId: contractFamilyMembers.contractId })
+      .from(contractFamilyMembers)
+      .where(
+        and(
+          eq(contractFamilyMembers.familyId, pursuit.familyId),
+          eq(contractFamilyMembers.contractId, contractId),
+        ),
+      )
+      .limit(1);
+    return rows.length > 0;
+  } catch (err) {
+    if (isMissingFamilyTableError(err)) return false;
+    throw err;
+  }
 }
 
 export async function createPursuitContact(
@@ -748,20 +826,34 @@ export async function createPursuitDocument(
   pursuitId: string,
   input: PursuitDocumentInput,
 ) {
+  const values = {
+    pursuitId,
+    contractId: input.contractId ?? null,
+    sourceUrl: input.sourceUrl,
+    fileName: cleanText(input.fileName) ?? filenameFromUrl(input.sourceUrl),
+    contentType: cleanText(input.contentType),
+    sizeBytes: input.sizeBytes ?? null,
+    sha256: cleanText(input.sha256),
+    extractedText: cleanText(input.extractedText),
+    objectKey: cleanText(input.objectKey),
+    storageProvider: cleanText(input.storageProvider),
+  };
   const [row] = await db
     .insert(pursuitDocuments)
-    .values({
-      pursuitId,
-      contractId: input.contractId ?? null,
-      sourceUrl: input.sourceUrl,
-      fileName: cleanText(input.fileName) ?? filenameFromUrl(input.sourceUrl),
-      contentType: cleanText(input.contentType),
-      sizeBytes: input.sizeBytes ?? null,
-      sha256: cleanText(input.sha256),
-      extractedText: cleanText(input.extractedText),
-      objectKey: cleanText(input.objectKey),
-      storageProvider: cleanText(input.storageProvider),
-    })
+    .values(values)
+    .onConflictDoNothing()
     .returning();
-  return row;
+  if (row) return row;
+
+  const [existing] = await db
+    .select()
+    .from(pursuitDocuments)
+    .where(
+      and(
+        eq(pursuitDocuments.pursuitId, pursuitId),
+        eq(pursuitDocuments.sourceUrl, input.sourceUrl),
+      ),
+    )
+    .limit(1);
+  return existing ?? null;
 }

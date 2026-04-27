@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import {
   createPursuitContact,
   listPursuitContacts,
+  pursuitExists,
 } from "@/lib/pursuits/service";
 import { isPursuitContactRole } from "@/lib/pursuits/types";
 
@@ -10,6 +11,9 @@ export async function GET(
   { params }: { params: { id: string } },
 ) {
   try {
+    if (!(await pursuitExists(params.id))) {
+      return NextResponse.json({ error: "Pursuit not found" }, { status: 404 });
+    }
     const contacts = await listPursuitContacts(params.id);
     return NextResponse.json({ data: contacts });
   } catch (err) {
@@ -32,6 +36,9 @@ export async function POST(
     const body = await req.json();
     if (!isPursuitContactRole(body.role)) {
       return NextResponse.json({ error: "Invalid role" }, { status: 400 });
+    }
+    if (!(await pursuitExists(params.id))) {
+      return NextResponse.json({ error: "Pursuit not found" }, { status: 404 });
     }
     const contact = await createPursuitContact(params.id, {
       role: body.role,

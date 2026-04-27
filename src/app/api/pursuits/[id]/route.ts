@@ -112,6 +112,9 @@ export async function PATCH(
     }
     return NextResponse.json(detail);
   } catch (err) {
+    if (err instanceof Error && err.name === "PursuitStateError") {
+      return NextResponse.json({ error: err.message }, { status: 400 });
+    }
     console.error("[api/pursuits/id] PATCH Error:", err);
     return NextResponse.json(
       {
