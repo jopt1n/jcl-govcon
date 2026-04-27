@@ -1,13 +1,29 @@
 import { vi } from "vitest";
 import { NextRequest } from "next/server";
 
-const { mockDeactivateWatchTargetsWithoutLiveLinks } = vi.hoisted(() => ({
-  mockDeactivateWatchTargetsWithoutLiveLinks: vi.fn().mockResolvedValue([]),
+const {
+  mockArchivePursuitForContract,
+  mockArchiveContractFamily,
+  mockDemoteContractFamily,
+  mockEnsurePursuitForContract,
+  mockHasOpportunityFamilyTables,
+  mockPromoteContractFamily,
+} = vi.hoisted(() => ({
+  mockArchivePursuitForContract: vi.fn().mockResolvedValue(null),
+  mockArchiveContractFamily: vi.fn().mockResolvedValue({ familyId: null }),
+  mockDemoteContractFamily: vi.fn().mockResolvedValue({ familyId: null }),
+  mockEnsurePursuitForContract: vi.fn().mockResolvedValue({ id: "pursuit-1" }),
+  mockHasOpportunityFamilyTables: vi.fn().mockResolvedValue(true),
+  mockPromoteContractFamily: vi.fn().mockResolvedValue({ familyId: null }),
 }));
 
 vi.mock("drizzle-orm", () => ({
   eq: vi.fn(),
-  sql: vi.fn((_strings, ..._values) => ({ __sql: true })),
+  sql: vi.fn((strings: TemplateStringsArray, ...values: unknown[]) => ({
+    __sql: true,
+    text: strings.join("?"),
+    values,
+  })),
 }));
 
 vi.mock("@/lib/db/schema", () => ({
@@ -137,16 +153,16 @@ vi.mock("@/lib/db", () => {
   };
 });
 
-vi.mock("@/lib/watch/service", () => ({
-  deactivateWatchTargetsWithoutLiveLinks:
-    mockDeactivateWatchTargetsWithoutLiveLinks,
-  getContractWatchMetadata: vi.fn().mockResolvedValue({
-    watched: false,
-    watchTargetId: null,
-    watchStatus: null,
-    watchLastCheckedAt: null,
-    watchLastAlertedAt: null,
-  }),
+vi.mock("@/lib/opportunity-family/service", () => ({
+  archiveContractFamily: mockArchiveContractFamily,
+  demoteContractFamily: mockDemoteContractFamily,
+  hasOpportunityFamilyTables: mockHasOpportunityFamilyTables,
+  promoteContractFamily: mockPromoteContractFamily,
+}));
+
+vi.mock("@/lib/pursuits/service", () => ({
+  archivePursuitForContract: mockArchivePursuitForContract,
+  ensurePursuitForContract: mockEnsurePursuitForContract,
 }));
 
 import { GET, PATCH } from "@/app/api/contracts/[id]/route";
@@ -158,8 +174,21 @@ beforeEach(() => {
   mockAuditInsertShouldFail = false;
   mockTxUpdateCalled = false;
   mockTxUpdateSetArg = null;
-  mockDeactivateWatchTargetsWithoutLiveLinks.mockReset();
-  mockDeactivateWatchTargetsWithoutLiveLinks.mockResolvedValue([]);
+  mockArchiveContractFamily.mockReset();
+  mockArchiveContractFamily.mockResolvedValue({ familyId: null });
+  mockArchivePursuitForContract.mockReset();
+  mockArchivePursuitForContract.mockResolvedValue(null);
+  mockDemoteContractFamily.mockReset();
+  mockDemoteContractFamily.mockResolvedValue({ familyId: null });
+  mockEnsurePursuitForContract.mockReset();
+  mockEnsurePursuitForContract.mockResolvedValue({ id: "pursuit-1" });
+  mockHasOpportunityFamilyTables.mockReset();
+  mockHasOpportunityFamilyTables.mockResolvedValue(true);
+  mockPromoteContractFamily.mockReset();
+  mockPromoteContractFamily.mockResolvedValue({ familyId: null });
+  mockTxPreSelectResult.splice(0, mockTxPreSelectResult.length, {
+    promoted: false,
+  });
 });
 
 describe("GET /api/contracts/[id]", () => {
@@ -310,6 +339,10 @@ describe("PATCH /api/contracts/[id]", () => {
   });
 
   it("accepts archived:true as a manual archive update", async () => {
+    // Archive is terminal: takes the transaction path so it can atomically
+    // demote and update the family decision alongside the tag append. Plain
+    // non-promoted archive still yields exactly zero audit rows — the demote
+    // audit fires only when the pre-update row was promoted.
     mockUpdateResult = [{ id: "test-uuid", tags: ["ARCHIVED"] }];
 
     const req = new NextRequest("http://localhost/api/contracts/test-uuid", {
@@ -321,14 +354,22 @@ describe("PATCH /api/contracts/[id]", () => {
 
     expect(res.status).toBe(200);
     expect(mockTxUpdateCalled).toBe(true);
-    expect(mockDeactivateWatchTargetsWithoutLiveLinks).toHaveBeenCalledTimes(1);
-    expect(mockDeactivateWatchTargetsWithoutLiveLinks).toHaveBeenCalledWith(
-      undefined,
+    expect(mockAuditInsertCalls).toHaveLength(0);
+    expect(mockArchiveContractFamily).toHaveBeenCalledTimes(1);
+    expect(mockArchiveContractFamily).toHaveBeenCalledWith(
+      "test-uuid",
+      expect.any(Object),
+    );
+    expect(mockArchivePursuitForContract).toHaveBeenCalledWith(
+      "test-uuid",
       expect.any(Object),
     );
   });
 
   it("accepts archived:false as a manual unarchive update", async () => {
+    // Un-archive is a pure tag removal: no demote, no promotion restoration,
+    // no transaction. Operator must explicitly re-promote to restore that
+    // quality — that's the invariant "archive stripped all qualities."
     mockUpdateResult = [{ id: "test-uuid", tags: [] }];
 
     const req = new NextRequest("http://localhost/api/contracts/test-uuid", {
@@ -340,6 +381,157 @@ describe("PATCH /api/contracts/[id]", () => {
 
     expect(res.status).toBe(200);
     expect(mockTxUpdateCalled).toBe(false);
+    expect(mockArchiveContractFamily).not.toHaveBeenCalled();
+  });
+
+  it("archived:true writes a demote audit row when the row was previously promoted", async () => {
+    // Pre-update read sees promoted=true → archive strips promotion and writes
+    // a single demote audit row tagged with reason:"archive" so retros can
+    // distinguish implicit (archive-driven) from explicit demotes.
+    mockTxPreSelectResult.splice(0, mockTxPreSelectResult.length, {
+      promoted: true,
+    });
+    mockUpdateResult = [
+      { id: "test-uuid", tags: ["ARCHIVED"], promoted: false },
+    ];
+
+    const req = new NextRequest("http://localhost/api/contracts/test-uuid", {
+      method: "PATCH",
+      body: JSON.stringify({ archived: true }),
+      headers: { "Content-Type": "application/json" },
+    });
+    const res = await PATCH(req, { params: { id: "test-uuid" } });
+
+    expect(res.status).toBe(200);
+    expect(mockAuditInsertCalls).toHaveLength(1);
+    expect(mockAuditInsertCalls[0]).toMatchObject({
+      contractId: "test-uuid",
+      action: "demote",
+      metadata: { reason: "archive" },
+    });
+  });
+
+  it("archived:true + promoted:false writes exactly one demote row (archive owns it)", async () => {
+    // Combined payload is allowed but archive drives the audit. The explicit
+    // promote/demote branch is gated on `body.archived !== true`, so we don't
+    // double-log one user action. Reason tag distinguishes the source.
+    mockTxPreSelectResult.splice(0, mockTxPreSelectResult.length, {
+      promoted: true,
+    });
+    mockUpdateResult = [
+      { id: "test-uuid", tags: ["ARCHIVED"], promoted: false },
+    ];
+
+    const req = new NextRequest("http://localhost/api/contracts/test-uuid", {
+      method: "PATCH",
+      body: JSON.stringify({ archived: true, promoted: false }),
+      headers: { "Content-Type": "application/json" },
+    });
+    const res = await PATCH(req, { params: { id: "test-uuid" } });
+
+    expect(res.status).toBe(200);
+    expect(mockAuditInsertCalls).toHaveLength(1);
+    expect(mockAuditInsertCalls[0]).toMatchObject({
+      action: "demote",
+      metadata: { reason: "archive" },
+    });
+  });
+
+  it("rejects { archived:true, promoted:true } as incoherent with 400", async () => {
+    // Archive is terminal (strips promotion). Promote is the opposite action.
+    // Accepting both in one PATCH would require picking a winner silently;
+    // reject up front and let the client decide.
+    const req = new NextRequest("http://localhost/api/contracts/test-uuid", {
+      method: "PATCH",
+      body: JSON.stringify({ archived: true, promoted: true }),
+      headers: { "Content-Type": "application/json" },
+    });
+    const res = await PATCH(req, { params: { id: "test-uuid" } });
+
+    expect(res.status).toBe(400);
+    const data = await res.json();
+    expect(data.error).toBe(
+      "Cannot set archived=true and promoted=true in the same request",
+    );
+    // Nothing else fired: no DB write, no audit row, no family update.
+    expect(mockTxUpdateCalled).toBe(false);
+    expect(mockAuditInsertCalls).toHaveLength(0);
+    expect(mockArchiveContractFamily).not.toHaveBeenCalled();
+  });
+
+  it("archived:true archives the opportunity family via the helper", async () => {
+    // The handler's job is to call `archiveContractFamily` inside the same
+    // transaction that writes the ARCHIVED tag. The helper itself handles the
+    // "no family exists" case (returns null) — mocked here.
+    mockUpdateResult = [
+      { id: "test-uuid", tags: ["ARCHIVED"], promoted: false },
+    ];
+    mockArchiveContractFamily.mockResolvedValue({
+      familyId: "family-1",
+    });
+
+    const req = new NextRequest("http://localhost/api/contracts/test-uuid", {
+      method: "PATCH",
+      body: JSON.stringify({ archived: true }),
+      headers: { "Content-Type": "application/json" },
+    });
+    const res = await PATCH(req, { params: { id: "test-uuid" } });
+
+    expect(res.status).toBe(200);
+    expect(mockArchiveContractFamily).toHaveBeenCalledWith(
+      "test-uuid",
+      expect.any(Object),
+    );
+  });
+
+  it("archived:true succeeds and skips family side effects when family tables are unavailable", async () => {
+    // The contract archive is the primary action. If the optional family tables
+    // have not been pushed locally, the route must not probe missing tables
+    // inside the write transaction and poison the archive update.
+    mockHasOpportunityFamilyTables.mockResolvedValue(false);
+    mockUpdateResult = [{ id: "test-uuid", tags: ["ARCHIVED"] }];
+
+    const req = new NextRequest("http://localhost/api/contracts/test-uuid", {
+      method: "PATCH",
+      body: JSON.stringify({ archived: true }),
+      headers: { "Content-Type": "application/json" },
+    });
+    const res = await PATCH(req, { params: { id: "test-uuid" } });
+
+    expect(res.status).toBe(200);
+    expect(mockTxUpdateCalled).toBe(true);
+    expect(mockHasOpportunityFamilyTables).toHaveBeenCalledTimes(1);
+    expect(mockArchiveContractFamily).not.toHaveBeenCalled();
+    expect(mockArchivePursuitForContract).toHaveBeenCalledWith(
+      "test-uuid",
+      expect.any(Object),
+    );
+    expect(mockAuditInsertCalls).toHaveLength(0);
+  });
+
+  it("archived:true still writes the implicit demote audit when family tables are unavailable", async () => {
+    mockHasOpportunityFamilyTables.mockResolvedValue(false);
+    mockTxPreSelectResult.splice(0, mockTxPreSelectResult.length, {
+      promoted: true,
+    });
+    mockUpdateResult = [
+      { id: "test-uuid", tags: ["ARCHIVED"], promoted: false },
+    ];
+
+    const req = new NextRequest("http://localhost/api/contracts/test-uuid", {
+      method: "PATCH",
+      body: JSON.stringify({ archived: true }),
+      headers: { "Content-Type": "application/json" },
+    });
+    const res = await PATCH(req, { params: { id: "test-uuid" } });
+
+    expect(res.status).toBe(200);
+    expect(mockArchiveContractFamily).not.toHaveBeenCalled();
+    expect(mockAuditInsertCalls).toHaveLength(1);
+    expect(mockAuditInsertCalls[0]).toMatchObject({
+      action: "demote",
+      metadata: { reason: "archive" },
+    });
   });
 
   // ── CHOSEN tier: promoted field ─────────────────────────────────────
@@ -383,6 +575,69 @@ describe("PATCH /api/contracts/[id]", () => {
     });
     // Transaction path was exercised: tx.update was called, not the outer db.update.
     expect(mockTxUpdateCalled).toBe(true);
+    expect(mockPromoteContractFamily).toHaveBeenCalledWith(
+      "test-uuid",
+      expect.any(Object),
+    );
+    expect(mockEnsurePursuitForContract).toHaveBeenCalledWith("test-uuid", {
+      reactivate: true,
+      executor: expect.any(Object),
+    });
+    expect(mockTxUpdateSetArg).not.toBeNull();
+    expect(mockTxUpdateSetArg!.promoted).toBe(true);
+    expect(mockTxUpdateSetArg!.promotedAt).toBeInstanceOf(Date);
+    expect(mockTxUpdateSetArg!.reviewedAt).toMatchObject({ __sql: true });
+  });
+
+  it("promoted:true removes the ARCHIVED tag", async () => {
+    mockUpdateResult = [
+      {
+        id: "test-uuid",
+        promoted: true,
+        tags: [],
+        promotedAt: new Date().toISOString(),
+      },
+    ];
+
+    const req = new NextRequest("http://localhost/api/contracts/test-uuid", {
+      method: "PATCH",
+      body: JSON.stringify({ promoted: true }),
+      headers: { "Content-Type": "application/json" },
+    });
+    const res = await PATCH(req, { params: { id: "test-uuid" } });
+
+    expect(res.status).toBe(200);
+    expect(mockTxUpdateSetArg).not.toBeNull();
+    expect(mockTxUpdateSetArg!.tags).toMatchObject({
+      __sql: true,
+      text: expect.stringContaining("- 'ARCHIVED'"),
+    });
+  });
+
+  it("promoted:true writes audit and skips family side effects when family tables are unavailable", async () => {
+    mockHasOpportunityFamilyTables.mockResolvedValue(false);
+    mockUpdateResult = [
+      { id: "test-uuid", promoted: true, promotedAt: new Date().toISOString() },
+    ];
+
+    const req = new NextRequest("http://localhost/api/contracts/test-uuid", {
+      method: "PATCH",
+      body: JSON.stringify({ promoted: true }),
+      headers: { "Content-Type": "application/json" },
+    });
+    const res = await PATCH(req, { params: { id: "test-uuid" } });
+
+    expect(res.status).toBe(200);
+    expect(mockAuditInsertCalls).toHaveLength(1);
+    expect(mockAuditInsertCalls[0]).toMatchObject({
+      contractId: "test-uuid",
+      action: "promote",
+    });
+    expect(mockPromoteContractFamily).not.toHaveBeenCalled();
+    expect(mockEnsurePursuitForContract).toHaveBeenCalledWith("test-uuid", {
+      reactivate: true,
+      executor: expect.any(Object),
+    });
   });
 
   it("promoted:false writes an audit_log row with action=demote", async () => {
@@ -401,6 +656,30 @@ describe("PATCH /api/contracts/[id]", () => {
       contractId: "test-uuid",
       action: "demote",
     });
+    expect(mockDemoteContractFamily).toHaveBeenCalledWith(
+      "test-uuid",
+      expect.any(Object),
+    );
+  });
+
+  it("promoted:false writes audit and skips family side effects when family tables are unavailable", async () => {
+    mockHasOpportunityFamilyTables.mockResolvedValue(false);
+    mockUpdateResult = [{ id: "test-uuid", promoted: false, promotedAt: null }];
+
+    const req = new NextRequest("http://localhost/api/contracts/test-uuid", {
+      method: "PATCH",
+      body: JSON.stringify({ promoted: false }),
+      headers: { "Content-Type": "application/json" },
+    });
+    const res = await PATCH(req, { params: { id: "test-uuid" } });
+
+    expect(res.status).toBe(200);
+    expect(mockAuditInsertCalls).toHaveLength(1);
+    expect(mockAuditInsertCalls[0]).toMatchObject({
+      contractId: "test-uuid",
+      action: "demote",
+    });
+    expect(mockDemoteContractFamily).not.toHaveBeenCalled();
   });
 
   it("PATCH on nonexistent contract with promoted:true does not write audit_log", async () => {

@@ -156,10 +156,6 @@ function serializeEvent(event: WatchEventRow): WatchEventView {
   };
 }
 
-function hasArchivedTag(tags: string[] | null | undefined): boolean {
-  return (tags ?? []).includes("ARCHIVED");
-}
-
 async function fetchContractsByIds(
   ids: string[],
 ): Promise<ContractFamilyRow[]> {
@@ -348,8 +344,6 @@ export async function listWatchTargets(
     totalPages: number;
   };
 }> {
-  await deactivateWatchTargetsWithoutLiveLinks();
-
   const page = Math.max(1, options.page ?? 1);
   const limit = Math.min(100, Math.max(1, options.limit ?? 50));
   const offset = (page - 1) * limit;
@@ -798,85 +792,6 @@ export async function deactivateWatchTargetByContractId(
       reason,
     );
     return { watchTargetId };
-  };
-
-  if (executor) return run(executor);
-  return db.transaction(run);
-}
-
-export async function deactivateWatchTargetsWithoutLiveLinks(
-  targetIds?: string[],
-  executor?: DbExecutor,
-): Promise<string[]> {
-  const dedupedTargetIds = targetIds
-    ? Array.from(new Set(targetIds.filter(Boolean)))
-    : [];
-
-  const run = async (executor: DbExecutor): Promise<string[]> => {
-    const targetWhere = targetIds
-      ? dedupedTargetIds.length > 0
-        ? and(
-            eq(watchTargets.active, true),
-            inArray(watchTargets.id, dedupedTargetIds),
-          )
-        : null
-      : eq(watchTargets.active, true);
-
-    if (targetWhere === null) {
-      return [];
-    }
-
-    const activeTargets = await executor
-      .select({
-        id: watchTargets.id,
-        sourceContractId: watchTargets.sourceContractId,
-      })
-      .from(watchTargets)
-      .where(targetWhere);
-
-    if (activeTargets.length === 0) {
-      return [];
-    }
-
-    const activeTargetIds = activeTargets.map((target) => target.id);
-    const linkRows = await executor
-      .select({
-        watchTargetId: watchTargetLinks.watchTargetId,
-        tags: contracts.tags,
-      })
-      .from(watchTargetLinks)
-      .innerJoin(contracts, eq(contracts.id, watchTargetLinks.contractId))
-      .where(inArray(watchTargetLinks.watchTargetId, activeTargetIds));
-
-    const hasLiveLink = new Map<string, boolean>();
-    for (const row of linkRows) {
-      if (!hasArchivedTag(row.tags)) {
-        hasLiveLink.set(row.watchTargetId, true);
-      } else if (!hasLiveLink.has(row.watchTargetId)) {
-        hasLiveLink.set(row.watchTargetId, false);
-      }
-    }
-
-    const targetsToDeactivate = activeTargets.filter(
-      (target) => hasLiveLink.get(target.id) !== true,
-    );
-
-    if (targetsToDeactivate.length === 0) {
-      return [];
-    }
-
-    const now = new Date();
-    for (const target of targetsToDeactivate) {
-      await deactivateWatchTargetInExecutor(
-        executor,
-        target.id,
-        target.sourceContractId,
-        now,
-        "all_linked_contracts_archived",
-      );
-    }
-
-    return targetsToDeactivate.map((target) => target.id);
   };
 
   if (executor) return run(executor);

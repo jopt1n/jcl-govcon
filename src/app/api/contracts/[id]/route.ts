@@ -6,9 +6,15 @@ import { generateActionPlan } from "@/lib/ai/classifier";
 import { downloadDocuments } from "@/lib/sam-gov/documents";
 import { extractAllDocumentTexts } from "@/lib/document-text";
 import {
-  deactivateWatchTargetsWithoutLiveLinks,
-  getContractWatchMetadata,
-} from "@/lib/watch/service";
+  archiveContractFamily,
+  demoteContractFamily,
+  hasOpportunityFamilyTables,
+  promoteContractFamily,
+} from "@/lib/opportunity-family/service";
+import {
+  archivePursuitForContract,
+  ensurePursuitForContract,
+} from "@/lib/pursuits/service";
 
 /**
  * GET /api/contracts/[id]
@@ -20,10 +26,11 @@ export async function GET(
   { params }: { params: { id: string } },
 ) {
   try {
-    const [[contract], watchMetadata] = await Promise.all([
-      db.select().from(contracts).where(eq(contracts.id, params.id)).limit(1),
-      getContractWatchMetadata(params.id),
-    ]);
+    const [contract] = await db
+      .select()
+      .from(contracts)
+      .where(eq(contracts.id, params.id))
+      .limit(1);
 
     if (!contract) {
       return NextResponse.json(
@@ -32,14 +39,7 @@ export async function GET(
       );
     }
 
-    return NextResponse.json({
-      ...contract,
-      watched: watchMetadata.watched,
-      watchTargetId: watchMetadata.watchTargetId,
-      watchStatus: watchMetadata.watchStatus,
-      watchLastCheckedAt: watchMetadata.watchLastCheckedAt,
-      watchLastAlertedAt: watchMetadata.watchLastAlertedAt,
-    });
+    return NextResponse.json(contract);
   } catch (err) {
     console.error("[api/contracts/id] GET Error:", err);
     return NextResponse.json(
@@ -66,7 +66,7 @@ export async function PATCH(
     const body = await req.json();
     const updates: Record<string, unknown> = {};
 
-    // Archive is terminal — it strips all qualities (demotes + unwatches). A
+    // Archive is terminal — it strips the promoted quality. A
     // request that tries to archive and promote in the same PATCH is incoherent;
     // reject it up front rather than silently letting one win.
     if (body.archived === true && body.promoted === true) {
@@ -211,6 +211,9 @@ export async function PATCH(
       const setPromoted = body.promoted;
       updates.promoted = setPromoted;
       updates.promotedAt = setPromoted ? new Date() : null;
+      if (setPromoted) {
+        updates.tags = sql`COALESCE(${contracts.tags}, '[]'::jsonb) - 'ARCHIVED'`;
+      }
       if (setPromoted && body.reviewedAt === undefined) {
         updates.reviewedAt = sql`COALESCE(${contracts.reviewedAt}, now())`;
       }
@@ -226,13 +229,16 @@ export async function PATCH(
     updates.updatedAt = new Date();
 
     // Atomic transaction when promoted is touched OR archived=true (archive is
-    // terminal and also deactivates any source watch target). IMPORTANT: every
+    // terminal and updates the family decision). IMPORTANT: every
     // call inside the callback uses the `tx` argument, NOT the outer `db` —
     // using `db` silently breaks atomicity (the INSERT runs on its own
     // connection).
     let updated: typeof contracts.$inferSelect | undefined;
     const usesTransaction =
       body.promoted !== undefined || body.archived === true;
+    const runFamilySideEffects = usesTransaction
+      ? await hasOpportunityFamilyTables()
+      : false;
 
     if (usesTransaction) {
       updated = await db.transaction(async (tx) => {
@@ -269,10 +275,36 @@ export async function PATCH(
           });
         }
 
+        // Family decision side effects. The family decision remains the source
+        // of truth, while contracts.promoted is synchronized as a dashboard
+        // filter projection for every family member.
+        if (
+          runFamilySideEffects &&
+          body.promoted === true &&
+          body.archived !== true
+        ) {
+          await promoteContractFamily(params.id, tx);
+          await ensurePursuitForContract(params.id, {
+            reactivate: true,
+            executor: tx,
+          });
+        } else if (
+          runFamilySideEffects &&
+          body.promoted === false &&
+          body.archived !== true
+        ) {
+          await demoteContractFamily(params.id, tx);
+        } else if (body.promoted === true && body.archived !== true) {
+          await ensurePursuitForContract(params.id, {
+            reactivate: true,
+            executor: tx,
+          });
+        }
+
         // Archive side effects: record the implicit demote (if we actually
-        // stripped a promotion) and retire any watch family that no longer has
-        // a live linked contract underneath it. This covers the simple
-        // source-contract case and the "last remaining linked contract" case.
+        // stripped a promotion) and archive the family. The audit row is tagged
+        // with `reason: "archive"` so retros can distinguish it from an
+        // explicit demote.
         if (body.archived === true) {
           if (previousPromoted) {
             await tx.insert(auditLog).values({
@@ -281,7 +313,10 @@ export async function PATCH(
               metadata: { reason: "archive" },
             });
           }
-          await deactivateWatchTargetsWithoutLiveLinks(undefined, tx);
+          if (runFamilySideEffects) {
+            await archiveContractFamily(params.id, tx);
+          }
+          await archivePursuitForContract(params.id, tx);
         }
 
         return row;

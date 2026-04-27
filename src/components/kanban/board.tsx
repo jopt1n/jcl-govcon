@@ -101,7 +101,6 @@ export function KanbanBoard() {
         page: String(page),
         limit: String(LIMIT),
         promoted: "false",
-        watched: "false",
       });
       if (search) params.set("search", search);
       if (agencyFilter) params.set("agency", agencyFilter);

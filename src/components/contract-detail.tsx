@@ -76,11 +76,6 @@ interface Contract {
   tags: string[] | null;
   promoted: boolean;
   promotedAt: string | null;
-  watched: boolean;
-  watchTargetId: string | null;
-  watchStatus: string | null;
-  watchLastCheckedAt: string | null;
-  watchLastAlertedAt: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -99,24 +94,6 @@ const classificationColors: Record<string, string> = {
   DISCARD: "bg-slate-500/10 text-slate-500 border-slate-500/30",
   PENDING: "bg-blue-500/10 text-blue-500 border-blue-500/30",
 };
-
-function formatWatchStatusLabel(status: string | null): string {
-  switch (status) {
-    case "MATCHED":
-      return "Matched";
-    case "NEEDS_REVIEW":
-      return "Needs Review";
-    case "INACTIVE":
-      return "Inactive";
-    default:
-      return "Monitoring";
-  }
-}
-
-function formatWatchTimestamp(value: string | null): string | null {
-  if (!value) return null;
-  return format(parseISO(value), "MMM d, yyyy 'at' h:mm a");
-}
 
 export function ContractDetail({ contractId }: { contractId: string }) {
   const router = useRouter();
@@ -297,30 +274,6 @@ export function ContractDetail({ contractId }: { contractId: string }) {
     }
   }
 
-  async function handleWatchToggle() {
-    if (!contract) return;
-
-    setSaving(true);
-    try {
-      if (contract.watched && contract.watchTargetId) {
-        await fetch(`/api/watch-targets/${contract.watchTargetId}`, {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ active: false }),
-        });
-      } else {
-        await fetch("/api/watch-targets", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ contractId }),
-        });
-      }
-      await fetchContract();
-    } finally {
-      setSaving(false);
-    }
-  }
-
   function handleNotesChange(value: string) {
     setNotes(value);
     if (saveTimeout.current) clearTimeout(saveTimeout.current);
@@ -417,7 +370,7 @@ export function ContractDetail({ contractId }: { contractId: string }) {
                   className="px-2.5 py-1 text-xs font-semibold rounded-full border bg-[var(--chosen-bg)] text-[var(--chosen)] border-[var(--chosen-border)] flex items-center gap-1"
                 >
                   <Star className="w-3 h-3 fill-[var(--chosen)]" />
-                  CHOSEN
+                  PURSUIT
                 </span>
               )}
               {isArchived && (
@@ -427,15 +380,6 @@ export function ContractDetail({ contractId }: { contractId: string }) {
                 >
                   <Archive className="w-3 h-3" />
                   ARCHIVED
-                </span>
-              )}
-              {contract.watched && (
-                <span
-                  data-testid="watch-pill"
-                  className="px-2.5 py-1 text-xs font-semibold rounded-full border bg-[var(--accent-10)] text-[var(--accent)] border-[var(--accent-30)] flex items-center gap-1"
-                >
-                  <Eye className="w-3 h-3" />
-                  WATCHING
                 </span>
               )}
               <span
@@ -451,46 +395,6 @@ export function ContractDetail({ contractId }: { contractId: string }) {
             </div>
           </div>
         </div>
-
-        {contract.watched && contract.watchTargetId && (
-          <div
-            data-testid="watch-status-card"
-            className="bg-[var(--surface)] border border-[var(--border)] rounded-lg p-4"
-          >
-            <div className="flex items-start justify-between gap-3 flex-wrap">
-              <div>
-                <div className="text-xs font-semibold uppercase tracking-wide text-[var(--accent)]">
-                  Watch Status
-                </div>
-                <div className="text-sm text-[var(--text-primary)] mt-1">
-                  {formatWatchStatusLabel(contract.watchStatus)}
-                </div>
-                <div className="text-xs text-[var(--text-muted)] mt-2 space-y-1">
-                  {contract.watchLastCheckedAt && (
-                    <div>
-                      Last checked:{" "}
-                      {formatWatchTimestamp(contract.watchLastCheckedAt)}
-                    </div>
-                  )}
-                  {contract.watchLastAlertedAt && (
-                    <div>
-                      Last alert:{" "}
-                      {formatWatchTimestamp(contract.watchLastAlertedAt)}
-                    </div>
-                  )}
-                </div>
-              </div>
-              <Link
-                data-testid="watch-family-link"
-                href={`/watch/${contract.watchTargetId}`}
-                className="inline-flex items-center gap-1.5 text-sm text-[var(--accent)] hover:text-[var(--accent-hover)]"
-              >
-                <Eye className="w-4 h-4" />
-                Open watch family
-              </Link>
-            </div>
-          </div>
-        )}
 
         {/* AI Reasoning + Classify */}
         <div className="bg-[var(--accent-5)] border border-[var(--accent-20)] rounded-lg p-4">
@@ -659,34 +563,13 @@ export function ContractDetail({ contractId }: { contractId: string }) {
                   </div>
                 )}
 
-              {/* Promote to Chosen (user-driven tier above AI classification).
+              {/* Promote to Pursuits (user-driven tier above AI classification).
                   Renders for ALL classifications including DISCARD — promoting
                   a DISCARD is the user signaling "AI was wrong"; the original
                   label stays visible in the badge beside it. */}
               <div>
                 <label className="block text-xs font-medium text-[var(--text-muted)] mb-1">
-                  Watch
-                </label>
-                <button
-                  data-testid="watch-toggle"
-                  onClick={handleWatchToggle}
-                  disabled={saving}
-                  className={cn(
-                    "px-3 py-1.5 text-xs font-medium rounded-lg border transition-all flex items-center gap-1 disabled:opacity-50",
-                    contract.watched
-                      ? "bg-[var(--accent)] text-white border-[var(--accent)] hover:opacity-90"
-                      : "bg-[var(--surface)] border-[var(--accent-30)] text-[var(--accent)] hover:bg-[var(--accent-10)]",
-                  )}
-                  aria-pressed={contract.watched}
-                >
-                  <Eye className="w-3 h-3" />
-                  {contract.watched ? "Unwatch" : "Watch"}
-                </button>
-              </div>
-
-              <div>
-                <label className="block text-xs font-medium text-[var(--text-muted)] mb-1">
-                  Chosen
+                  Pursuit
                 </label>
                 <button
                   data-testid="promote-toggle"

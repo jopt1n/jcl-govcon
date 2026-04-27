@@ -25,7 +25,7 @@ export interface ContractCard {
   actionPlan?: string | null;
   status: string | null;
   notes?: string | null;
-  /** User-driven promotion (CHOSEN tier). Optional — cards from older code
+  /** User-driven promotion into Pursuits. Optional — cards from older code
    *  paths may omit the field. Renders a gold border + star when true. */
   promoted?: boolean;
 }
@@ -148,7 +148,7 @@ export function KanbanCard({
               <Star
                 data-testid="chosen-star"
                 className="w-3 h-3 shrink-0 fill-[var(--chosen)] text-[var(--chosen)]"
-                aria-label="Chosen"
+                aria-label="Pursuit"
               />
             )}
             {contract.title}
