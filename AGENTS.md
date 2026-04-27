@@ -33,6 +33,9 @@ state until `progress.md` is updated.
 - Unlike `CLAUDE.md`, Codex must not write API keys to `.env` during this
   migration unless the user explicitly approves that exact file edit.
 - Before proposing or creating a new path, run `git check-ignore -v -- <path>`.
+- Before starting a new feature, fix, migration, or other implementation work,
+  confirm the current branch and create/switch to a dedicated git branch unless
+  the user explicitly says to work on the current branch.
 - Do not make external API calls unless explicitly authorized. This includes
   SAM.gov, xAI/Grok, Gemini, Resend, Telegram, Railway, and production database
   operations.
